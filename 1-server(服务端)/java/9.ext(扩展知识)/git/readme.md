@@ -1,7 +1,6 @@
-git学习之jgit
+#### java自动化操作git
 
-
-一、简介
+##### 一、简介
 
     jgit是存java实现的git版本控制，学习jgit可以更好的理解学习git，其源代码托管在github上JGit。主要的模块如下：
     
@@ -9,18 +8,20 @@ git学习之jgit
     org.eclipse.jgit.archive 支持导出各种压缩的格式
     org.eclipse.jgit.http.server 支持http协议的服务器，主要提供GitServlet
     使用JGit的软件有：EGit（Eclipse git版本管理插件）、Gitblit等。其maven配置坐标为：
-    
+    maven:
     <dependency>
             <groupId>org.eclipse.jgit</groupId>
             <artifactId>org.eclipse.jgit</artifactId>
-            <version>4.11.0.201803080745-r</version>
+            <version>5.2.1.201812262042-r</version>
     </dependency>
-二、API使用
-
-1.基本概念
-
-    官方文档
     
+    gradle:
+    compile group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '5.2.1.201812262042-r'
+##### 二、API使用
+
+###### 1.基本概念
+
+
     Repository 包括所有的对象和引用，用来管理源码
     AnyObjectId 表示SHA1对象，可以获得SHA1的值，进而可以获得git对象
     Ref 引用对象，表示.git/refs下面的文件引用 Ref HEAD = repository.getRef("refs/heads/master");
@@ -29,14 +30,17 @@ git学习之jgit
     RevTag 代表标签对象
     RevTree 代表树对象
 
-2. 创建本地仓库
-
-
-    Git.init().setGitDir(new File("D:\\source-code\\temp\\.git")).call();
-    不推荐，因为这样新建出来在.git/config文件下面多了一个core.workTree属性，其值为user.dir属性，而不是工作区为temp目录
-    //推荐如下方式：
-    File dir = new File("D:\\source-code\\temp\\.git");
-            Git.init().setGitDir(dir).setDirectory(dir.getParentFile()).call();
+###### 2. 创建本地仓库
+     
+    初始化并创建配置厂库
+    public static void init(String baseDirStr){
+        try {
+            File baseDir = new File(baseDirStr + "/.git");
+            Git.init().setGitDir(baseDir).setDirectory(baseDir.getParentFile()).call();
+        } catch (Exception e) {
+            log.error("init Exception:{}", baseDirStr, e);
+        }
+    }
     只需要简单的一行代码就可以创建本地仓库，可以调用setBare方法来设置版本库是否为裸版本库。
     注意org.eclipse.jgit.api.Git这个类，其方法返回所有支持的git命令
     git学习之jgit
