@@ -1,0 +1,2 @@
+rootProject.name = 'thinktank-doc'
+include 'kbs-tool'
