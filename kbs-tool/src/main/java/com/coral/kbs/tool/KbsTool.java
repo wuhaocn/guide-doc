@@ -24,6 +24,7 @@ public class KbsTool {
         if (file.isDirectory()) {
             if (index == 0){
                 getFileStream().write("## KBS知识库目录结构\n\n".getBytes());
+                getFileStream().flush();
             } else {
                 StringBuilder sb = new StringBuilder();
                 //dir
@@ -32,6 +33,7 @@ public class KbsTool {
                 }
                 sb.append(" ").append(file.getPath()).append("\n\n");
                 getFileStream().write(sb.toString().getBytes());
+                getFileStream().flush();
             }
 
             //write file
@@ -42,6 +44,7 @@ public class KbsTool {
             StringBuilder sb = new StringBuilder();
             sb.append("    ").append(file.getName()).append("\n");
             getFileStream().write(sb.toString().getBytes());
+            getFileStream().flush();
         }
     }
 
