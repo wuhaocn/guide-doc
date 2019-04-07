@@ -1,11 +1,8 @@
 ### docker打包运行参照
 
 #### 1. 目录结构
-![docker打包项目目录结构](images/docker-build.jpg)
+![docker打包项目目录结构](../images/docker-build.jpg)
 
-[其他docker文档参考(tebdoc/urcs/integrationbuild/4-deploy/docker)](../../urcs/integrationbuild/4-deploy/docker)
-
-[项目参考](http://git.feinno.com/urcs-v3/urcs-access-mqtt.git)
 
 #### 2. 打包流程
 
@@ -43,12 +40,12 @@
    FROM java:8
    
    VOLUME ["/tmp"]
-   ADD ./* /home/urcs-service-sims-adapter/
+   ADD ./* /home/servicename/
    
    #指定时区
    RUN /bin/cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo 'Asia/Shanghai' >/etc/timezone
    
-   ENTRYPOINT ["/home/urcs-service-sims-adapter/run.sh"]
+   ENTRYPOINT ["/home/servicename/run.sh"]
          
    ```
    
@@ -105,7 +102,7 @@ SERVICE_HOME=$basePath
 
 SERVICE_LIBS="$SERVICE_HOME/"
 
-SERVICE_MAIN="com.feinno.sims.adapter.SimsAdapterBootstrap"
+SERVICE_MAIN="mainClass"
 declare -a JAVA_ARGS
 JAVA_ARGS[0]="-Xmx256m"
 JAVA_ARGS[1]="-Xms256m"
@@ -137,7 +134,7 @@ apply plugin: 'docker'
 jar {
     manifest {
         attributes 'Manifest-Version': 1.0
-        attributes 'Main-Class': 'com.feinno.sims.adapter.SimsAdapterBootstrap'
+        attributes 'Main-Class': 'mainClass'
     }
     enabled = true
 
@@ -154,7 +151,7 @@ task buildRunJar(type:Copy, dependsOn: build) {
 task buildDocker(type: Docker, dependsOn: buildRunJar) {
     push = true
     //TODO 前面为服务器期名 + 后面为服务名【以后修改最好不把服务器名打进去】
-    tag = "10.10.208.193:5000/" + "urcs-service-sims-adapter"
+    tag = "10.10.208.193:5000/" + "servicename"
     applicationName = jar.baseName
     dockerfile = file('src/main/docker/Dockerfile')
     doFirst {
@@ -174,20 +171,20 @@ dependencies {
 
 
 
-##### 2.6. run-docker-clean-build.sh
+##### 2.6. docker-clean-build.sh
 
 ```
 docker rm `docker ps -a -q`
-docker rmi --force `docker images | grep urcs-service-sims | awk '{print $3}'`
+docker rmi --force `docker images | grep servicename | awk '{print $3}'`
 gradle clean
 gradle buildDocker -x test
 
 ```
 
-##### 2.7. run-sims-xxxx-dev.sh
+##### 2.7. docker-run.sh
 
 ```
-docker stop urcs-service-sims-adapter1
+docker stop servicename
 
 docker rm `docker ps -a -q`
 
@@ -206,8 +203,8 @@ docker run \
     -p 8011:8011 \
     -p 8111:8111 \
     -p 6011:6011 \
-    -d --name urcs-service-sims-adapter1 \
-    10.10.208.193:5000/urcs-service-sims-adapter:3.0.0-1902151423
+    -d --name servicename1.0 \
+    10.10.208.193:5000/servicename1.0.0-1902151423
 
 ```
 
@@ -219,7 +216,7 @@ docker run \
     
     2.docker基础镜像中安装常用功能,例如vim
     
-##### 4 功能环境部署sims-adapter模块
+##### 4 功能环境部署servicename模块
      
      docker镜像部署在10.10.208.194宿主机
      docker run \
@@ -236,8 +233,8 @@ docker run \
          -p 8011:8011 \
          -p 8111:8111 \
          -p 6011:6011 \
-         -d --name urcs-service-sims-adapter1.0 \
-         10.10.208.193:5000/com.feinno/sims-adapter:3.0.0-1812291049
+         -d --name servicename1.0 \
+         10.10.208.193:5000/com.feinno/servicename:1.0.0-1812291049
          
 ##### 5 常用命令
         
