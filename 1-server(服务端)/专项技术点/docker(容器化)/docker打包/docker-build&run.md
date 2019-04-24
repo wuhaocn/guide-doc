@@ -72,7 +72,7 @@
    
    #指定时区
    RUN /bin/cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo 'Asia/Shanghai' >/etc/timezone
-   ENTRYPOINT ["/home/urcs-service-group/run.sh"]
+   ENTRYPOINT ["/home/$appName/run.sh"]
                  
    ```
 
@@ -87,15 +87,6 @@
 ulimit -c unlimited
 ulimit -n 32768
 
-cp -rf /etc/hosts /tmp/hoststmp
-sed -i '$a\DB_HOST urcs_db' /tmp/hoststmp
-sed -i '$a\REDIS_HOST urcs_redis' /tmp/hoststmp
-sed -i '$a\KAFKA_HOST urcs_kafka' /tmp/hoststmp
-sed -i "s/DB_HOST/$DB_HOST/g" /tmp/hoststmp
-sed -i "s/REDIS_HOST/$REDIS_HOST/g" /tmp/hoststmp
-sed -i "s/KAFKA_HOST/$KAFKA_HOST/g" /tmp/hoststmp
-cat /tmp/hoststmp
-cat /tmp/hoststmp > /etc/hosts
 
 basePath=$(cd "$(dirname "$0")";pwd)
 SERVICE_HOME=$basePath
@@ -216,27 +207,8 @@ docker run \
     
     2.docker基础镜像中安装常用功能,例如vim
     
-##### 4 功能环境部署servicename模块
-     
-     docker镜像部署在10.10.208.194宿主机
-     docker run \
-         --env PRIVATE_IP=0.0.0.0 \
-         --env REG_IP=10.10.12.77 \
-         --env ZK_HOSTS=10.10.220.91:7998 \
-         --env HTTP_PORT=8011 \
-         --env HTTP_DASH_PORT=8111 \
-         --env RPC_PORT=6011 \
-         --env RPC_STACK=rpc-stack \
-         --env HTTP_STACK=http-stack \
-         --env HTTP_DASH_STACK=http-dash-stack \
-         --privileged=true \
-         -p 8011:8011 \
-         -p 8111:8111 \
-         -p 6011:6011 \
-         -d --name servicename1.0 \
-         10.10.208.193:5000/com.feinno/servicename:1.0.0-1812291049
          
-##### 5 常用命令
+##### 4 常用命令
         
         docker run -p 8888:8888 $name tag
         docker stop $name
