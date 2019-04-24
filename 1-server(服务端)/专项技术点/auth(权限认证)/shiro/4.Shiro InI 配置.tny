@@ -1,0 +1,160 @@
+<div id="pro-mian-header">
+<div class="content-top">
+<h1>Shiro InI 配置</h1>
+</div>
+<div class="kn-infomation">由&nbsp;北公爵无欢&nbsp;创建， 最后一次修改&nbsp;2016-08-12 21:19:54</div>
+</div>
+<div class="content-bg">
+<div class="content-intro view-box ">
+<div class="wkcontent">
+<h2>INI 配置</h2>
+<p>之前章节我们已经接触过一些 INI 配置规则了，如果大家使用过如 Spring 之类的 IoC/DI 容器的话，Shiro 提供的 INI 配置也是非常类似的，即可以理解为是一个 IoC/DI 容器，但是区别在于它从一个根对象 securityManager 开始。</p>
+<h2 class="head2">根对象 SecurityManager</h2>
+<p>从之前的 Shiro 架构图可以看出，Shiro 是从根对象 SecurityManager 进行身份验证和授权的；也就是所有操作都是自它开始的，这个对象是线程安全且真个应用只需要一个即可，因此 Shiro 提供了 SecurityUtils 让我们绑定它为全局的，方便后续操作。</p>
+<p>因为 Shiro 的类都是 POJO 的，因此都很容易放到任何 IoC 容器管理。但是和一般的 IoC 容器的区别在于，Shiro 从根对象 securityManager 开始导航；Shiro 支持的依赖注入：public 空参构造器对象的创建、setter 依赖注入。</p>
+<p>1、纯 Java 代码写法（com.github.zhangkaitao.shiro.chapter4.NonConfigurationCreateTest）：</p>
+<pre><code class="hljs javascript">DefaultSecurityManager securityManager = <span class="hljs-keyword">new</span> DefaultSecurityManager();
+<span class="hljs-comment">//设置authenticator</span>
+ModularRealmAuthenticator authenticator = <span class="hljs-keyword">new</span> ModularRealmAuthenticator();
+authenticator.setAuthenticationStrategy(<span class="hljs-keyword">new</span> AtLeastOneSuccessfulStrategy());
+securityManager.setAuthenticator(authenticator);
+<span class="hljs-comment">//设置authorizer</span>
+ModularRealmAuthorizer authorizer = <span class="hljs-keyword">new</span> ModularRealmAuthorizer();
+authorizer.setPermissionResolver(<span class="hljs-keyword">new</span> WildcardPermissionResolver());
+securityManager.setAuthorizer(authorizer);
+<span class="hljs-comment">//设置Realm</span>
+DruidDataSource ds = <span class="hljs-keyword">new</span> DruidDataSource();
+ds.setDriverClassName(<span class="hljs-string">"com.mysql.jdbc.Driver"</span>);
+ds.setUrl(<span class="hljs-string">"jdbc:mysql://localhost:3306/shiro"</span>);
+ds.setUsername(<span class="hljs-string">"root"</span>);
+ds.setPassword(<span class="hljs-string">""</span>);
+JdbcRealm jdbcRealm = <span class="hljs-keyword">new</span> JdbcRealm();
+jdbcRealm.setDataSource(ds);
+jdbcRealm.setPermissionsLookupEnabled(<span class="hljs-literal">true</span>);
+securityManager.setRealms(Arrays.asList((Realm) jdbcRealm));
+<span class="hljs-comment">//将SecurityManager设置到SecurityUtils 方便全局使用</span>
+SecurityUtils.setSecurityManager(securityManager);
+Subject subject = SecurityUtils.getSubject();
+UsernamePasswordToken token = <span class="hljs-keyword">new</span> UsernamePasswordToken(<span class="hljs-string">"zhang"</span>, <span class="hljs-string">"123"</span>);
+subject.login(token);
+Assert.assertTrue(subject.isAuthenticated());</code></pre>
+<p>2、等价的 INI 配置（shiro-config.ini）</p>
+<pre><code class="hljs ruby">[main]
+\<span class="hljs-comment">#authenticator</span>
+authenticator=org.apache.shiro.authc.pam.ModularRealmAuthenticator
+authenticationStrategy=org.apache.shiro.authc.pam.AtLeastOneSuccessfulStrategy
+authenticator.authenticationStrategy=$authenticationStrategy
+securityManager.authenticator=$authenticator
+\<span class="hljs-comment">#authorizer</span>
+authorizer=org.apache.shiro.authz.ModularRealmAuthorizer
+permissionResolver=org.apache.shiro.authz.permission.WildcardPermissionResolver
+authorizer.permissionResolver=$permissionResolver
+securityManager.authorizer=$authorizer
+\<span class="hljs-comment">#realm</span>
+dataSource=com.alibaba.druid.pool.DruidDataSource
+dataSource.driverClassName=com.mysql.jdbc.Driver
+dataSource.url=<span class="hljs-symbol">jdbc:</span><span class="hljs-symbol">mysql:</span>/<span class="hljs-regexp">/localhost:3306/shiro</span>
+dataSource.username=root
+\<span class="hljs-comment">#dataSource.password=</span>
+jdbcRealm=org.apache.shiro.realm.jdbc.JdbcRealm
+jdbcRealm.dataSource=$dataSource
+jdbcRealm.permissionsLookupEnabled=<span class="hljs-literal">true</span>
+securityManager.realms=$jdbcRealm&amp;nbsp;</code></pre>
+<p>即使没接触过 IoC 容器的知识，如上配置也是很容易理解的：</p>
+<ol>
+<li>对象名 = 全限定类名 相对于调用 public 无参构造器创建对象</li>
+<li>对象名. 属性名 = 值 相当于调用 setter 方法设置常量值</li>
+<li>对象名. 属性名 =$ 对象引用 相当于调用 setter 方法设置对象引用</li>
+</ol>
+<p>3、Java 代码（com.github.zhangkaitao.shiro.chapter4.ConfigurationCreateTest）</p>
+<pre><code class="hljs javascript">Factory&lt;org.apache.shiro.mgt.SecurityManager&gt; factory =
+         <span class="hljs-keyword">new</span> IniSecurityManagerFactory(<span class="hljs-string">"classpath:shiro-config.ini"</span>);
+org.apache.shiro.mgt.SecurityManager securityManager = factory.getInstance();
+<span class="hljs-comment">//将SecurityManager设置到SecurityUtils 方便全局使用</span>
+SecurityUtils.setSecurityManager(securityManager);
+Subject subject = SecurityUtils.getSubject();
+UsernamePasswordToken token = <span class="hljs-keyword">new</span> UsernamePasswordToken(<span class="hljs-string">"zhang"</span>, <span class="hljs-string">"123"</span>);
+subject.login(token);
+Assert.assertTrue(subject.isAuthenticated());&amp;nbsp;</code></pre>
+<p>如上代码是从 Shiro INI 配置中获取相应的 securityManager 实例：</p>
+<ol>
+<li>默认情况先创建一个名字为 securityManager，类型为 org.apache.shiro.mgt.DefaultSecurityManager 的默认的 SecurityManager，如果想自定义，只需要在 ini 配置文件中指定 &ldquo;securityManager=SecurityManager 实现类&rdquo; 即可，名字必须为 securityManager，它是起始的根；</li>
+<li>IniSecurityManagerFactory 是创建 securityManager 的工厂，其需要一个 ini 配置文件路径，其支持 &ldquo;classpath:&rdquo;（类路径）、&ldquo;file:&rdquo;（文件系统）、&ldquo;url:&rdquo;（网络）三种路径格式，默认是文件系统；</li>
+<li>接着获取 SecuriyManager 实例，后续步骤和之前的一样。</li>
+</ol>
+<p>从如上可以看出 Shiro INI 配置方式本身提供了一个简单的 IoC/DI 机制方便在配置文件配置，但是是从 securityManager 这个根对象开始导航。</p>
+<h2 class="head2">INI 配置</h2>
+<p>ini 配置文件类似于 Java 中的 properties（key=value），不过提供了将 key/value 分类的特性，key 是每个部分不重复即可，而不是整个配置文件。如下是 INI 配置分类：</p>
+<pre><code class="hljs makefile">[main]
+\<span class="hljs-comment">#提供了对根对象securityManager及其依赖的配置</span>
+securityManager=org.apache.shiro.mgt.DefaultSecurityManager
+&hellip;&hellip;&hellip;&hellip;
+securityManager.realms=$jdbcRealm
+[users]
+\<span class="hljs-comment">#提供了对用户/密码及其角色的配置，用户名=密码，角色1，角色2</span>
+username=password,role1,role2
+[roles]
+\<span class="hljs-comment">#提供了角色及权限之间关系的配置，角色=权限1，权限2</span>
+role1=permission1,permission2
+[urls]
+\<span class="hljs-comment">#用于web，提供了对web url拦截相关的配置，url=拦截器[参数]，拦截器</span>
+/index.html = anon
+/admin/** = authc, roles[admin], perms["permission1"]</code></pre>
+<p><strong>[main] 部分</strong></p>
+<p>提供了对根对象 securityManager 及其依赖对象的配置。</p>
+<p><strong>创建对象</strong></p>
+<p><code>securityManager=org.apache.shiro.mgt.DefaultSecurityManager</code></p>
+<p>其构造器必须是 public 空参构造器，通过反射创建相应的实例。</p>
+<p><strong>常量值 setter 注入</strong></p>
+<pre><code class="hljs javascript">dataSource.driverClassName=com.mysql.jdbc.Driver
+jdbcRealm.permissionsLookupEnabled=<span class="hljs-literal">true</span>&amp;nbsp;</code></pre>
+<p>会自动调用 jdbcRealm.setPermissionsLookupEnabled(true)，对于这种常量值会自动类型转换。</p>
+<p><strong>对象引用 setter 注入</strong></p>
+<pre><code class="hljs bash">authenticator=org.apache.shiro.authc.pam.ModularRealmAuthenticator
+authenticationStrategy=org.apache.shiro.authc.pam.AtLeastOneSuccessfulStrategy
+authenticator.authenticationStrategy=<span class="hljs-variable">$authenticationStrategy</span>
+securityManager.authenticator=<span class="hljs-variable">$authenticator</span>&amp;nbsp;</code></pre>
+<p>会自动通过 securityManager.setAuthenticator(authenticator) 注入引用依赖。</p>
+<p><strong>嵌套属性 setter 注入</strong></p>
+<p><code>securityManager.authenticator.authenticationStrategy=$authenticationStrategy</code></p>
+<p>也支持这种嵌套方式的 setter 注入。</p>
+<p><strong>byte 数组 setter 注入</strong></p>
+<pre><code class="hljs bash">\<span class="hljs-comment">#base64 byte[]</span>
+authenticator.bytes=aGVsbG8=
+\<span class="hljs-comment">#hex byte[]</span>
+authenticator.bytes=0x68656c6c6f&amp;nbsp;</code></pre>
+<p>默认需要使用 Base64 进行编码，也可以使用 0x 十六进制。</p>
+<p><strong>Array/Set/List setter 注入</strong></p>
+<pre><code class="hljs php">authenticator.<span class="hljs-keyword">array</span>=<span class="hljs-number">1</span>,<span class="hljs-number">2</span>,<span class="hljs-number">3</span>
+authenticator.set=$jdbcRealm,$jdbcRealm&amp;nbsp;</code></pre>
+<p>多个之间通过 &ldquo;，&rdquo; 分割。</p>
+<p><strong>Map setter 注入</strong></p>
+<p><code>authenticator.map=$jdbcRealm:$jdbcRealm,1:1,key:abc</code></p>
+<p>即格式是：map=key：value，key：value，可以注入常量及引用值，常量的话都看作字符串（即使有泛型也不会自动造型）。</p>
+<p><strong>实例化 / 注入顺序</strong></p>
+<pre><code class="hljs makefile">realm=Realm1
+realm=Realm12
+authenticator.bytes=aGVsbG8=
+authenticator.bytes=0x68656c6c6f&amp;nbsp; </code></pre>
+<p>后边的覆盖前边的注入。</p>
+<p>测试用例请参考配置文件 shiro-config-main.ini。</p>
+<p><strong>[users] 部分</strong></p>
+<p>配置用户名 / 密码及其角色，格式：&ldquo;用户名 = 密码，角色 1，角色 2&rdquo;，角色部分可省略。如：</p>
+<pre><code class="hljs ini"><span class="hljs-section">[users]</span>
+<span class="hljs-attr">zhang</span>=<span class="hljs-number">123</span>,role1,role2
+<span class="hljs-attr">wang</span>=<span class="hljs-number">123</span>&amp;nbsp; </code></pre>
+<p>密码一般生成其摘要 / 加密存储，后续章节介绍。</p>
+<p><strong>[roles] 部分</strong></p>
+<p>配置角色及权限之间的关系，格式：&ldquo;角色 = 权限 1，权限 2&rdquo;；如：</p>
+<pre><code class="hljs ini"><span class="hljs-section">[roles]</span>
+<span class="hljs-attr">role1</span>=user:create,user:update
+<span class="hljs-attr">role2</span>=*&amp;nbsp;</code></pre>
+<p>如果只有角色没有对应的权限，可以不配 roles，具体规则请参考授权章节。</p>
+<p><strong>[urls] 部分</strong></p>
+<p>配置 url 及相应的拦截器之间的关系，格式：&ldquo;url = 拦截器 [参数]，拦截器 [参数]，如：</p>
+<pre><code class="hljs coffeescript">[urls]
+<span class="hljs-regexp">/admin/</span>** = authc, roles[admin], perms[<span class="hljs-string">"permission1"</span>]&amp;nbsp;</code></pre>
+<p>具体规则参见 web 相关章节。</p>
+</div>
+</div>
+</div>
