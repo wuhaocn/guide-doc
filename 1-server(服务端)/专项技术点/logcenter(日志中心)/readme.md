@@ -43,7 +43,7 @@
 系统结构图
 ![参考](1.efk使用示例/res/stefk.jpg)
 
-[teatalk使用介绍](1.efk使用示例/efk配置示例.md)
+
 
 #### 4.使用示例-java对接使用示例
 
