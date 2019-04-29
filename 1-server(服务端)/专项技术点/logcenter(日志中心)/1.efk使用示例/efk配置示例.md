@@ -4,8 +4,8 @@
 ![](res/stefk.jpg)
 功能环境地址：
 
-    elasticsearch(日志存储):
-    filebeat(日志收集工具):10.10.220.90
+    elasticsearch(日志存储): 10.10.208.193:9200
+    filebeat(日志收集工具): 10.10.220.90
     kibana(日志展示): http://10.10.208.193:5601/app/kibana#?_g=()
 
 ##### 1.1建议
@@ -24,9 +24,9 @@
 [elasticsearch参考文件](elasticsearch)
 
 ##### 2.1.docker安装
-    docker pull docker.elastic.co/elasticsearch/elasticsearch:6.0.0
-    
-    docker run -d --elasticsearch es \
+    docker stop elasticsearch
+    docker rm `docker ps -a -q`
+    docker run -d --name elasticsearch6.0.0 \
     -p 9200:9200 -p 9300:9300 \
     -e "discovery.type=single-node" docker.elastic.co/elasticsearch/elasticsearch:6.0.0
 
@@ -83,17 +83,25 @@
     10.10.220.90
 
 
-
 #### 4.kibana安装配置
 [kibana参考文件](kibana)
 
 ##### 4.1.docker安装
 
-    docker pull elastic/kibana:6.0.0
-    docker run --name kibana6.0.0 -e ELASTICSEARCH_URL=http://10.10.208.194:9200 -p 5601:5601 -d 2f0aebda029e
+    kibana登录收费、取消kibana登录认证
+        kibana.yml
+            server.name: kibana
+            server.host: "0"
+            elasticsearch.url: http://elasticsearch:9200
+            elasticsearch.username: admin
+            elasticsearch.password: admin
+            xpack.monitoring.ui.container.elasticsearch.enabled: false
+            status.allowAnonymous: true
+    自定义docker镜像屏蔽登录认证
     
-    2f0aebda029e为拉取的镜像id
-
-
-
- 
+    docker stop kibana6.0.0
+    docker rm `docker ps -a -q`
+    docker run -d --name kibana6.0.0  -e ELASTICSEARCH_URL=http://10.10.208.193:9200 -p 5601:5601  10.10.208.193:5000/urcs/kibana:6.0.0
+    
+##### 4.2kibana定制化安装
+    自定义登录鉴权
