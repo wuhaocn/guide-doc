@@ -88,8 +88,11 @@
 [kibana参考文件](kibana)
 
 ##### 4.1.docker安装
+
     docker pull elastic/kibana:6.0.0
-    docker run --name kibana6.0.0 -e ELASTICSEARCH_URL=http://10.10.220.91:9200 -p 5601:5601 -d b69917327930
+    docker run --name kibana6.0.0 -e ELASTICSEARCH_URL=http://10.10.208.194:9200 -p 5601:5601 -d 2f0aebda029e
+    
+    2f0aebda029e为拉取的镜像id
 
 
 
