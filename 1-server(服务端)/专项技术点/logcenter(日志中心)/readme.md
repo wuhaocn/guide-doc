@@ -29,7 +29,24 @@
     filebeat:
         Filebeat是一个日志文件托运工具，在你的服务器上安装客户端后，filebeat会监控日志目录或者指定的日志文件
         可以理解为轻量版的logstash
-#### 2.使用示例-efk使用示例
-[](1.efk-使用示例/efk配置示例.md)
+#### 2.组件介绍
+[elasticsearch介绍](elasticsearch)
 
+[filebeat介绍](filebeat)
+
+[kibana介绍](kibana)
+
+[logstash介绍](kibana)
+
+#### 3.使用示例-efk使用示例
+
+系统结构图
+![参考](1.efk使用示例/res/stefk.jpg)
+
+[teatalk使用介绍](1.efk使用示例/efk配置示例.md)
+
+#### 4.使用示例-java对接使用示例
+
+系统结构图
+![参考](2.java使用示例/res/elkjava.jpg)
     
