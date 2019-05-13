@@ -1,2 +1,2 @@
-rootProject.name = 'thinktank-doc'
+rootProject.name = 'guide-doc'
 include 'kbs-tool'
