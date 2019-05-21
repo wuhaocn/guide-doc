@@ -1,0 +1,1 @@
+https://github.com/seaswalker/spring-analysis.git
