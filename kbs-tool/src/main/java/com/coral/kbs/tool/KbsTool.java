@@ -13,37 +13,54 @@ public class KbsTool {
 
     public static void main(String[] args) throws IOException {
         File file = new File("./");
-        findAnrWrite(file, 0);
+        findAnrWrite(file, 0, true);
+        findAnrWrite(file, 0, false);
         getFileStream().close();
     }
 
-    private static void findAnrWrite(File file, int index) throws IOException {
-        if (file.getName().startsWith(".") && index != 0){
+    private static void findAnrWrite(File file, int level, boolean guide) throws IOException {
+        int index = 1;
+        if (file.getName().startsWith(".") && level != 0){
             return;
         }
         if (file.getName().endsWith("jpg") || file.getName().endsWith("png") ){
             return;
         }
         if (file.isDirectory()) {
-            if (index == 0){
-                getFileStream().write("## KBS知识库目录结构\n\n".getBytes());
+            if (file.getName().endsWith("kbs-tool")){
+                return;
+            }
+            if (level == 0){
+                getFileStream().write("* [KBS知识库目录结构](#)\n".getBytes());
                 getFileStream().flush();
             } else {
                 StringBuilder sb = new StringBuilder();
                 //dir
-                for (int i = 0; i < index + 2; i++){
-                    sb.append("#");
+
+                if (guide){
+                    for (int i = 0; i < level; i++){
+                        sb.append("     ");
+                    }
+                    sb.append("*");
+                } else {
+                    for (int i = 0; i < level; i++){
+                        sb.append("#");
+                    }
                 }
-                sb.append(" ").append(file.getPath().replace(".\\", index + ".").replace("\\", "-")).append("\n");
+
+
+                String paths[] = file.getPath().split("\\\\");
+                sb.append(" [").append(paths[paths.length -1]).append("](#)\n");
+                //sb.append(" ").append(file.getPath().replace(".\\", index + "." + level + ".").replace("\\", "-")).append("\n");
                 getFileStream().write(sb.toString().getBytes());
                 getFileStream().flush();
             }
 
             //write file
             for (File fileItem : file.listFiles()) {
-                findAnrWrite(fileItem, index + 1);
+                findAnrWrite(fileItem, level + 1, guide);
             }
-        } else {
+        } else if (!guide){
             StringBuilder sb = new StringBuilder();
             sb.append("    ").append(file.getName()).append("\n");
             getFileStream().write(sb.toString().getBytes());
