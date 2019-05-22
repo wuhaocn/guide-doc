@@ -21,6 +21,9 @@ public class KbsTool {
         if (file.getName().startsWith(".") && index != 0){
             return;
         }
+        if (file.getName().endsWith("jpg") || file.getName().endsWith("png") ){
+            return;
+        }
         if (file.isDirectory()) {
             if (index == 0){
                 getFileStream().write("## KBS知识库目录结构\n\n".getBytes());
@@ -31,7 +34,7 @@ public class KbsTool {
                 for (int i = 0; i < index + 2; i++){
                     sb.append("#");
                 }
-                sb.append(" ").append(file.getPath()).append("\n\n");
+                sb.append(" ").append(file.getPath().replace(".\\", index + ".").replace("\\", "-")).append("\n");
                 getFileStream().write(sb.toString().getBytes());
                 getFileStream().flush();
             }
