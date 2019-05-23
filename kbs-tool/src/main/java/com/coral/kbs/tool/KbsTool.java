@@ -31,7 +31,7 @@ public class KbsTool {
                 return;
             }
             if (level == 0){
-                getFileStream().write("* [KBS知识库目录结构](#)\n".getBytes());
+                getFileStream().write("* [知识库目录](#)\n".getBytes());
                 getFileStream().flush();
             } else {
                 StringBuilder sb = new StringBuilder();
@@ -47,11 +47,11 @@ public class KbsTool {
                         sb.append("#");
                     }
                 }
-
-
-                String paths[] = file.getPath().split("\\\\");
-                sb.append(" [").append(paths[paths.length -1]).append("](#)\n");
-                //sb.append(" ").append(file.getPath().replace(".\\", index + "." + level + ".").replace("\\", "-")).append("\n");
+                String pathNoWin =  file.getPath().replace("\\", "/");
+                String paths[] = pathNoWin.split("/");
+                sb.append(" [").append(paths[paths.length -1]).append("](");
+                sb.append(pathNoWin);
+                sb.append(")\n");
                 getFileStream().write(sb.toString().getBytes());
                 getFileStream().flush();
             }
