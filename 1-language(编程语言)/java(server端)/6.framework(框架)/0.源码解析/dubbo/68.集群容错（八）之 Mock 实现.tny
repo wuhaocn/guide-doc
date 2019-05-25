@@ -1,0 +1,375 @@
+<header class="article-header">
+<h1 class="article-title">集群容错（八）之 Mock 实现</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文接&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-7-impl-router/?self">《精尽 Dubbo 源码解析 &mdash;&mdash; 集群容错（七）之 Router 实现》</a>&nbsp;一文，分享&nbsp;<code>dubbo-cluster</code>&nbsp;模块，&nbsp;<code>mock</code>&nbsp;包，实现 Dubbo 如下功能：</p>
+<ul>
+<li><strong>本地伪装</strong>：通常用于服务降级，比如某验权服务，当服务提供方全部挂掉后，客户端不抛出异常，而是通过 Mock 数据返回授权失败。</li>
+<li><strong>服务降级</strong>：可以通过服务降级功能，临时屏蔽某个出错的非关键服务，并定义降级后的返回策略。</li>
+</ul>
+<blockquote>
+<p>老艿艿：如果不熟悉的胖友，推荐结合着&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/local-mock.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 本地伪装》</a>&nbsp;和&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/service-downgrade.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 服务降级》</a>&nbsp;一起学习。</p>
+</blockquote>
+<ul>
+<li><strong>注意</strong>，<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/local-mock.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 本地伪装》</a>&nbsp;的文档有点问题：Spring XML 是通过&nbsp;<code>&lt;dubbo:reference /&gt;</code>&nbsp;配置，而不是&nbsp;<code>&lt;dubbo:service /&gt;</code>&nbsp;。</li>
+</ul>
+<p>本文涉及类如下图：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2019_05_05/01.png" alt="Mock 相关类" /></p>
+<ul>
+<li>分成两个部分：
+<ul>
+<li>MockClusterWrapper + MockClusterInvoker + MockClusterSelector</li>
+<li>MockProtocol + MockInvoker</li>
+</ul>
+</li>
+</ul>
+<h1 id="2-MockClusterWrapper">2. MockClusterWrapper</h1>
+<p><code>com.alibaba.dubbo.rpc.cluster.support.wrapper.MockClusterWrapper</code>&nbsp;，实现 Cluster 接口，Mock Cluster&nbsp;<strong>Wrapper</strong>&nbsp;实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MockClusterWrapper</span> <span class="keyword">implements</span> <span class="title">Cluster</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 真正的 Cluster 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> Cluster cluster;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">MockClusterWrapper</span><span class="params">(Cluster cluster)</span> </span>{</span><br /><span class="line">        <span class="keyword">this</span>.cluster = cluster;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="keyword">public</span> &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">join</span><span class="params">(Directory&lt;T&gt; directory)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> MockClusterInvoker&lt;T&gt;(directory, <span class="comment">// &lt;2&gt;</span></span><br /><span class="line">                <span class="keyword">this</span>.cluster.join(directory)); <span class="comment">// &lt;1&gt;</span></span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>cluster</code>&nbsp;字段，<strong>真正</strong>的 Cluster 对象。因为 MockClusterWrapper 是 Dubbo SPI Wrapper 类，<strong>所以对应的 Cluster 对象，都会被它所包装</strong>。不理解的胖友，可以看下&nbsp;<a href="http://svip.iocoder.cn/Dubbo/spi/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 拓展机制 SPI》</a>&nbsp;的&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「4.4.2 createExtension」</a>&nbsp;的【第 24 至 30 行】。</li>
+<li><code>&lt;1&gt;</code>&nbsp;处：调用&nbsp;<code>Cluster#join(directory)</code>&nbsp;方法，创建<strong>真正</strong>的 Cluster Invoker 对象。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处：创建 MockClusterInvoker 对象。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「3. MockClusterInvoker」</a>&nbsp;。</li>
+</ul>
+<h1 id="3-MockClusterInvoker">3. MockClusterInvoker</h1>
+<p><code>com.alibaba.dubbo.rpc.cluster.support.wrapper.MockClusterInvoker</code>&nbsp;，实现 Invoker 接口，<strong>MockClusterWrapper</strong>&nbsp;对应的 Invoker 实现类。</p>
+<h2 id="3-1-构造方法">3.1 构造方法</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Directory&lt;T&gt; directory;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 真正的 Invoker 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Invoker&lt;T&gt; invoker;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">MockClusterInvoker</span><span class="params">(Directory&lt;T&gt; directory, Invoker&lt;T&gt; invoker)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.directory = directory;</span><br /><span class="line">    <span class="keyword">this</span>.invoker = invoker;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="3-2-invoke">3.2 invoke</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">3</span>:     Result result;</span><br /><span class="line"> <span class="number">4</span>:     <span class="comment">// 获得 "mock" 配置项，有多种配置方式</span></span><br /><span class="line"> <span class="number">5</span>:     String value = directory.getUrl().getMethodParameter(invocation.getMethodName(), Constants.MOCK_KEY, Boolean.FALSE.toString()).trim();</span><br /><span class="line"> <span class="number">6</span>:     <span class="comment">//【第一种】无 mock</span></span><br /><span class="line"> <span class="number">7</span>:     <span class="keyword">if</span> (value.length() == <span class="number">0</span> || value.equalsIgnoreCase(<span class="string">"false"</span>)) {</span><br /><span class="line"> <span class="number">8</span>:         <span class="comment">// no mock</span></span><br /><span class="line"> <span class="number">9</span>:         <span class="comment">// 调用原 Invoker ，发起 RPC 调用</span></span><br /><span class="line"><span class="number">10</span>:         result = <span class="keyword">this</span>.invoker.invoke(invocation);</span><br /><span class="line"><span class="number">11</span>:     <span class="comment">//【第二种】强制服务降级 http://dubbo.apache.org/zh-cn/docs/user/demos/service-downgrade.html</span></span><br /><span class="line"><span class="number">12</span>:     } <span class="keyword">else</span> <span class="keyword">if</span> (value.startsWith(<span class="string">"force"</span>)) {</span><br /><span class="line"><span class="number">13</span>:         <span class="keyword">if</span> (logger.isWarnEnabled()) {</span><br /><span class="line"><span class="number">14</span>:             logger.info(<span class="string">"force-mock: "</span> + invocation.getMethodName() + <span class="string">" force-mock enabled , url : "</span> + directory.getUrl());</span><br /><span class="line"><span class="number">15</span>:         }</span><br /><span class="line"><span class="number">16</span>:         <span class="comment">// force:direct mock</span></span><br /><span class="line"><span class="number">17</span>:         <span class="comment">// 直接调用 Mock Invoker ，执行本地 Mock 逻辑</span></span><br /><span class="line"><span class="number">18</span>:         result = doMockInvoke(invocation, <span class="keyword">null</span>);</span><br /><span class="line"><span class="number">19</span>:     <span class="comment">// 【第三种】失败服务降级 http://dubbo.apache.org/zh-cn/docs/user/demos/service-downgrade.html</span></span><br /><span class="line"><span class="number">20</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">21</span>:         <span class="comment">// fail-mock</span></span><br /><span class="line"><span class="number">22</span>:         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">23</span>:             <span class="comment">// 调用原 Invoker ，发起 RPC 调用</span></span><br /><span class="line"><span class="number">24</span>:             result = <span class="keyword">this</span>.invoker.invoke(invocation);</span><br /><span class="line"><span class="number">25</span>:         } <span class="keyword">catch</span> (RpcException e) {</span><br /><span class="line"><span class="number">26</span>:             <span class="comment">// 业务性异常，直接抛出</span></span><br /><span class="line"><span class="number">27</span>:             <span class="keyword">if</span> (e.isBiz()) {</span><br /><span class="line"><span class="number">28</span>:                 <span class="keyword">throw</span> e;</span><br /><span class="line"><span class="number">29</span>:             } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">30</span>:                 <span class="keyword">if</span> (logger.isWarnEnabled()) {</span><br /><span class="line"><span class="number">31</span>:                     logger.info(<span class="string">"fail-mock: "</span> + invocation.getMethodName() + <span class="string">" fail-mock enabled , url : "</span> + directory.getUrl(), e);</span><br /><span class="line"><span class="number">32</span>:                 }</span><br /><span class="line"><span class="number">33</span>:                 <span class="comment">// 失败后，调用 Mock Invoker ，执行本地 Mock 逻辑</span></span><br /><span class="line"><span class="number">34</span>:                 result = doMockInvoke(invocation, e);</span><br /><span class="line"><span class="number">35</span>:             }</span><br /><span class="line"><span class="number">36</span>:         }</span><br /><span class="line"><span class="number">37</span>:     }</span><br /><span class="line"><span class="number">38</span>:     <span class="keyword">return</span> result;</span><br /><span class="line"><span class="number">39</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 5 行：获得&nbsp;<code>"mock"</code>&nbsp;配置项。根据不同的配置，分成<strong>三种</strong>情况。</li>
+<li>========== 第一种：<strong>无 Mock</strong>&nbsp;==========</li>
+<li>第 10 行：只调用<strong>真正的</strong>&nbsp;<code>invoker</code>&nbsp;的&nbsp;<code>#invoke(invocation)</code>&nbsp;方法，发起 RPC 调用，<strong>即不进行 Mock 逻辑</strong>。</li>
+<li>========== 第二种：<strong>强制服务降级</strong>&nbsp;==========</li>
+<li>第 12 行：<code>"mock"</code>&nbsp;配置项以&nbsp;<code>"force"</code>&nbsp;<strong>开头</strong>，<strong>强制</strong>服务降级，即&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/service-downgrade.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 服务降级》</a>&nbsp;。</li>
+<li>第 18 行：<strong>直接</strong>调用&nbsp;<code>#doMockInvoke(invocation, null)</code>&nbsp;方法，调用&nbsp;<strong>Mock Invoker</strong>&nbsp;，执行本地 Mock 逻辑。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「3.3 doMockInvoke」</a>&nbsp;。</li>
+<li>========== 第三种：<strong>失败服务降级</strong>&nbsp;==========</li>
+<li>第 24 行：<strong>优先</strong>，调用<strong>真正的</strong>&nbsp;<code>invoker</code>&nbsp;的&nbsp;<code>#invoke(invocation)</code>&nbsp;方法，发起 RPC 调用，<strong>即不进行 Mock 逻辑</strong>。</li>
+<li>第 25 至 36 行：处理 RpcException 异常。<strong>也仅仅处理这种类型的异常</strong>。
+<ul>
+<li>第 26 至 28 行：若发生<strong>业务性</strong>异常，直接抛出异常。</li>
+<li>第 29 至 35 行：<strong>失败后</strong>，调用&nbsp;<code>#doMockInvoke(invocation, null)</code>&nbsp;方法，调用&nbsp;<strong>Mock Invoker</strong>&nbsp;，执行本地 Mock 逻辑。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「3.3 doMockInvoke」</a>&nbsp;。</li>
+</ul>
+</li>
+</ul>
+<p>😈 总的来说，MockClusterInvoker 的&nbsp;<code>#invoke(Invocation)</code>&nbsp;方法的过程，根据不同的&nbsp;<code>"mock"</code>&nbsp;配置，&ldquo;组合&rdquo;调用<strong>真正的</strong>和&nbsp;<strong>Mock</strong>&nbsp;的 Invoker 。</p>
+<h2 id="3-3-doMockInvoke">3.3 doMockInvoke</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">private</span> Result <span class="title">doMockInvoke</span><span class="params">(Invocation invocation, RpcException e)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     Result result;</span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// 第一步，获得 Mock Invoker 对象</span></span><br /><span class="line"> <span class="number">4</span>:     Invoker&lt;T&gt; mInvoker;</span><br /><span class="line"> <span class="number">5</span>:     <span class="comment">// 路由匹配 Mock Invoker 集合</span></span><br /><span class="line"> <span class="number">6</span>:     List&lt;Invoker&lt;T&gt;&gt; mockInvokers = selectMockInvoker(invocation);</span><br /><span class="line"> <span class="number">7</span>:     <span class="comment">// 如果不存在，创建 MockInvoker 对象</span></span><br /><span class="line"> <span class="number">8</span>:     <span class="keyword">if</span> (mockInvokers == <span class="keyword">null</span> || mockInvokers.isEmpty()) {</span><br /><span class="line"> <span class="number">9</span>:         mInvoker = (Invoker&lt;T&gt;) <span class="keyword">new</span> MockInvoker(directory.getUrl());</span><br /><span class="line"><span class="number">10</span>:     <span class="comment">// 如果存在，选择第一个</span></span><br /><span class="line"><span class="number">11</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">12</span>:         mInvoker = mockInvokers.get(<span class="number">0</span>);</span><br /><span class="line"><span class="number">13</span>:     }</span><br /><span class="line"><span class="number">14</span>:     <span class="comment">// 第二步，调用，执行本地 Mock 逻辑</span></span><br /><span class="line"><span class="number">15</span>:     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">16</span>:         result = mInvoker.invoke(invocation);</span><br /><span class="line"><span class="number">17</span>:     } <span class="keyword">catch</span> (RpcException me) {</span><br /><span class="line"><span class="number">18</span>:         <span class="keyword">if</span> (me.isBiz()) {</span><br /><span class="line"><span class="number">19</span>:             result = <span class="keyword">new</span> RpcResult(me.getCause());</span><br /><span class="line"><span class="number">20</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">21</span>:             <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(me.getCode(), getMockExceptionMessage(e, me), me.getCause());</span><br /><span class="line"><span class="number">22</span>:         }</span><br /><span class="line"><span class="number">23</span>:     } <span class="keyword">catch</span> (Throwable me) {</span><br /><span class="line"><span class="number">24</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(getMockExceptionMessage(e, me), me.getCause());</span><br /><span class="line"><span class="number">25</span>:     }</span><br /><span class="line"><span class="number">26</span>:     <span class="keyword">return</span> result;</span><br /><span class="line"><span class="number">27</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 至 13 行：<strong>第一步</strong>，获得&nbsp;<strong>MockInvoker</strong>&nbsp;对象。
+<ul>
+<li>第 6 行：调用&nbsp;<code>#selectMockInvoker(invocation)</code>&nbsp;方法，<strong>路由匹配</strong>&nbsp;Mock Invoker 集合。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「3.4 selectMockInvoker」</a>&nbsp;。</li>
+<li>第 7 至 9 行：若<strong>不</strong>存在，<strong>创建</strong>&nbsp;MockInvoker 对象。</li>
+<li>第 10 至 13 行：若<strong>已</strong>不能再，<strong>选择</strong>第一个 Mock Invoker 对象。</li>
+</ul>
+</li>
+<li>第 14 至 16 行：调用&nbsp;<code>MockInvoker#invoke(invocation)</code>&nbsp;方法，执行本地 Mock 逻辑。</li>
+<li>第 17 至 25 行：处理<strong>异常</strong>。</li>
+</ul>
+<h2 id="3-4-selectMockInvoker">3.4 selectMockInvoker</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="keyword">private</span> List&lt;Invoker&lt;T&gt;&gt; selectMockInvoker(Invocation invocation) {</span><br /><span class="line"> <span class="number">2</span>:     List&lt;Invoker&lt;T&gt;&gt; invokers = <span class="keyword">null</span>;</span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (invocation <span class="keyword">instanceof</span> RpcInvocation) {</span><br /><span class="line"> <span class="number">4</span>:         <span class="comment">// 存在隐含契约(虽然在接口声明中增加描述，但扩展性会存在问题.同时放在 attachment 中的做法需要改进</span></span><br /><span class="line"> <span class="number">5</span>:         ((RpcInvocation) invocation).setAttachment(Constants.INVOCATION_NEED_MOCK, Boolean.TRUE.toString());</span><br /><span class="line"> <span class="number">6</span>:         <span class="comment">// directory 根据 invocation 中 attachment 是否有 Constants.INVOCATION_NEED_MOCK，来判断获取的是 normal invokers or mock invokers</span></span><br /><span class="line"> <span class="number">7</span>:         <span class="keyword">try</span> {</span><br /><span class="line"> <span class="number">8</span>:             invokers = directory.list(invocation);</span><br /><span class="line"> <span class="number">9</span>:         } <span class="keyword">catch</span> (RpcException e) {</span><br /><span class="line"><span class="number">10</span>:             <span class="keyword">if</span> (logger.isInfoEnabled()) {</span><br /><span class="line"><span class="number">11</span>:                 logger.info(<span class="string">"Exception when try to invoke mock. Get mock invokers error for service:"</span> + directory.getUrl().getServiceInterface() + <span class="string">", method:"</span> + invocation.getMethodName() + <span class="string">", will contruct a new mock with 'new MockInvoker()'."</span>, e);</span><br /><span class="line"><span class="number">12</span>:             }</span><br /><span class="line"><span class="number">13</span>:         }</span><br /><span class="line"><span class="number">14</span>:     }</span><br /><span class="line"><span class="number">15</span>:     <span class="keyword">return</span> invokers;</span><br /><span class="line"><span class="number">16</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 5 行：设置 RpcInvocation 的&nbsp;<code>"invocation.need.mock"</code>&nbsp;为&nbsp;<strong>true</strong>&nbsp;。</li>
+<li>第 8 行：调用&nbsp;<code>Directory#list(invocation)</code>&nbsp;方法，获得<strong>所有</strong>&nbsp;Invoker 集合。因为【第 5 行】设置了&nbsp;<code>"invocation.need.mock"</code>&nbsp;为&nbsp;<strong>true</strong>&nbsp;，所以实际获得的是 MockInvoker 集合。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「3.4.1 MockInvokersSelector」</a>&nbsp;。</li>
+</ul>
+<h3 id="3-4-1-MockInvokersSelector">3.4.1 MockInvokersSelector</h3>
+<p><code>com.alibaba.dubbo.rpc.cluster.router.MockInvokersSelector</code>&nbsp;，实现 Router 接口，MockInvoker 路由<strong>选择器</strong>实现类。</p>
+<p>因为 AbstractDirectory 的&nbsp;<code>#setRouters(List&lt;Router&gt; routers)</code>&nbsp;方法中，都会添加&nbsp;<strong>MockInvokersSelector</strong>&nbsp;，如下图所示：<img src="http://static2.iocoder.cn/images/Dubbo/2019_05_05/02.png" alt="setRouters" /></p>
+<ul>
+<li>所以，每次&nbsp;<code>Directory#list(invocation)</code>&nbsp;的过程中，都会执行 MockInvokersSelector 的路由逻辑。</li>
+</ul>
+<hr />
+<p><code>#route(List&lt;Invoker&lt;T&gt;&gt; invokers, URL url, Invocation invocation)</code>&nbsp;方法，根据&nbsp;<code>"invocation.need.mock"</code>&nbsp;路由匹配<strong>对应类型</strong>的 Invoker 集合：</p>
+<ul>
+<li>1、若为&nbsp;<strong>true</strong>&nbsp;，<strong>Mock</strong>Invoker 集合。</li>
+<li>2、若为&nbsp;<strong>false</strong>&nbsp;，<strong>普通</strong>&nbsp;Invoker 集合。</li>
+</ul>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> &lt;T&gt; List&lt;Invoker&lt;T&gt;&gt; route(<span class="keyword">final</span> List&lt;Invoker&lt;T&gt;&gt; invokers, URL url, <span class="keyword">final</span> Invocation invocation) <span class="keyword">throws</span> RpcException {</span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// 获得普通 Invoker 集合</span></span><br /><span class="line"> <span class="number">4</span>:     <span class="keyword">if</span> (invocation.getAttachments() == <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">5</span>:         <span class="keyword">return</span> getNormalInvokers(invokers);</span><br /><span class="line"> <span class="number">6</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">7</span>:         <span class="comment">// 获得 "invocation.need.mock" 配置项</span></span><br /><span class="line"> <span class="number">8</span>:         String value = invocation.getAttachments().get(Constants.INVOCATION_NEED_MOCK);</span><br /><span class="line"> <span class="number">9</span>:         <span class="comment">// 获得普通 Invoker 集合</span></span><br /><span class="line"><span class="number">10</span>:         <span class="keyword">if</span> (value == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">11</span>:             <span class="keyword">return</span> getNormalInvokers(invokers);</span><br /><span class="line"><span class="number">12</span>:         <span class="comment">// 获得 MockInvoker 集合</span></span><br /><span class="line"><span class="number">13</span>:         } <span class="keyword">else</span> <span class="keyword">if</span> (Boolean.TRUE.toString().equalsIgnoreCase(value)) {</span><br /><span class="line"><span class="number">14</span>:             <span class="keyword">return</span> getMockedInvokers(invokers);</span><br /><span class="line"><span class="number">15</span>:         }</span><br /><span class="line"><span class="number">16</span>:     }</span><br /><span class="line"><span class="number">17</span>:     <span class="comment">// 其它，不匹配，直接返回 `invokers` 集合</span></span><br /><span class="line"><span class="number">18</span>:     <span class="keyword">return</span> invokers;</span><br /><span class="line"><span class="number">19</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>分成<strong>三种</strong>情况，我们一个一个来看。在看具体情况之前，我们先来看&nbsp;<code>#hasMockProviders(invokers)</code>&nbsp;方法，判断是否有 MockInvoker 。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> &lt;T&gt; <span class="function"><span class="keyword">boolean</span> <span class="title">hasMockProviders</span><span class="params">(<span class="keyword">final</span> List&lt;Invoker&lt;T&gt;&gt; invokers)</span> </span>{</span><br /><span class="line">    <span class="keyword">boolean</span> hasMockProvider = <span class="keyword">false</span>;</span><br /><span class="line">    <span class="keyword">for</span> (Invoker&lt;T&gt; invoker : invokers) {</span><br /><span class="line">        <span class="keyword">if</span> (invoker.getUrl().getProtocol().equals(Constants.MOCK_PROTOCOL)) { <span class="comment">// 协议为 "mock"</span></span><br /><span class="line">            hasMockProvider = <span class="keyword">true</span>;</span><br /><span class="line">            <span class="keyword">break</span>;</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> hasMockProvider;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>通过&nbsp;<code>protocol = "mock"</code>&nbsp;来判断，是否为&nbsp;<strong>Mock</strong>Invoker 。所以只要<strong>不为</strong>&nbsp;MockInvoker ，就是<strong>普通</strong>&nbsp;Invoker 。关于&nbsp;<code>"mock"</code>&nbsp;协议，我们稍后在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「4. MockProtocol」</a>&nbsp;中，详细解析。</li>
+</ul>
+</li>
+<li>
+<p>【第<strong>一</strong>种】第 3 至 5 行 || 第 9 至 11 行：若<strong>未设置</strong>&nbsp;<code>"invocation.need.mock"</code>&nbsp;配置项，调用&nbsp;<code>#getNormalInvokers(invokers)</code>&nbsp;方法，获得<strong>普通</strong>&nbsp;Invoker 集合。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="keyword">private</span> &lt;T&gt; List&lt;Invoker&lt;T&gt;&gt; getNormalInvokers(<span class="keyword">final</span> List&lt;Invoker&lt;T&gt;&gt; invokers) {</span><br /><span class="line"> <span class="number">2</span>:     <span class="comment">// 不包含 MockInvoker 的情况下，直接返回 `invokers` 集合</span></span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (!hasMockProviders(invokers)) {</span><br /><span class="line"> <span class="number">4</span>:         <span class="keyword">return</span> invokers;</span><br /><span class="line"> <span class="number">5</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">6</span>:         <span class="comment">// 若包含 MockInvoker 的情况下，过滤掉 MockInvoker ，创建普通 Invoker 集合</span></span><br /><span class="line"> <span class="number">7</span>:         List&lt;Invoker&lt;T&gt;&gt; sInvokers = <span class="keyword">new</span> ArrayList&lt;Invoker&lt;T&gt;&gt;(invokers.size());</span><br /><span class="line"> <span class="number">8</span>:         <span class="keyword">for</span> (Invoker&lt;T&gt; invoker : invokers) {</span><br /><span class="line"> <span class="number">9</span>:             <span class="keyword">if</span> (!invoker.getUrl().getProtocol().equals(Constants.MOCK_PROTOCOL)) {</span><br /><span class="line"><span class="number">10</span>:                 sInvokers.add(invoker);</span><br /><span class="line"><span class="number">11</span>:             }</span><br /><span class="line"><span class="number">12</span>:         }</span><br /><span class="line"><span class="number">13</span>:         <span class="keyword">return</span> sInvokers;</span><br /><span class="line"><span class="number">14</span>:     }</span><br /><span class="line"><span class="number">15</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 2 至 4 行：调用&nbsp;<code>#hasMockProviders(invokers)</code>&nbsp;方法，判断<strong>不包含</strong>&nbsp;MockInvoker 的情况，直接返回&nbsp;<code>invokers</code>&nbsp;集合。</li>
+<li>第 6 至 13 行：若<strong>包含</strong>&nbsp;MockInvoker 的情况，<strong>过滤</strong>掉 MockInvoker ，创建<strong>普通</strong>&nbsp;Invoker 集合。</li>
+</ul>
+</li>
+<li>
+<p>【第<strong>二</strong>种】第 12 至 15 行：若设置&nbsp;<code>"invocation.need.mock"</code>&nbsp;配置项为&nbsp;<strong>true</strong>&nbsp;，调用&nbsp;<code>#getMockedInvokers(invokers)</code>&nbsp;方法，获得&nbsp;<strong>Mock</strong>Invoker 集合。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> &lt;T&gt; List&lt;Invoker&lt;T&gt;&gt; getMockedInvokers(<span class="keyword">final</span> List&lt;Invoker&lt;T&gt;&gt; invokers) {</span><br /><span class="line">    <span class="comment">// 不包含 MockInvoker 的情况下，直接返回 null</span></span><br /><span class="line">    <span class="keyword">if</span> (!hasMockProviders(invokers)) {</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 过滤掉普通 kInvoker ，创建 MockInvoker 集合</span></span><br /><span class="line">    List&lt;Invoker&lt;T&gt;&gt; sInvokers = <span class="keyword">new</span> ArrayList&lt;Invoker&lt;T&gt;&gt;(<span class="number">1</span>); <span class="comment">// 一般情况就一个，所以设置了默认数组大小为 1 。</span></span><br /><span class="line">    <span class="keyword">for</span> (Invoker&lt;T&gt; invoker : invokers) {</span><br /><span class="line">        <span class="keyword">if</span> (invoker.getUrl().getProtocol().equals(Constants.MOCK_PROTOCOL)) {</span><br /><span class="line">            sInvokers.add(invoker);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> sInvokers;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>和&nbsp;<code>#getNormalInvokers(invokers)</code>&nbsp;方法，<strong>相反</strong>。比较易懂，胖友看代码注释。</li>
+</ul>
+</li>
+<li>【第<strong>三</strong>种】第 18 行：其它，<strong>不匹配</strong>，直接返回&nbsp;<code>invokers</code>&nbsp;集合。理论上，应该调用和【第<strong>一</strong>种】一样，调用&nbsp;<code>#getNormalInvokers(invokers)</code>&nbsp;方法。不过没关系，😈 从目前代码来看，这块是走不到的。</li>
+</ul>
+<h1 id="4-MockProtocol">4. MockProtocol</h1>
+<p><code>com.alibaba.dubbo.rpc.support.MockProtocol</code>&nbsp;，实现 AbstractProtocol 抽象类，用于在服务<strong>消费者</strong>，通过类型为&nbsp;<code>"mock"</code>&nbsp;的 URL ，引用创建 MockInvoker 对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">MockProtocol</span> <span class="keyword">extends</span> <span class="title">AbstractProtocol</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="keyword">public</span> &lt;T&gt; <span class="function">Exporter&lt;T&gt; <span class="title">export</span><span class="params">(Invoker&lt;T&gt; invoker)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> UnsupportedOperationException();</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="keyword">public</span> &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">refer</span><span class="params">(Class&lt;T&gt; type, URL url)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> MockInvoker&lt;T&gt;(url);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">getDefaultPort</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>#export(Invoker)</code>&nbsp;<strong>实现</strong>方法，不允许调用，直接抛出 UnsupportedOperationException 异常。</li>
+<li>
+<p><code>#refer(Class&lt;T&gt; type, Url)</code>&nbsp;<strong>实现</strong>方法，引用创建&nbsp;<strong>MockInvoker</strong>&nbsp;对象。一般情况下，我们可以通过&nbsp;<code>dubbo-admin</code>&nbsp;<strong>运维平台</strong>或者直接向 Zookeeper 写入<strong>静态</strong>&nbsp;URL ，例如：</p>
+<figure class="highlight plain">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">// 实际写入的 URL</span><br /><span class="line">/dubbo/com.alibaba.dubbo.demo.DemoService/providers/mock%3A%2F%2F10.20.153.11%2Fcom.alibaba.dubbo.demo.DemoService%3Fdynamic%3Dtrue%26application%3Dfoo</span><br /><br /><span class="line">// decode URL</span><br /><span class="line">/dubbo/com.alibaba.dubbo.demo.DemoService/providers/mock://10.20.153.11/com.alibaba.dubbo.demo.DemoService?dynamic=true&amp;application=foo</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>为什么要是<strong>静态</strong>&nbsp;URL 呢？因为非静态 URL ，可能被注册中心删除。</li>
+</ul>
+</li>
+</ul>
+<p>😈 当然，我们在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「3.3 doMockInvoke」</a>&nbsp;中也看到，即使不<strong>手动</strong>添加&nbsp;<code>"mock"</code>&nbsp;URL ，在【第 9 行】代码中也会<strong>自动</strong>创建 MockInvoker 对象。</p>
+<h1 id="5-MockInvoker">5. MockInvoker</h1>
+<p><code>com.alibaba.dubbo.rpc.support.MockInvoker</code>&nbsp;，实现 Invoker 接口，<strong>Mock</strong>&nbsp;Invoker 实现类。</p>
+<h2 id="5-1-构造方法">5.1 构造方法</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * ProxyFactory$Adaptive 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> ProxyFactory proxyFactory = ExtensionLoader.getExtensionLoader(ProxyFactory.class).getAdaptiveExtension();</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * mock 与 Invoker 对象的映射缓存</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@see</span> #getInvoker(String)</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> Map&lt;String, Invoker&lt;?&gt;&gt; mocks = <span class="keyword">new</span> ConcurrentHashMap&lt;String, Invoker&lt;?&gt;&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * mock 与 Throwable 对象的映射缓存</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@see</span> #getThrowable(String)</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> Map&lt;String, Throwable&gt; throwables = <span class="keyword">new</span> ConcurrentHashMap&lt;String, Throwable&gt;();</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * URL 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> URL url;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">MockInvoker</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.url = url;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="5-2-invoke">5.2 invoke</h2>
+<p><code>#invoke(Invocation)</code>&nbsp;<strong>实现</strong>方法，执行 Mock 逻辑。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (invocation <span class="keyword">instanceof</span> RpcInvocation) {</span><br /><span class="line"> <span class="number">4</span>:         ((RpcInvocation) invocation).setInvoker(<span class="keyword">this</span>);</span><br /><span class="line"> <span class="number">5</span>:     }</span><br /><span class="line"> <span class="number">6</span>:     <span class="comment">// 获得 `"mock"` 配置项，方法级 &gt; 类级</span></span><br /><span class="line"> <span class="number">7</span>:     String mock = getUrl().getParameter(invocation.getMethodName() + <span class="string">"."</span> + Constants.MOCK_KEY);</span><br /><span class="line"> <span class="number">8</span>:     <span class="keyword">if</span> (StringUtils.isBlank(mock)) {</span><br /><span class="line"> <span class="number">9</span>:         mock = getUrl().getParameter(Constants.MOCK_KEY);</span><br /><span class="line"><span class="number">10</span>:     }</span><br /><span class="line"><span class="number">11</span>:     <span class="keyword">if</span> (StringUtils.isBlank(mock)) { <span class="comment">// 不允许为空</span></span><br /><span class="line"><span class="number">12</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="keyword">new</span> IllegalAccessException(<span class="string">"mock can not be null. url :"</span> + url));</span><br /><span class="line"><span class="number">13</span>:     }</span><br /><span class="line"><span class="number">14</span>:     <span class="comment">// 标准化 `"mock"` 配置项</span></span><br /><span class="line"><span class="number">15</span>:     mock = normalizedMock(URL.decode(mock));</span><br /><span class="line"><span class="number">16</span>:     <span class="comment">// 等于 "return " ，返回值为空的 RpcResult 对象</span></span><br /><span class="line"><span class="number">17</span>:     <span class="keyword">if</span> (Constants.RETURN_PREFIX.trim().equalsIgnoreCase(mock.trim())) {</span><br /><span class="line"><span class="number">18</span>:         RpcResult result = <span class="keyword">new</span> RpcResult();</span><br /><span class="line"><span class="number">19</span>:         result.setValue(<span class="keyword">null</span>);</span><br /><span class="line"><span class="number">20</span>:         <span class="keyword">return</span> result;</span><br /><span class="line"><span class="number">21</span>:     <span class="comment">// 以 "return " 开头，返回对应值的 RpcResult 对象</span></span><br /><span class="line"><span class="number">22</span>:     } <span class="keyword">else</span> <span class="keyword">if</span> (mock.startsWith(Constants.RETURN_PREFIX)) {</span><br /><span class="line"><span class="number">23</span>:         mock = mock.substring(Constants.RETURN_PREFIX.length()).trim();</span><br /><span class="line"><span class="number">24</span>:         mock = mock.replace(<span class="string">'`'</span>, <span class="string">'"'</span>);</span><br /><span class="line"><span class="number">25</span>:         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">26</span>:             <span class="comment">// 解析返回类型</span></span><br /><span class="line"><span class="number">27</span>:             Type[] returnTypes = RpcUtils.getReturnTypes(invocation);</span><br /><span class="line"><span class="number">28</span>:             <span class="comment">// 解析返回值</span></span><br /><span class="line"><span class="number">29</span>:             Object value = parseMockValue(mock, returnTypes);</span><br /><span class="line"><span class="number">30</span>:             <span class="comment">// 创建对应值的 RpcResult 对象，并返回</span></span><br /><span class="line"><span class="number">31</span>:             <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(value);</span><br /><span class="line"><span class="number">32</span>:         } <span class="keyword">catch</span> (Exception ew) {</span><br /><span class="line"><span class="number">33</span>:             <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"mock return invoke error. method :"</span> + invocation.getMethodName() + <span class="string">", mock:"</span> + mock + <span class="string">", url: "</span> + url, ew);</span><br /><span class="line"><span class="number">34</span>:         }</span><br /><span class="line"><span class="number">35</span>:     <span class="comment">// 以 "throw" 开头，抛出 RpcException 异常</span></span><br /><span class="line"><span class="number">36</span>:     } <span class="keyword">else</span> <span class="keyword">if</span> (mock.startsWith(Constants.THROW_PREFIX)) {</span><br /><span class="line"><span class="number">37</span>:         mock = mock.substring(Constants.THROW_PREFIX.length()).trim();</span><br /><span class="line"><span class="number">38</span>:         mock = mock.replace(<span class="string">'`'</span>, <span class="string">'"'</span>);</span><br /><span class="line"><span class="number">39</span>:         <span class="keyword">if</span> (StringUtils.isBlank(mock)) { <span class="comment">// 禁止为空</span></span><br /><span class="line"><span class="number">40</span>:             <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">" mocked exception for Service degradation. "</span>);</span><br /><span class="line"><span class="number">41</span>:         } <span class="keyword">else</span> { <span class="comment">// user customized class</span></span><br /><span class="line"><span class="number">42</span>:             <span class="comment">// 创建自定义异常</span></span><br /><span class="line"><span class="number">43</span>:             Throwable t = getThrowable(mock);</span><br /><span class="line"><span class="number">44</span>:             <span class="comment">// 抛出业务类型的 RpcException 异常</span></span><br /><span class="line"><span class="number">45</span>:             <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(RpcException.BIZ_EXCEPTION, t);</span><br /><span class="line"><span class="number">46</span>:         }</span><br /><span class="line"><span class="number">47</span>:     <span class="comment">// 自定义 Mock 类，执行自定义逻辑</span></span><br /><span class="line"><span class="number">48</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">49</span>:         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">50</span>:             <span class="comment">// 创建 Invoker 对象</span></span><br /><span class="line"><span class="number">51</span>:             Invoker&lt;T&gt; invoker = getInvoker(mock);</span><br /><span class="line"><span class="number">52</span>:             <span class="comment">// 执行 Invoker 对象的调用逻辑</span></span><br /><span class="line"><span class="number">53</span>:             <span class="keyword">return</span> invoker.invoke(invocation);</span><br /><span class="line"><span class="number">54</span>:         } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line"><span class="number">55</span>:             <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Failed to create mock implemention class "</span> + mock, t);</span><br /><span class="line"><span class="number">56</span>:         }</span><br /><span class="line"><span class="number">57</span>:     }</span><br /><span class="line"><span class="number">58</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 6 至 13 行：获得&nbsp;<code>"mock"</code>&nbsp;配置项，优先从<strong>方法级</strong>的参数，再从<strong>类级</strong>的参数。</li>
+<li>第 15 行：调用&nbsp;<code>#normalizedMock(mock)</code>&nbsp;方法，标准化&nbsp;<code>"mock"</code>&nbsp;配置项。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「5.3 normalizedMock」</a>&nbsp;。</li>
+<li>下面根据&nbsp;<code>mock</code>&nbsp;，分成<strong>三种</strong>情况。</li>
+<li>【第&nbsp;<strong>1.1</strong>&nbsp;种】第 16 至 20 行：等于&nbsp;<code>"return "</code>&nbsp;，返回值为<strong>空</strong>&nbsp;的 RpcResult 对象。</li>
+<li>【第&nbsp;<strong>1.2</strong>&nbsp;种】第 21 至 34 行：以&nbsp;<code>"return"</code>&nbsp;开头，返回<strong>对应值</strong>&nbsp;的 RpcResult 对象。
+<ul>
+<li>第29 行：调用&nbsp;<code>#parseMockValue(mock, returnTypes)</code>&nbsp;方法，解析<strong>返回值</strong>。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「5.4 parseMockValue」</a>&nbsp;。</li>
+</ul>
+</li>
+<li>【第&nbsp;<strong>2</strong>&nbsp;种】第 35 至 46 行：以&nbsp;<code>"throw"</code>&nbsp;开头，抛出<strong>对应的</strong>&nbsp;RpcException 异常。
+<ul>
+<li>第 43 行：调用&nbsp;<code>#getThrowable(mock)</code>&nbsp;对象，创建<strong>自定义</strong>异常。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「5.5 getThrowable」</a>&nbsp;。</li>
+</ul>
+</li>
+<li>【第&nbsp;<strong>3</strong>&nbsp;种】第 47 至 57 行：<strong>自定义</strong>&nbsp;Mock 类，执行自定义逻辑。
+<ul>
+<li>第 51 行：调用&nbsp;<code>#getInvoker(mock)</code>&nbsp;方法，获得 Invoker 对象。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-8-impl-mock/">「5.6 getInvoker」</a>&nbsp;。</li>
+<li>第 53 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，执行<strong>自定义</strong>&nbsp;Mock 逻辑。</li>
+</ul>
+</li>
+</ul>
+<h2 id="5-3-normalizedMock">5.3 normalizedMock</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">private</span> String <span class="title">normalizedMock</span><span class="params">(String mock)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="comment">// 若为空，直接返回</span></span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (mock == <span class="keyword">null</span> || mock.trim().length() == <span class="number">0</span>) {</span><br /><span class="line"> <span class="number">4</span>:         <span class="keyword">return</span> mock;</span><br /><span class="line"> <span class="number">5</span>:     <span class="comment">// 若果为 "true" "default" "fail" "force" 四种字符串，修改为对应接口 + "Mock" 类</span></span><br /><span class="line"> <span class="number">6</span>:     } <span class="keyword">else</span> <span class="keyword">if</span> (ConfigUtils.isDefault(mock) || <span class="string">"fail"</span>.equalsIgnoreCase(mock.trim()) || <span class="string">"force"</span>.equalsIgnoreCase(mock.trim())) {</span><br /><span class="line"> <span class="number">7</span>:         mock = url.getServiceInterface() + <span class="string">"Mock"</span>;</span><br /><span class="line"> <span class="number">8</span>:     }</span><br /><span class="line"> <span class="number">9</span>:     <span class="comment">// 若以 "fail:" 开头，去掉该开头</span></span><br /><span class="line"><span class="number">10</span>:     <span class="keyword">if</span> (mock.startsWith(Constants.FAIL_PREFIX)) {</span><br /><span class="line"><span class="number">11</span>:         mock = mock.substring(Constants.FAIL_PREFIX.length()).trim();</span><br /><span class="line"><span class="number">12</span>:     <span class="comment">// 若以 "force:" 开头，去掉该开头</span></span><br /><span class="line"><span class="number">13</span>:     } <span class="keyword">else</span> <span class="keyword">if</span> (mock.startsWith(Constants.FORCE_PREFIX)) {</span><br /><span class="line"><span class="number">14</span>:         mock = mock.substring(Constants.FORCE_PREFIX.length()).trim();</span><br /><span class="line"><span class="number">15</span>:     }</span><br /><span class="line"><span class="number">16</span>:     <span class="keyword">return</span> mock;</span><br /><span class="line"><span class="number">17</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>【第<strong>一</strong>种】第 2 至 4 行：若为<strong>空</strong>，直接返回。</li>
+<li>【第<strong>二</strong>种】第 5 至 8 行：若为&nbsp;<strong><code>true</code>&nbsp;<code>default</code>&nbsp;<code>fail</code>&nbsp;<code>force</code></strong>&nbsp;，修改为对应接口 +&nbsp;<code>"Mock"</code>&nbsp;。</li>
+<li>【第<strong>三</strong>种】第 9 至 15 行：若以&nbsp;<code>"fail:"</code>&nbsp;或&nbsp;<code>"force:"</code>&nbsp;<strong>开头</strong>&nbsp;，去掉<strong>开头</strong>。该开头，仅用于 MockClusterInvoker 表示<strong>强制</strong>&nbsp;Mock 还是<strong>失败</strong>&nbsp;Mock 。</li>
+</ul>
+<h2 id="5-4-parseMockValue">5.4 parseMockValue</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Object <span class="title">parseMockValue</span><span class="params">(String mock)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> parseMockValue(mock, <span class="keyword">null</span>);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Object <span class="title">parseMockValue</span><span class="params">(String mock, Type[] returnTypes)</span> </span>{</span><br /><span class="line">    <span class="comment">// 解析值（不考虑返回类型）</span></span><br /><span class="line">    Object value;</span><br /><span class="line">    <span class="keyword">if</span> (<span class="string">"empty"</span>.equals(mock)) { <span class="comment">// 未赋值的对象，即 new XXX() 对象</span></span><br /><span class="line">        value = ReflectUtils.getEmptyObject(returnTypes != <span class="keyword">null</span> &amp;&amp; returnTypes.length &gt; <span class="number">0</span> ? (Class&lt;?&gt;) returnTypes[<span class="number">0</span>] : <span class="keyword">null</span>);</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"null"</span>.equals(mock)) { <span class="comment">// null</span></span><br /><span class="line">        value = <span class="keyword">null</span>;</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"true"</span>.equals(mock)) { <span class="comment">// true</span></span><br /><span class="line">        value = <span class="keyword">true</span>;</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"false"</span>.equals(mock)) { <span class="comment">// false</span></span><br /><span class="line">        value = <span class="keyword">false</span>;</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (mock.length() &gt;= <span class="number">2</span> &amp;&amp; (mock.startsWith(<span class="string">"\""</span>) &amp;&amp; mock.endsWith(<span class="string">"\""</span>)</span><br /><span class="line">            || mock.startsWith(<span class="string">"\'"</span>) &amp;&amp; mock.endsWith(<span class="string">"\'"</span>))) { <span class="comment">// 使用 '' 或 "" 的字符串，截取掉头尾</span></span><br /><span class="line">        value = mock.subSequence(<span class="number">1</span>, mock.length() - <span class="number">1</span>);</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (returnTypes != <span class="keyword">null</span> &amp;&amp; returnTypes.length &gt; <span class="number">0</span> &amp;&amp; returnTypes[<span class="number">0</span>] == String.class) { <span class="comment">// 字符串</span></span><br /><span class="line">        value = mock;</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (StringUtils.isNumeric(mock)) { <span class="comment">// 数字</span></span><br /><span class="line">        value = JSON.parse(mock);</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (mock.startsWith(<span class="string">"{"</span>)) { <span class="comment">// Map</span></span><br /><span class="line">        value = JSON.parseObject(mock, Map.class);</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (mock.startsWith(<span class="string">"["</span>)) { <span class="comment">// List</span></span><br /><span class="line">        value = JSON.parseObject(mock, List.class);</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        value = mock;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 转换成对应的返回类型</span></span><br /><span class="line">    <span class="keyword">if</span> (returnTypes != <span class="keyword">null</span> &amp;&amp; returnTypes.length &gt; <span class="number">0</span>) {</span><br /><span class="line">        value = PojoUtils.realize(value, (Class&lt;?&gt;) returnTypes[<span class="number">0</span>], returnTypes.length &gt; <span class="number">1</span> ? returnTypes[<span class="number">1</span>] <span class="comment">/* 泛型 */</span>: <span class="keyword">null</span>);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> value;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>解析<strong>值</strong>，并<strong>转换</strong>成对应的返回<strong>类型</strong>。</li>
+</ul>
+<h2 id="5-5-getThrowable">5.5 getThrowable</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> Throwable <span class="title">getThrowable</span><span class="params">(String throwStr)</span> </span>{</span><br /><span class="line">    <span class="comment">// 从缓存中，获得 Throwable 对象</span></span><br /><span class="line">    Throwable throwable = throwables.get(throwStr);</span><br /><span class="line">    <span class="keyword">if</span> (throwable != <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">return</span> throwable;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 不存在，创建 Throwable 对象</span></span><br /><span class="line">    Throwable t;</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        <span class="comment">// 获得异常类</span></span><br /><span class="line">        Class&lt;?&gt; bizException = ReflectUtils.forName(throwStr);</span><br /><span class="line">        <span class="comment">// 获得构造方法</span></span><br /><span class="line">        Constructor&lt;?&gt; constructor = ReflectUtils.findConstructor(bizException, String.class);</span><br /><span class="line">        <span class="comment">// 创建 Throwable 对象</span></span><br /><span class="line">        t = (Throwable) constructor.newInstance(<span class="keyword">new</span> Object[]{<span class="string">" mocked exception for Service degradation. "</span>});</span><br /><span class="line">        <span class="comment">// 添加到缓存中</span></span><br /><span class="line">        <span class="keyword">if</span> (throwables.size() &lt; <span class="number">1000</span>) {</span><br /><span class="line">            throwables.put(throwStr, t);</span><br /><span class="line">        }</span><br /><span class="line">    } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"mock throw error :"</span> + throwStr + <span class="string">" argument error."</span>, e);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> t;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>代码比较易懂，胖友看代码注释。</li>
+</ul>
+<h2 id="5-6-getInvoker">5.6 getInvoker</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> Invoker&lt;T&gt; <span class="title">getInvoker</span><span class="params">(String mockService)</span> </span>{</span><br /><span class="line">    <span class="comment">// 从缓存中，获得 Invoker 对象</span></span><br /><span class="line">    Invoker&lt;T&gt; invoker = (Invoker&lt;T&gt;) mocks.get(mockService);</span><br /><span class="line">    <span class="keyword">if</span> (invoker != <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">return</span> invoker;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 不存在，创建 Invoker 对象</span></span><br /><span class="line">    <span class="comment">// 1. 获得接口类</span></span><br /><span class="line">    Class&lt;T&gt; serviceType = (Class&lt;T&gt;) ReflectUtils.forName(url.getServiceInterface());</span><br /><span class="line">    <span class="comment">// 2. 若为 `true` `default` ，修改修改为对应接口 + "Mock" 类。这种情况出现在原始 `mock = fail:true` 或 `mock = force:true` 等情况</span></span><br /><span class="line">    <span class="keyword">if</span> (ConfigUtils.isDefault(mockService)) {</span><br /><span class="line">        mockService = serviceType.getName() + <span class="string">"Mock"</span>;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 3. 获得 Mock 类</span></span><br /><span class="line">    Class&lt;?&gt; mockClass = ReflectUtils.forName(mockService);</span><br /><span class="line">    <span class="comment">// 4. 校验 Mock 类，实现了接口类</span></span><br /><span class="line">    <span class="keyword">if</span> (!serviceType.isAssignableFrom(mockClass)) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"The mock implemention class "</span> + mockClass.getName() + <span class="string">" not implement interface "</span> + serviceType.getName());</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        <span class="comment">// 5. 创建 Mock 对象</span></span><br /><span class="line">        T mockObject = (T) mockClass.newInstance();</span><br /><span class="line">        <span class="comment">// 6. 创建 Mock 对应，对应的 Invoker 对象</span></span><br /><span class="line">        invoker = proxyFactory.getInvoker(mockObject, serviceType, url);</span><br /><span class="line">        <span class="comment">// 7. 添加到缓存</span></span><br /><span class="line">        <span class="keyword">if</span> (mocks.size() &lt; <span class="number">10000</span>) {</span><br /><span class="line">            mocks.put(mockService, invoker);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">return</span> invoker;</span><br /><span class="line">    } <span class="keyword">catch</span> (InstantiationException e) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"No such empty constructor \"public "</span> + mockClass.getSimpleName() + <span class="string">"()\" in mock implemention class "</span> + mockClass.getName(), e);</span><br /><span class="line">    } <span class="keyword">catch</span> (IllegalAccessException e) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(e);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>代码比较易懂，胖友看代码注释。</li>
+</ul>
+<h1 id="6-AbstractInterfaceConfig">6. AbstractInterfaceConfig</h1>
+<p><code>#checkStubAndMock(Class&lt;?&gt; interfaceClass)</code>&nbsp;方法，校验 Stub 和&nbsp;<strong>Mock 相关的配置</strong>。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">checkStubAndMock</span><span class="params">(Class&lt;?&gt; interfaceClass)</span> </span>{</span><br /><span class="line">    <span class="comment">// 【省略代码】`local` 配置项的校验，和 `stub` 一样。</span></span><br /><span class="line">    <span class="comment">// 【省略代码】`stub` 配置项的校验</span></span><br /><br /><span class="line">    <span class="comment">// mock 配置校验</span></span><br /><span class="line">    <span class="keyword">if</span> (ConfigUtils.isNotEmpty(mock)) {</span><br /><span class="line">        <span class="keyword">if</span> (mock.startsWith(Constants.RETURN_PREFIX)) { <span class="comment">// 处理 "return " 开头的情况</span></span><br /><span class="line">            String value = mock.substring(Constants.RETURN_PREFIX.length());</span><br /><span class="line">            <span class="comment">// 校验 Mock 值，配置正确</span></span><br /><span class="line">            <span class="keyword">try</span> {</span><br /><span class="line">                MockInvoker.parseMockValue(value);</span><br /><span class="line">            } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Illegal mock json value in &lt;dubbo:service ... mock=\""</span> + mock + <span class="string">"\" /&gt;"</span>);</span><br /><span class="line">            }</span><br /><span class="line">        } <span class="keyword">else</span> {</span><br /><span class="line">            <span class="comment">// 获得 Mock 类</span></span><br /><span class="line">            Class&lt;?&gt; mockClass = ConfigUtils.isDefault(mock) ? ReflectUtils.forName(interfaceClass.getName() + <span class="string">"Mock"</span>) : ReflectUtils.forName(mock);</span><br /><span class="line">            <span class="comment">// 校验是否实现接口类</span></span><br /><span class="line">            <span class="keyword">if</span> (!interfaceClass.isAssignableFrom(mockClass)) {</span><br /><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"The mock implementation class "</span> + mockClass.getName() + <span class="string">" not implement interface "</span> + interfaceClass.getName());</span><br /><span class="line">            }</span><br /><span class="line">            <span class="comment">// 校验是否有默认构造方法</span></span><br /><span class="line">            <span class="keyword">try</span> {</span><br /><span class="line">                mockClass.getConstructor();</span><br /><span class="line">            } <span class="keyword">catch</span> (NoSuchMethodException e) {</span><br /><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"No such empty constructor \"public "</span> + mockClass.getSimpleName() + <span class="string">"()\" in mock implementation class "</span> + mockClass.getName());</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>代码比较易懂，胖友看代码注释。</li>
+<li>从 Mock 配置校验的逻辑我们可以看出，不允许配置&nbsp;<code>"force:"</code>&nbsp;和&nbsp;<code>"fail:"</code>&nbsp;为开头。😈 所以，<strong>不能通过</strong>&nbsp;Java API 或者 XML ，又或者注解来配置 Mock 规则，只能通过<strong>配置规则</strong>来开启<strong>服务降级</strong>。具体的配置方式，参见&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/service-downgrade.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 服务降级》</a>。
+<ul>
+<li>同样，也不允许配置&nbsp;<code>"throws "</code>&nbsp;开头。</li>
+</ul>
+</li>
+</ul>
+</div>

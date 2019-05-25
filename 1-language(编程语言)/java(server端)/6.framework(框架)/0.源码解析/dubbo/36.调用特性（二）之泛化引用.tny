@@ -1,0 +1,242 @@
+<header class="article-header">
+<h1 class="article-title">调用特性（二）之泛化引用</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享<strong>泛化引用</strong>。我们来看下&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/generic-reference.html" target="_blank" rel="external nofollow noopener noreferrer">《用户指南 &mdash;&mdash; 泛化引用》</a>&nbsp;的定义：</p>
+<blockquote>
+<p>泛化接口调用方式主要用于客户端没有 API 接口及模型类元的情况，参数及返回值中的所有 POJO 均用 Map 表示，通常用于框架集成，比如：实现一个通用的服务测试框架，可通过 GenericService 调用所有服务实现。</p>
+</blockquote>
+<p>请注意，消费<strong>消费者</strong>没有&nbsp;<strong>API 接口</strong>&nbsp;及&nbsp;<strong>模型类元</strong>。那就是说，Dubbo 在泛化引用中，需要做两件事情：</p>
+<ul>
+<li>
+<p>没有&nbsp;<strong>API 接口</strong>，所以提供一个泛化服务接口，目前是&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/f83e70b53389a064e49babe32e61a5648002a44a/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/service/GenericService.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.service.GenericService</code></a>&nbsp;，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">GenericService</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Generic invocation</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 泛化调用</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> method         Method name, e.g. findPerson. If there are overridden methods, parameter info is</span></span><br /><span class="line"><span class="comment">     *                       required, e.g. findPerson(java.lang.String)</span></span><br /><span class="line"><span class="comment">     *                       方法名</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> parameterTypes Parameter types</span></span><br /><span class="line"><span class="comment">     *                       参数类型数组</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> args           Arguments</span></span><br /><span class="line"><span class="comment">     *                       参数数组</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> invocation return value 调用结果</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> Throwable potential exception thrown from the invocation</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    Object $invoke(String method, String[] parameterTypes, Object[] args) <span class="keyword">throws</span> GenericException;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><strong>一个</strong>泛化引用，只对应<strong>一个</strong>服务实现。</li>
+<li>通过&nbsp;<code>$invoke(method, parameterTypes, args)</code>&nbsp;方法，可以实现服务的泛化调用。</li>
+<li>具体的使用方式，我们在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/rpc-feature-generic-reference/">「2. 示例」</a>&nbsp;中看。</li>
+</ul>
+</li>
+<li>
+<p>没有&nbsp;<strong>模型类元</strong>，所以方法参数和方法返回若是 POJO ( 例如 User 和 Order 等 ) ，需要<strong>转换处理</strong>：</p>
+<ul>
+<li>服务消费者，将 POJO 转成 Map ，然后再调用服务提供者。</li>
+<li>服务提供者，接收到 Map ，转换成 POJO ，再调用 Service 方法。若返回值有 POJO ，则转换成 Map 再返回。</li>
+<li>🙂 此处的 Map 只是举例子，实际在下文中，我们会看到还有<strong>两种</strong>转换方式。</li>
+</ul>
+</li>
+</ul>
+<p>整体流程如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_11_06/01.png" alt="流程" /></p>
+<h1 id="2-示例">2. 示例</h1>
+<p><strong>服务提供者</strong></p>
+<p>在&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/3766a47c5e97ee86c29d765dc88ee11ab5225604/dubbo-demo/dubbo-generic-reference-demo-provider" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-generic-reference-demo-provider</code></a>&nbsp;，我们提供了例子。普通的服务提供者，不需要做任何处理，胖友自己查看。</p>
+<p><strong>服务消费者</strong></p>
+<p>在&nbsp;<a href="https://github.com/YunaiV/dubbo/tree/3766a47c5e97ee86c29d765dc88ee11ab5225604/dubbo-demo/dubbo-generic-reference-demo-consumer" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-generic-reference-demo-consumer</code></a>&nbsp;，我们提供了例子。我们挑<strong>重点</strong>的地方说。</p>
+<p>① 在 Spring 配置申明&nbsp;<code>generic="true"</code>：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">&lt;dubbo:reference id=<span class="string">"demoService"</span>  <span class="class"><span class="keyword">interface</span></span>=<span class="string">"com.alibaba.dubbo.demo.DemoService"</span> generic=<span class="string">"true"</span> /&gt;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>interface</code>&nbsp;配置项，泛化引用的服务接口。通过该配置，可以从注册中心，获取到所有<strong>该服务</strong>的提供方的地址。</li>
+<li><code>generic</code>&nbsp;配置项，默认为&nbsp;<code>false</code>&nbsp;，不使用配置项。目前有<strong>三种配置项的值</strong>，开启泛化引用的功能：
+<ul>
+<li><code>generic=true</code>&nbsp;，使用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/f83e70b53389a064e49babe32e61a5648002a44a/dubbo-common/src/main/java/com/alibaba/dubbo/common/utils/PojoUtils.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.utils.PojoUtils</code></a>&nbsp;，实现&nbsp;<code>POJO &lt;=&gt; Map</code>&nbsp;的互转。</li>
+<li><code>generic=nativejava</code>&nbsp;，使用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/nativejava/NativeJavaSerialization.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.nativejava.NativeJavaSerialization</code></a>&nbsp;，实现&nbsp;<code>POJO &lt;=&gt; byte[]</code>&nbsp;的互转。</li>
+<li><code>generic=bean</code>&nbsp;，使用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/beanutil/JavaBeanSerializeUtil.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.beanutil.JavaBeanSerializeUtil</code></a>&nbsp;，实现&nbsp;<code>POJO &lt;=&gt; JavaBeanDescriptor</code>&nbsp;的互转。</li>
+<li>总的来说，三种方式的差异，在于使用互转(&nbsp;<strong>序列化和反序列化</strong>&nbsp;)的方式不同。未来如果我们有需要，完成可以实现&nbsp;<code>generic=json</code>&nbsp;，使用 FastJSON 来序列化和反序列化。</li>
+</ul>
+</li>
+</ul>
+<p>② 在 Java 代码获取 barService 并开始泛化调用：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">ClassPathXmlApplicationContext context = <span class="keyword">new</span> ClassPathXmlApplicationContext(<span class="keyword">new</span> String[]{<span class="string">"META-INF/spring/dubbo-demo-consumer.xml"</span>});</span><br /><br /><span class="line">GenericService genericService = (GenericService) context.getBean(<span class="string">"demoService"</span>);</span><br /><span class="line">Object result = genericService.$invoke(<span class="string">"say01"</span>, <span class="keyword">new</span> String[]{<span class="string">"java.lang.String"</span>}, <span class="keyword">new</span> Object[]{<span class="string">"123"</span>});</span><br /><span class="line">System.out.println(<span class="string">"result: "</span> + result);</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>那么问题就来了，为什么可以使用 GenericService 转换？答案在&nbsp;<code>ReferenceConfig#init()</code>&nbsp;方法中，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ReferenceConfig.java</span></span><br /><span class="line"><span class="keyword">if</span> (ProtocolUtils.isGeneric(getGeneric())) {</span><br /><span class="line">    interfaceClass = GenericService.class;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="comment">// ProtocolUtils.java</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">isGeneric</span><span class="params">(String generic)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> generic != <span class="keyword">null</span></span><br /><span class="line">            &amp;&amp; !<span class="string">""</span>.equals(generic)</span><br /><span class="line">            &amp;&amp; (Constants.GENERIC_SERIALIZATION_DEFAULT.equalsIgnoreCase(generic)  <span class="comment">/* Normal generalization cal */</span></span><br /><span class="line">            || Constants.GENERIC_SERIALIZATION_NATIVE_JAVA.equalsIgnoreCase(generic) <span class="comment">/* Streaming generalization call supporting jdk serialization */</span></span><br /><span class="line">            || Constants.GENERIC_SERIALIZATION_BEAN.equalsIgnoreCase(generic));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h2 id="2-1-有关泛化类型的进一步解释">2.1 有关泛化类型的进一步解释</h2>
+<blockquote>
+<p>本小节为引用&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/generic-reference.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 泛化引用》</a>&nbsp;。</p>
+</blockquote>
+<p>假设存在 POJO 如：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">package</span> com.xxx;</span><br /><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">PersonImpl</span> <span class="keyword">implements</span> <span class="title">Person</span> </span>{</span><br /><span class="line">    <span class="keyword">private</span> String name;</span><br /><span class="line">    <span class="keyword">private</span> String password;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">getName</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> name;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setName</span><span class="params">(String name)</span> </span>{</span><br /><span class="line">        <span class="keyword">this</span>.name = name;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">getPassword</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> password;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setPassword</span><span class="params">(String password)</span> </span>{</span><br /><span class="line">        <span class="keyword">this</span>.password = password;</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>则 POJO 数据：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">Person person = <span class="keyword">new</span> PersonImpl(); </span><br /><span class="line">person.setName(<span class="string">"xxx"</span>); </span><br /><span class="line">person.setPassword(<span class="string">"yyy"</span>);</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>【服务消费者】可用下面 Map 表示：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">Map&lt;String, Object&gt; map = <span class="keyword">new</span> HashMap&lt;String, Object&gt;(); </span><br /><span class="line"><span class="comment">// 注意：如果参数类型是接口，或者List等丢失泛型，可通过class属性指定类型。</span></span><br /><span class="line">map.put(<span class="string">"class"</span>, <span class="string">"com.xxx.PersonImpl"</span>); </span><br /><span class="line">map.put(<span class="string">"name"</span>, <span class="string">"xxx"</span>); </span><br /><span class="line">map.put(<span class="string">"password"</span>, <span class="string">"yyy"</span>);</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>Map 中的&nbsp;<code>class</code>&nbsp;属性，在 PojoUtils 中，会根据该属性，将 Map 转换成 POJO 对象。</li>
+</ul>
+<h1 id="3-服务消费者-GenericImplFilter">3. 服务消费者 GenericImplFilter</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/3766a47c5e97ee86c29d765dc88ee11ab5225604/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/filter/GenericImplFilter.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.filter.GenericImplFilter</code></a>&nbsp;，实现 Filter 接口，服务消费者的泛化调用过滤器。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Activate</span>(group = Constants.CONSUMER, value = Constants.GENERIC_KEY, order = <span class="number">20000</span>)</span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">GenericImplFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><span class="line"> <span class="number">3</span>: </span><br /><span class="line"> <span class="number">4</span>:     <span class="comment">// ... 省略无关属性</span></span><br /><span class="line"> <span class="number">5</span>: </span><br /><span class="line"> <span class="number">6</span>:     <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">7</span>:     <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">8</span>:         <span class="comment">// 获得 `generic` 配置项</span></span><br /><span class="line"> <span class="number">9</span>:         String generic = invoker.getUrl().getParameter(Constants.GENERIC_KEY);</span><br /><span class="line"><span class="number">10</span>: </span><br /><span class="line"><span class="number">11</span>:         <span class="comment">// 省略代码...泛化实现的调用</span></span><br /><span class="line"><span class="number">12</span>: </span><br /><span class="line"><span class="number">13</span>:         <span class="comment">// 泛化引用的调用</span></span><br /><span class="line"><span class="number">14</span>:         <span class="keyword">if</span> (invocation.getMethodName().equals(Constants.$INVOKE) <span class="comment">// 方法名为 `$invoke`</span></span><br /><span class="line"><span class="number">15</span>:                 &amp;&amp; invocation.getArguments() != <span class="keyword">null</span></span><br /><span class="line"><span class="number">16</span>:                 &amp;&amp; invocation.getArguments().length == <span class="number">3</span></span><br /><span class="line"><span class="number">17</span>:                 &amp;&amp; ProtocolUtils.isGeneric(generic)) {</span><br /><span class="line"><span class="number">18</span>:             Object[] args = (Object[]) invocation.getArguments()[<span class="number">2</span>];</span><br /><span class="line"><span class="number">19</span>:             <span class="comment">// `nativejava` ，校验方法参数都为 byte[]</span></span><br /><span class="line"><span class="number">20</span>:             <span class="keyword">if</span> (ProtocolUtils.isJavaGenericSerialization(generic)) {</span><br /><span class="line"><span class="number">21</span>:                 <span class="keyword">for</span> (Object arg : args) {</span><br /><span class="line"><span class="number">22</span>:                     <span class="keyword">if</span> (!(<span class="keyword">byte</span>[].class == arg.getClass())) {</span><br /><span class="line"><span class="number">23</span>:                         error(<span class="keyword">byte</span>[].class.getName(), arg.getClass().getName());</span><br /><span class="line"><span class="number">24</span>:                     }</span><br /><span class="line"><span class="number">25</span>:                 }</span><br /><span class="line"><span class="number">26</span>:             <span class="comment">// `bean` ，校验方法参数为 JavaBeanDescriptor</span></span><br /><span class="line"><span class="number">27</span>:             } <span class="keyword">else</span> <span class="keyword">if</span> (ProtocolUtils.isBeanGenericSerialization(generic)) {</span><br /><span class="line"><span class="number">28</span>:                 <span class="keyword">for</span> (Object arg : args) {</span><br /><span class="line"><span class="number">29</span>:                     <span class="keyword">if</span> (!(arg <span class="keyword">instanceof</span> JavaBeanDescriptor)) {</span><br /><span class="line"><span class="number">30</span>:                         error(JavaBeanDescriptor.class.getName(), arg.getClass().getName());</span><br /><span class="line"><span class="number">31</span>:                     }</span><br /><span class="line"><span class="number">32</span>:                 }</span><br /><span class="line"><span class="number">33</span>:             }</span><br /><span class="line"><span class="number">34</span>: </span><br /><span class="line"><span class="number">35</span>:             <span class="comment">// 通过隐式参数，传递 `generic` 配置项</span></span><br /><span class="line"><span class="number">36</span>:             ((RpcInvocation) invocation).setAttachment(Constants.GENERIC_KEY, generic);</span><br /><span class="line"><span class="number">37</span>:         }</span><br /><span class="line"><span class="number">38</span>:         <span class="keyword">return</span> invoker.invoke(invocation);</span><br /><span class="line"><span class="number">39</span>:     }</span><br /><span class="line"><span class="number">40</span>: </span><br /><span class="line"><span class="number">41</span>:     <span class="comment">// 省略 `#error(...)` 方法</span></span><br /><span class="line"><span class="number">42</span>: </span><br /><span class="line"><span class="number">43</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>使用 Dubbo SPI Adaptive 机制，<strong>自动加载</strong>，仅限<strong>服务消费者</strong>，并且有&nbsp;<code>generic</code>&nbsp;配置项。
+<ul>
+<li>此处笔者就产生了一个疑问，从注册中心，获得到的服务 URL ，并没有设置&nbsp;<code>generic</code>&nbsp;的配置项，那岂不是在 ProtocolFilterWrapper 中，使用 Dubbo SPI Adaptive 加载不到 GenericImplFilter 这个过滤器？</li>
+<li>于是，笔者就开始慢慢调试，直到发现&nbsp;<code>RegistryDirectory#mergeUrl(providerUrl)</code>&nbsp;方法，它会将服务消费者的配置( URL )项，<strong>覆盖</strong>到服务提供者的 URL 。</li>
+<li>又因为泛化引用时，我们会在服务消费者的配置&nbsp;<code>generic = true</code>&nbsp;，那么服务提供者 URL 自然就有了该配置项，所以便有了 GenericImplFilter 过滤器。</li>
+</ul>
+</li>
+<li>第 9 行：获得&nbsp;<code>generic</code>&nbsp;配置项。</li>
+<li>第 11 行：省略用于调用<strong>泛化实现服务</strong>的代码，对应文档为&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/generic-service.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 泛化实现》</a>&nbsp;，下一篇文章，我们详细分享。</li>
+<li>
+<p>第 13 至 37 行：<strong>泛化引用</strong>的调用，通过方法( 包括方法名、参数 ) +&nbsp;<code>generic</code>&nbsp;配置项，进行判断。</p>
+<ul>
+<li>
+<p>第 19 至 33 行：根据不同的&nbsp;<code>generic</code>&nbsp;配置项，校验方法参数是否已经正确<strong>序列化</strong>。若不合法，调用&nbsp;<code>#error(expected, actual)</code>&nbsp;方法，抛出 RpcException 异常。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">error</span><span class="params">(String expected, String actual)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(</span><br /><span class="line">            <span class="keyword">new</span> StringBuilder(<span class="number">32</span>)</span><br /><span class="line">                    .append(<span class="string">"Generic serialization ["</span>)</span><br /><span class="line">                    .append(Constants.GENERIC_SERIALIZATION_NATIVE_JAVA)</span><br /><span class="line">                    .append(<span class="string">"] only support message type "</span>)</span><br /><span class="line">                    .append(expected)</span><br /><span class="line">                    .append(<span class="string">" and your message type is "</span>)</span><br /><span class="line">                    .append(actual).toString());</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>x</li>
+</ul>
+</li>
+<li>第 36 行：调用&nbsp;<code>RpcInvocation#setAttachment(key, value)</code>&nbsp;通过隐式参数，传递&nbsp;<code>generic</code>&nbsp;配置项。</li>
+</ul>
+</li>
+<li>
+<p>第 38 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，继续过滤链的调用，最终 RPC 调用。</p>
+</li>
+</ul>
+<h1 id="4-服务提供者-GenericFilter">4. 服务提供者 GenericFilter</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/3766a47c5e97ee86c29d765dc88ee11ab5225604/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/filter/GenericFilter.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.filter.GenericFilter</code></a>&nbsp;，实现 Filter 接口，服务消费者的泛化调用过滤器。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Activate</span>(group = Constants.PROVIDER, order = -<span class="number">20000</span>)</span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">GenericFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><span class="line"> <span class="number">3</span>: </span><br /><span class="line"> <span class="number">4</span>:     <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">5</span>:     <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation inv)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">6</span>:         <span class="comment">// 泛化引用的调用</span></span><br /><span class="line"> <span class="number">7</span>:         <span class="keyword">if</span> (inv.getMethodName().equals(Constants.$INVOKE)</span><br /><span class="line"> <span class="number">8</span>:                 &amp;&amp; inv.getArguments() != <span class="keyword">null</span></span><br /><span class="line"> <span class="number">9</span>:                 &amp;&amp; inv.getArguments().length == <span class="number">3</span></span><br /><span class="line"><span class="number">10</span>:                 &amp;&amp; !ProtocolUtils.isGeneric(invoker.getUrl().getParameter(Constants.GENERIC_KEY))) { <span class="comment">// 非泛化实现的调用</span></span><br /><span class="line"><span class="number">11</span>:             String name = ((String) inv.getArguments()[<span class="number">0</span>]).trim();</span><br /><span class="line"><span class="number">12</span>:             String[] types = (String[]) inv.getArguments()[<span class="number">1</span>];</span><br /><span class="line"><span class="number">13</span>:             Object[] args = (Object[]) inv.getArguments()[<span class="number">2</span>];</span><br /><span class="line"><span class="number">14</span>:             <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">15</span>:                 <span class="comment">// 获得对应的方法 Method 对象</span></span><br /><span class="line"><span class="number">16</span>:                 Method method = ReflectUtils.findMethodByMethodSignature(invoker.getInterface(), name, types);</span><br /><span class="line"><span class="number">17</span>:                 <span class="comment">// 获得方法参数类型和方法参数数组</span></span><br /><span class="line"><span class="number">18</span>:                 Class&lt;?&gt;[] params = method.getParameterTypes();</span><br /><span class="line"><span class="number">19</span>:                 <span class="keyword">if</span> (args == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">20</span>:                     args = <span class="keyword">new</span> Object[params.length];</span><br /><span class="line"><span class="number">21</span>:                 }</span><br /><span class="line"><span class="number">22</span>:                 <span class="comment">// 获得 `generic` 配置项</span></span><br /><span class="line"><span class="number">23</span>:                 String generic = inv.getAttachment(Constants.GENERIC_KEY);</span><br /><span class="line"><span class="number">24</span>:                 <span class="comment">// 【第一步】`true` ，反序列化参数，仅有 Map =&gt; POJO</span></span><br /><span class="line"><span class="number">25</span>:                 <span class="keyword">if</span> (StringUtils.isEmpty(generic) || ProtocolUtils.isDefaultGenericSerialization(generic)) {</span><br /><span class="line"><span class="number">26</span>:                     args = PojoUtils.realize(args, params, method.getGenericParameterTypes());</span><br /><span class="line"><span class="number">27</span>:                 <span class="comment">// 【第一步】`nativejava` ，反序列化参数，byte[] =&gt; 方法参数</span></span><br /><span class="line"><span class="number">28</span>:                 } <span class="keyword">else</span> <span class="keyword">if</span> (ProtocolUtils.isJavaGenericSerialization(generic)) {</span><br /><span class="line"><span class="number">29</span>:                     <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; args.length; i++) {</span><br /><span class="line"><span class="number">30</span>:                         <span class="keyword">if</span> (<span class="keyword">byte</span>[].class == args[i].getClass()) {</span><br /><span class="line"><span class="number">31</span>:                             <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">32</span>:                                 UnsafeByteArrayInputStream is = <span class="keyword">new</span> UnsafeByteArrayInputStream((<span class="keyword">byte</span>[]) args[i]);</span><br /><span class="line"><span class="number">33</span>:                                 args[i] = ExtensionLoader.getExtensionLoader(Serialization.class).getExtension(Constants.GENERIC_SERIALIZATION_NATIVE_JAVA)</span><br /><span class="line"><span class="number">34</span>:                                         .deserialize(<span class="keyword">null</span>, is).readObject();</span><br /><span class="line"><span class="number">35</span>:                             } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line"><span class="number">36</span>:                                 <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Deserialize argument ["</span> + (i + <span class="number">1</span>) + <span class="string">"] failed."</span>, e);</span><br /><span class="line"><span class="number">37</span>:                             }</span><br /><span class="line"><span class="number">38</span>:                         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">39</span>:                             <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(</span><br /><span class="line"><span class="number">40</span>:                                     <span class="keyword">new</span> StringBuilder(<span class="number">32</span>).append(<span class="string">"Generic serialization ["</span>)</span><br /><span class="line"><span class="number">41</span>:                                             .append(Constants.GENERIC_SERIALIZATION_NATIVE_JAVA)</span><br /><span class="line"><span class="number">42</span>:                                             .append(<span class="string">"] only support message type "</span>)</span><br /><span class="line"><span class="number">43</span>:                                             .append(<span class="keyword">byte</span>[].class)</span><br /><span class="line"><span class="number">44</span>:                                             .append(<span class="string">" and your message type is "</span>)</span><br /><span class="line"><span class="number">45</span>:                                             .append(args[i].getClass()).toString());</span><br /><span class="line"><span class="number">46</span>:                         }</span><br /><span class="line"><span class="number">47</span>:                     }</span><br /><span class="line"><span class="number">48</span>:                 <span class="comment">// 【第一步】`bean` ，反序列化参数，JavaBeanDescriptor =&gt; 方法参数</span></span><br /><span class="line"><span class="number">49</span>:                 } <span class="keyword">else</span> <span class="keyword">if</span> (ProtocolUtils.isBeanGenericSerialization(generic)) {</span><br /><span class="line"><span class="number">50</span>:                     <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; args.length; i++) {</span><br /><span class="line"><span class="number">51</span>:                         <span class="keyword">if</span> (args[i] <span class="keyword">instanceof</span> JavaBeanDescriptor) {</span><br /><span class="line"><span class="number">52</span>:                             args[i] = JavaBeanSerializeUtil.deserialize((JavaBeanDescriptor) args[i]);</span><br /><span class="line"><span class="number">53</span>:                         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">54</span>:                             <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(</span><br /><span class="line"><span class="number">55</span>:                                     <span class="keyword">new</span> StringBuilder(<span class="number">32</span>)</span><br /><span class="line"><span class="number">56</span>:                                             .append(<span class="string">"Generic serialization ["</span>)</span><br /><span class="line"><span class="number">57</span>:                                             .append(Constants.GENERIC_SERIALIZATION_BEAN)</span><br /><span class="line"><span class="number">58</span>:                                             .append(<span class="string">"] only support message type "</span>)</span><br /><span class="line"><span class="number">59</span>:                                             .append(JavaBeanDescriptor.class.getName())</span><br /><span class="line"><span class="number">60</span>:                                             .append(<span class="string">" and your message type is "</span>)</span><br /><span class="line"><span class="number">61</span>:                                             .append(args[i].getClass().getName()).toString());</span><br /><span class="line"><span class="number">62</span>:                         }</span><br /><span class="line"><span class="number">63</span>:                     }</span><br /><span class="line"><span class="number">64</span>:                 }</span><br /><span class="line"><span class="number">65</span>:                 <span class="comment">// 【第二步】方法调用</span></span><br /><span class="line"><span class="number">66</span>:                 Result result = invoker.invoke(<span class="keyword">new</span> RpcInvocation(method, args, inv.getAttachments()));</span><br /><span class="line"><span class="number">67</span>:                 <span class="comment">// 【第三步】若是异常结果，并且非 GenericException 异常，则使用 GenericException 包装</span></span><br /><span class="line"><span class="number">68</span>:                 <span class="keyword">if</span> (result.hasException()</span><br /><span class="line"><span class="number">69</span>:                         &amp;&amp; !(result.getException() <span class="keyword">instanceof</span> GenericException)) {</span><br /><span class="line"><span class="number">70</span>:                     <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(<span class="keyword">new</span> GenericException(result.getException()));</span><br /><span class="line"><span class="number">71</span>:                 }</span><br /><span class="line"><span class="number">72</span>:                 <span class="comment">// 【第三步】`nativejava` ，序列化结果，结果 =&gt; byte[]</span></span><br /><span class="line"><span class="number">73</span>:                 <span class="keyword">if</span> (ProtocolUtils.isJavaGenericSerialization(generic)) {</span><br /><span class="line"><span class="number">74</span>:                     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">75</span>:                         UnsafeByteArrayOutputStream os = <span class="keyword">new</span> UnsafeByteArrayOutputStream(<span class="number">512</span>);</span><br /><span class="line"><span class="number">76</span>:                         ExtensionLoader.getExtensionLoader(Serialization.class).getExtension(Constants.GENERIC_SERIALIZATION_NATIVE_JAVA)</span><br /><span class="line"><span class="number">77</span>:                                 .serialize(<span class="keyword">null</span>, os).writeObject(result.getValue());</span><br /><span class="line"><span class="number">78</span>:                         <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(os.toByteArray());</span><br /><span class="line"><span class="number">79</span>:                     } <span class="keyword">catch</span> (IOException e) {</span><br /><span class="line"><span class="number">80</span>:                         <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Serialize result failed."</span>, e);</span><br /><span class="line"><span class="number">81</span>:                     }</span><br /><span class="line"><span class="number">82</span>:                 <span class="comment">// 【第三步】`bean` ，序列化结果，结果 =&gt; JavaBeanDescriptor</span></span><br /><span class="line"><span class="number">83</span>:                 } <span class="keyword">else</span> <span class="keyword">if</span> (ProtocolUtils.isBeanGenericSerialization(generic)) {</span><br /><span class="line"><span class="number">84</span>:                     <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(JavaBeanSerializeUtil.serialize(result.getValue(), JavaBeanAccessor.METHOD));</span><br /><span class="line"><span class="number">85</span>:                 <span class="comment">// 【第三步】`true` ，序列化结果，仅有 POJO =&gt; Map</span></span><br /><span class="line"><span class="number">86</span>:                 } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">87</span>:                     <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(PojoUtils.generalize(result.getValue()));</span><br /><span class="line"><span class="number">88</span>:                 }</span><br /><span class="line"><span class="number">89</span>:             } <span class="keyword">catch</span> (NoSuchMethodException e) {</span><br /><span class="line"><span class="number">90</span>:                 <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(e.getMessage(), e);</span><br /><span class="line"><span class="number">91</span>:             } <span class="keyword">catch</span> (ClassNotFoundException e) {</span><br /><span class="line"><span class="number">92</span>:                 <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(e.getMessage(), e);</span><br /><span class="line"><span class="number">93</span>:             }</span><br /><span class="line"><span class="number">94</span>:         }</span><br /><span class="line"><span class="number">95</span>:         <span class="comment">// 普通调用</span></span><br /><span class="line"><span class="number">96</span>:         <span class="keyword">return</span> invoker.invoke(inv);</span><br /><span class="line"><span class="number">97</span>:     }</span><br /><span class="line"><span class="number">98</span>: </span><br /><span class="line"><span class="number">99</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>使用 Dubbo SPI Adaptive 机制，<strong>自动加载</strong>，仅限<strong>服务提供者</strong>。</li>
+<li>第 96 行：若是普通调用(&nbsp;<strong>非泛化引用的调用</strong>&nbsp;)，调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，继续过滤链的调用，最终调用 Service 服务。</li>
+<li>第 6 至 95 行： 若是<strong>泛化引用的调用</strong>，通过方法( 包括方法名、参数 )判断。<strong>注意</strong>，【第 10 行】非<strong>泛化实现</strong>的调用。</li>
+<li>第 16 行：调用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/f83e70b53389a064e49babe32e61a5648002a44a/dubbo-common/src/main/java/com/alibaba/dubbo/common/utils/ReflectUtils.java#L768-L814" target="_blank" rel="external nofollow noopener noreferrer"><code>ReflectUtils#findMethodByMethodSignature(Class&lt;?&gt; clazz, String methodName, String[] parameterTypes)</code></a>&nbsp;方法，通过反射，获得对应的方法&nbsp;<strong>Method</strong>&nbsp;对象。具体的代码实现，胖友自己查看哈。</li>
+<li>第 17 至 21 行：获得<strong>方法参数类型和方法参数</strong>数组。</li>
+<li>第 23 行：获得&nbsp;<code>generic</code>&nbsp;配置项。</li>
+<li>========== 【第一步：反序列化参数】 ==========</li>
+<li>第 24 至 26 行：<code>generic = true</code>&nbsp;，调用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/f83e70b53389a064e49babe32e61a5648002a44a/dubbo-common/src/main/java/com/alibaba/dubbo/common/utils/PojoUtils.java#L81-L89" target="_blank" rel="external nofollow noopener noreferrer"><code>PojoUtils#realize(Object[] objs, Class&lt;?&gt;[] types, Type[] gtypes)</code></a>&nbsp;方法，反序列化参数。<strong>注意</strong>，在该方法中，只有带有&nbsp;<code>class</code>&nbsp;属性的 Map ，需要<strong>反序列化</strong>成对应的 POJO 对象。</li>
+<li>第 27 至 47 行：<code>generic = nativejava</code>&nbsp;，调用&nbsp;<code>NativeJavaSerialization#deserialize(url, input)</code>&nbsp;方法，反序列化参数，即&nbsp;<code>byte[] =&gt; 方法参数</code>&nbsp;。</li>
+<li>第 48 至 64 行：<code>generic = bean</code>&nbsp;，调用&nbsp;<code>JavaBeanSerializeUtil#deserialize(JavaBeanDescriptor)</code>&nbsp;方法，反序列化参数，即&nbsp;<code>JavaBeanDescriptor =&gt; 方法参数</code>&nbsp;。</li>
+<li>========== 【第二步：方法调用】 ==========</li>
+<li>第 66 行：创建<strong>新的</strong>&nbsp;RpcInvocation 对象。这是<strong>非常关键</strong>的一步，<code>$invoke</code>&nbsp;的泛化调用，被转换成<strong>具体</strong>的普通调用。</li>
+<li>第 66 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，继续过滤链的调用，最终调用 Service 服务。</li>
+<li>========== 【第三步：序列化结果】 ==========</li>
+<li>
+<p>第 68 至 71 行：若是异常结果，并且非 GenericException 异常，可能这个异常在服务消费端是<strong>没有</strong>的，因此需要使用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/f83e70b53389a064e49babe32e61a5648002a44a/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/service/GenericException.java" target="_blank" rel="external nofollow noopener noreferrer">GenericException</a>&nbsp;<strong>包装后返回</strong>。GenericException 的代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">GenericException</span> <span class="keyword">extends</span> <span class="title">RuntimeException</span> </span>{</span><br />    <br /><span class="line">        <span class="keyword">private</span> String exceptionClass;</span><br />    <br /><span class="line">    <span class="keyword">private</span> String exceptionMessage;</span><br />    <br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">GenericException</span><span class="params">()</span> </span>{</span><br /><span class="line">    }</span><br />    <br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">GenericException</span><span class="params">(String exceptionClass, String exceptionMessage)</span> </span>{</span><br /><span class="line">        <span class="keyword">super</span>(exceptionMessage);</span><br /><span class="line">        <span class="keyword">this</span>.exceptionClass = exceptionClass;</span><br /><span class="line">        <span class="keyword">this</span>.exceptionMessage = exceptionMessage;</span><br /><span class="line">    }</span><br />    <br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">GenericException</span><span class="params">(Throwable cause)</span> </span>{</span><br /><span class="line">        <span class="keyword">super</span>(StringUtils.toString(cause));</span><br /><span class="line">        <span class="keyword">this</span>.exceptionClass = cause.getClass().getName();</span><br /><span class="line">        <span class="keyword">this</span>.exceptionMessage = cause.getMessage();</span><br /><span class="line">    }</span><br />    <br /><span class="line">    <span class="comment">// ... 省略 getting/setting 的方法</span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 72 至 81 行：<code>generic = nativejava</code>&nbsp;，调用&nbsp;<code>NativeJavaSerialization#serialize(url, output)</code>方法，序列化结果，即&nbsp;<code>结果 =&gt; byte[]</code>&nbsp;。</p>
+</li>
+<li>第 82 至 84 行：<code>generic = bean</code>&nbsp;，调用&nbsp;<code>JavaBeanSerializeUtil#serialize(Object, JavaBeanAccessor)</code>&nbsp;方法，序列化结果，即&nbsp;<code>结果 =&gt; JavaBeanDescriptor</code>&nbsp;。</li>
+<li>第 85 至 88 行：<code>generic = true</code>&nbsp;，调用&nbsp;<code>PojoUtils#generalize(Object)</code>&nbsp;方法，序列化结果，仅有&nbsp;<code>POJO =&gt; Map</code>&nbsp;。</li>
+</ul>
+</div>

@@ -1,0 +1,783 @@
+<header class="article-header">
+<h1 class="article-title">NIO 服务器（二）之 Transport 层</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文接&nbsp;<a href="http://svip.iocoder.cn/Dubbo/remoting-api-interface/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; NIO 服务器（一）之抽象 API》</a>&nbsp;一文，分享&nbsp;<code>dubbo-remoting-api</code>模块，&nbsp;<code>transport</code>&nbsp;包，<strong>网络传输层</strong>。</p>
+<blockquote>
+<p><strong>transport</strong>&nbsp;网络传输层：抽象 mina 和 netty 为统一接口，以 Message 为中心，扩展接口为 Channel, Transporter, Client, Server, Codec</p>
+</blockquote>
+<p>涉及的类图如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_04/01.png" alt="类图" /></p>
+<ul>
+<li>白色部分，为通用接口。</li>
+<li>蓝色部分，为&nbsp;<code>transport</code>&nbsp;包下的类。</li>
+<li>整个类图，我们分成<strong>六个</strong>部分：
+<ul>
+<li>Client</li>
+<li>Server</li>
+<li>Channel</li>
+<li>ChannelHandler</li>
+<li>Codec</li>
+<li>Dispacher</li>
+</ul>
+</li>
+<li>从流程上来说，我们分成：
+<ul>
+<li>Server
+<ul>
+<li>启动</li>
+<li>关闭</li>
+</ul>
+</li>
+<li>Client
+<ul>
+<li>启动</li>
+<li>关闭</li>
+</ul>
+</li>
+<li>ChannelHandler
+<ul>
+<li>处理连接</li>
+<li>处理断开</li>
+<li>发送消息</li>
+<li>接收消息</li>
+<li>处理异常</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<p>艿艿的旁白：涉及较多类和流程，内容不是很线性，可能分享的比较凌乱，还望胖友谅解。建议，读 2-3 遍，并且做一些调试。</p>
+</blockquote>
+<h1 id="2-AbstractPeer">2. AbstractPeer</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractPeer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.AbstractPeer</code></a>&nbsp;，实现 Endpoint、ChannelHandler 接口，<strong>Peer</strong>&nbsp;抽象类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 通道处理器</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: <span class="keyword">private</span> <span class="keyword">final</span> ChannelHandler handler;</span><br /><span class="line"> <span class="number">5</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 6:  * URL</span></span><br /><span class="line"><span class="comment"> 7:  */</span></span><br /><span class="line"> <span class="number">8</span>: <span class="keyword">private</span> <span class="keyword">volatile</span> URL url;</span><br /><span class="line"> <span class="number">9</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">10:  * 正在关闭</span></span><br /><span class="line"><span class="comment">11:  *</span></span><br /><span class="line"><span class="comment">12:  * {<span class="doctag">@link</span> #startClose()}</span></span><br /><span class="line"><span class="comment">13:  */</span></span><br /><span class="line"><span class="number">14</span>: <span class="comment">// closing closed means the process is being closed and close is finished</span></span><br /><span class="line"><span class="number">15</span>: <span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">boolean</span> closing;</span><br /><span class="line"><span class="number">16</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">17:  * 关闭完成</span></span><br /><span class="line"><span class="comment">18:  *</span></span><br /><span class="line"><span class="comment">19:  * {<span class="doctag">@link</span> #close()}</span></span><br /><span class="line"><span class="comment">20:  */</span></span><br /><span class="line"><span class="number">21</span>: <span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">boolean</span> closed;</span><br /><span class="line"><span class="number">22</span>: </span><br /><span class="line"><span class="number">23</span>: <span class="function"><span class="keyword">public</span> <span class="title">AbstractPeer</span><span class="params">(URL url, ChannelHandler handler)</span> </span>{</span><br /><span class="line"><span class="number">24</span>:     <span class="keyword">if</span> (url == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">25</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"url == null"</span>);</span><br /><span class="line"><span class="number">26</span>:     }</span><br /><span class="line"><span class="number">27</span>:     <span class="keyword">if</span> (handler == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">28</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"handler == null"</span>);</span><br /><span class="line"><span class="number">29</span>:     }</span><br /><span class="line"><span class="number">30</span>:     <span class="keyword">this</span>.url = url;</span><br /><span class="line"><span class="number">31</span>:     <span class="keyword">this</span>.handler = handler;</span><br /><span class="line"><span class="number">32</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>handler</code>&nbsp;属性，通道处理器，通过构造方法传入。实现的 ChannelHandler 的接口方法，直接调用&nbsp;<code>handler</code>&nbsp;的方法，进行执行逻辑处理。
+<ul>
+<li>参见代码：<a href="https://github.com/YunaiV/dubbo/blob/7fad710c2dbf66356d5e7b7995e843b8f6225652/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractPeer.java#L114-L141" target="_blank" rel="external nofollow noopener noreferrer">传送门</a></li>
+<li>这种方式在设计模式中被称作 &ldquo;<a href="https://www.cnblogs.com/java-my-life/archive/2012/04/20/2455726.html" target="_blank" rel="external nofollow noopener noreferrer">装饰模式</a>&ldquo; 。在下文中，我们会看到<strong>大量的</strong>装饰模式的使用。实际上，这也是&nbsp;<code>dubbo-remoting</code>&nbsp;抽象 API + 实现最核心的方式之一。</li>
+</ul>
+</li>
+<li><code>url</code>&nbsp;属性，URL ，通过构造方法传入。通过该属性，传递 Dubbo 服务引用和服务暴露的<strong>配置项</strong>。</li>
+<li><code>closing</code>&nbsp;属性，正在关闭，调用&nbsp;<code>#startClose()</code>&nbsp;方法，变更。</li>
+<li><code>close</code>&nbsp;属性，关闭完成，调用&nbsp;<code>#close()</code>&nbsp;方法，变更。</li>
+</ul>
+<p><strong>发送消息</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">send</span><span class="params">(Object message)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    send(message, url.getParameter(Constants.SENT_KEY, <span class="keyword">false</span>));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>sent</code>&nbsp;配置项：
+<ul>
+<li><code>true</code>&nbsp;等待消息发出，消息发送失败将抛出异常。</li>
+<li><code>false</code>&nbsp;不等待消息发出，将消息放入 IO 队列，即刻返回。</li>
+<li>详细参见：<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/async-call.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 异步调用》</a></li>
+</ul>
+</li>
+</ul>
+<p><strong>其他方法</strong></p>
+<p>胖友点击&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractPeer.java" target="_blank" rel="external nofollow noopener noreferrer">AbstractPeer</a>&nbsp;，再看看<strong>所有</strong>的方法。</p>
+<h2 id="2-1-AbstractEndpint">2.1 AbstractEndpint</h2>
+<p><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractEndpoint.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.AbstractPeer.AbstractEndpint</code></a>&nbsp;，实现 Resetable 接口，继承 AbstractPeer 抽象类，<strong>端点</strong>抽象类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 编解码器</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: <span class="keyword">private</span> Codec2 codec;</span><br /><span class="line"> <span class="number">5</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 6:  * 超时时间</span></span><br /><span class="line"><span class="comment"> 7:  */</span></span><br /><span class="line"> <span class="number">8</span>: <span class="keyword">private</span> <span class="keyword">int</span> timeout;</span><br /><span class="line"> <span class="number">9</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">10:  * 连接超时时间</span></span><br /><span class="line"><span class="comment">11:  */</span></span><br /><span class="line"><span class="number">12</span>: <span class="keyword">private</span> <span class="keyword">int</span> connectTimeout;</span><br /><span class="line"><span class="number">13</span>: </span><br /><span class="line"><span class="number">14</span>: <span class="function"><span class="keyword">public</span> <span class="title">AbstractEndpoint</span><span class="params">(URL url, ChannelHandler handler)</span> </span>{</span><br /><span class="line"><span class="number">15</span>:     <span class="keyword">super</span>(url, handler);</span><br /><span class="line"><span class="number">16</span>:     <span class="keyword">this</span>.codec = getChannelCodec(url);</span><br /><span class="line"><span class="number">17</span>:     <span class="keyword">this</span>.timeout = url.getPositiveParameter(Constants.TIMEOUT_KEY, Constants.DEFAULT_TIMEOUT);</span><br /><span class="line"><span class="number">18</span>:     <span class="keyword">this</span>.connectTimeout = url.getPositiveParameter(Constants.CONNECT_TIMEOUT_KEY, Constants.DEFAULT_CONNECT_TIMEOUT);</span><br /><span class="line"><span class="number">19</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><code>codec</code>&nbsp;属性，编解码器。在构造方法中，可以看到调用&nbsp;<code>#getChannelCodec(url)</code>&nbsp;方法，基于&nbsp;<code>url</code>&nbsp;参数，加载对应的 Codec 实现对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="number">1</span>: <span class="function"><span class="keyword">protected</span> <span class="keyword">static</span> Codec2 <span class="title">getChannelCodec</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line"><span class="number">2</span>:     String codecName = url.getParameter(Constants.CODEC_KEY, <span class="string">"telnet"</span>);</span><br /><span class="line"><span class="number">3</span>:     <span class="keyword">if</span> (ExtensionLoader.getExtensionLoader(Codec2.class).hasExtension(codecName)) { <span class="comment">// 例如，在 DubboProtocol 中，会获得 DubboCodec</span></span><br /><span class="line"><span class="number">4</span>:         <span class="keyword">return</span> ExtensionLoader.getExtensionLoader(Codec2.class).getExtension(codecName);</span><br /><span class="line"><span class="number">5</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">6</span>:         <span class="keyword">return</span> <span class="keyword">new</span> CodecAdapter(ExtensionLoader.getExtensionLoader(Codec.class).getExtension(codecName));</span><br /><span class="line"><span class="number">7</span>:     }</span><br /><span class="line"><span class="number">8</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 行：基于 Dubbo SPI 机制，加载对应的 Codec 实现对象。例如，在 DubboProtocol 中，会获得&nbsp;<a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-rpc/dubbo-rpc-dubbo/src/main/java/com/alibaba/dubbo/rpc/protocol/dubbo/DubboCodec.java" target="_blank" rel="external nofollow noopener noreferrer">DubboCodec</a>&nbsp;对象。</li>
+<li>第 6 行：Codec 接口，已经废弃了，目前 Dubbo 项目里，也没有它的拓展实现。</li>
+</ul>
+</li>
+</ul>
+<p><strong>重置属性</strong></p>
+<p><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractEndpoint.java#L60-L92" target="_blank" rel="external nofollow noopener noreferrer"><code>#reset(url)</code></a>&nbsp;<strong>实现</strong>方法，使用新的&nbsp;<code>url</code>&nbsp;属性，可重置&nbsp;<code>codec</code>&nbsp;<code>timeout</code>&nbsp;<code>connectTimeout</code>&nbsp;属性。🙂 已经添加了谅解，胖友点击可看。</p>
+<h1 id="3-Client">3. Client</h1>
+<h2 id="3-1-AbstractClient">3.1 AbstractClient</h2>
+<p><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractClient.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.AbstractClient</code></a>&nbsp;，实现 Client 接口，继承 AbstractEndpoint 抽象类，<strong>客户端</strong>抽象类，<strong>重点</strong>实现了公用的重连逻辑，同时抽象了连接等模板方法，供子类实现。抽象方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">doOpen</span><span class="params">()</span> <span class="keyword">throws</span> Throwable</span>;</span><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">doClose</span><span class="params">()</span> <span class="keyword">throws</span> Throwable</span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">doConnect</span><span class="params">()</span> <span class="keyword">throws</span> Throwable</span>;</span><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">doDisConnect</span><span class="params">()</span> <span class="keyword">throws</span> Throwable</span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> Channel <span class="title">getChannel</span><span class="params">()</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 重连定时任务执行器</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ScheduledThreadPoolExecutor reconnectExecutorService = <span class="keyword">new</span> ScheduledThreadPoolExecutor(<span class="number">2</span>, <span class="keyword">new</span> NamedThreadFactory(<span class="string">"DubboClientReconnectTimer"</span>, <span class="keyword">true</span>));</span><br /><span class="line"> <span class="number">5</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 6:  * 发送消息时，若断开，是否重连</span></span><br /><span class="line"><span class="comment"> 7:  */</span></span><br /><span class="line"> <span class="number">8</span>: <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">boolean</span> send_reconnect;</span><br /><span class="line"> <span class="number">9</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">10:  * 重连 warning 的间隔.(waring多少次之后，warning一次) //for test</span></span><br /><span class="line"><span class="comment">11:  */</span></span><br /><span class="line"><span class="number">12</span>: <span class="comment">// reconnect warning period. Reconnect warning interval (log warning after how many times) //for test</span></span><br /><span class="line"><span class="number">13</span>: <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> reconnect_warning_period;</span><br /><span class="line"><span class="number">14</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">15:  * 关闭超时时间</span></span><br /><span class="line"><span class="comment">16:  */</span></span><br /><span class="line"><span class="number">17</span>: <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">long</span> shutdown_timeout;</span><br /><span class="line"><span class="number">18</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">19:  * 线程池</span></span><br /><span class="line"><span class="comment">20:  *</span></span><br /><span class="line"><span class="comment">21:  * 在调用 {<span class="doctag">@link</span> #wrapChannelHandler(URL, ChannelHandler)} 时，会调用 {<span class="doctag">@link</span> com.alibaba.dubbo.remoting.transport.dispatcher.WrappedChannelHandler} 创建</span></span><br /><span class="line"><span class="comment">22:  */</span></span><br /><span class="line"><span class="number">23</span>: <span class="keyword">protected</span> <span class="keyword">volatile</span> ExecutorService executor;</span><br /><span class="line"><span class="number">24</span>: </span><br /><span class="line"><span class="number">25</span>: <span class="function"><span class="keyword">public</span> <span class="title">AbstractClient</span><span class="params">(URL url, ChannelHandler handler)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line"><span class="number">26</span>:     <span class="keyword">super</span>(url, handler);</span><br /><span class="line"><span class="number">27</span>:     <span class="comment">// 从 URL 中，获得重连相关配置项</span></span><br /><span class="line"><span class="number">28</span>:     send_reconnect = url.getParameter(Constants.SEND_RECONNECT_KEY, <span class="keyword">false</span>);</span><br /><span class="line"><span class="number">29</span>:     shutdown_timeout = url.getParameter(Constants.SHUTDOWN_TIMEOUT_KEY, Constants.DEFAULT_SHUTDOWN_TIMEOUT);</span><br /><span class="line"><span class="number">30</span>:     <span class="comment">// The default reconnection interval is 2s, 1800 means warning interval is 1 hour.</span></span><br /><span class="line"><span class="number">31</span>:     reconnect_warning_period = url.getParameter(<span class="string">"reconnect.waring.period"</span>, <span class="number">1800</span>);</span><br /><span class="line"><span class="number">32</span>: </span><br /><span class="line"><span class="number">33</span>:     <span class="comment">// 初始化客户端</span></span><br /><span class="line"><span class="number">34</span>:     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">35</span>:         doOpen();</span><br /><span class="line"><span class="number">36</span>:     } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line"><span class="number">37</span>:         close(); <span class="comment">// 失败，则关闭</span></span><br /><span class="line"><span class="number">38</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RemotingException(url.toInetSocketAddress(), <span class="keyword">null</span>,</span><br /><span class="line"><span class="number">39</span>:                 <span class="string">"Failed to start "</span> + getClass().getSimpleName() + <span class="string">" "</span> + NetUtils.getLocalAddress()</span><br /><span class="line"><span class="number">40</span>:                         + <span class="string">" connect to the server "</span> + getRemoteAddress() + <span class="string">", cause: "</span> + t.getMessage(), t);</span><br /><span class="line"><span class="number">41</span>:     }</span><br /><span class="line"><span class="number">42</span>: </span><br /><span class="line"><span class="number">43</span>:     <span class="comment">// 连接服务器</span></span><br /><span class="line"><span class="number">44</span>:     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">45</span>:         <span class="comment">// connect.</span></span><br /><span class="line"><span class="number">46</span>:         connect();</span><br /><span class="line"><span class="number">47</span>:         <span class="keyword">if</span> (logger.isInfoEnabled()) {</span><br /><span class="line"><span class="number">48</span>:             logger.info(<span class="string">"Start "</span> + getClass().getSimpleName() + <span class="string">" "</span> + NetUtils.getLocalAddress() + <span class="string">" connect to the server "</span> + getRemoteAddress());</span><br /><span class="line"><span class="number">49</span>:         }</span><br /><span class="line"><span class="number">50</span>:     } <span class="keyword">catch</span> (RemotingException t) {</span><br /><span class="line"><span class="number">51</span>:         <span class="keyword">if</span> (url.getParameter(Constants.CHECK_KEY, <span class="keyword">true</span>)) {</span><br /><span class="line"><span class="number">52</span>:             close(); <span class="comment">// 失败，则关闭</span></span><br /><span class="line"><span class="number">53</span>:             <span class="keyword">throw</span> t;</span><br /><span class="line"><span class="number">54</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">55</span>:             logger.warn(<span class="string">"Failed to start "</span> + getClass().getSimpleName() + <span class="string">" "</span> + NetUtils.getLocalAddress()</span><br /><span class="line"><span class="number">56</span>:                     + <span class="string">" connect to the server "</span> + getRemoteAddress() + <span class="string">" (check == false, ignore and retry later!), cause: "</span> + t.getMessage(), t);</span><br /><span class="line"><span class="number">57</span>:         }</span><br /><span class="line"><span class="number">58</span>:     } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line"><span class="number">59</span>:         close(); <span class="comment">// 失败，则关闭</span></span><br /><span class="line"><span class="number">60</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RemotingException(url.toInetSocketAddress(), <span class="keyword">null</span>,</span><br /><span class="line"><span class="number">61</span>:                 <span class="string">"Failed to start "</span> + getClass().getSimpleName() + <span class="string">" "</span> + NetUtils.getLocalAddress()</span><br /><span class="line"><span class="number">62</span>:                         + <span class="string">" connect to the server "</span> + getRemoteAddress() + <span class="string">", cause: "</span> + t.getMessage(), t);</span><br /><span class="line"><span class="number">63</span>:     }</span><br /><span class="line"><span class="number">64</span>: </span><br /><span class="line"><span class="number">65</span>:     <span class="comment">// 获得线程池</span></span><br /><span class="line"><span class="number">66</span>:     executor = (ExecutorService) ExtensionLoader.getExtensionLoader(DataStore.class).getDefaultExtension()</span><br /><span class="line"><span class="number">67</span>:             .get(Constants.CONSUMER_SIDE, Integer.toString(url.getPort()));</span><br /><span class="line"><span class="number">68</span>:     ExtensionLoader.getExtensionLoader(DataStore.class).getDefaultExtension()</span><br /><span class="line"><span class="number">69</span>:             .remove(Constants.CONSUMER_SIDE, Integer.toString(url.getPort()));</span><br /><span class="line"><span class="number">70</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>reconnectExecutorService</code>&nbsp;属性，重连定时任务执行器。在客户端连接服务端时，会创建后台任务，定时检查连接，若断开，会进行重连。</li>
+<li>第 27 至 31 行：从 URL 中，获得重连相关<strong>配置项</strong>。</li>
+<li>第 33 至 41 行：调用&nbsp;<code>#doOpen()</code>&nbsp;<strong>抽象</strong>方法，初始化客户端。若异常，调用&nbsp;<code>#close()</code>&nbsp;方法，进行关闭。</li>
+<li>第 43 至 63 行：调用&nbsp;<code>#connect()</code>&nbsp;<strong>实现</strong>方法，连接服务器。若异常，调用&nbsp;<code>#close()</code>&nbsp;方法，进行关闭。
+<ul>
+<li>第 51 至 57 行：若是连接失败 RemotingException ，若开启了&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/preflight-check.html" target="_blank" rel="external nofollow noopener noreferrer">启动时检查</a>&nbsp;，则调用&nbsp;<code>#close()</code>&nbsp;方法，进行关闭。</li>
+</ul>
+</li>
+<li>第 66 至 69 行：从&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-common/src/main/java/com/alibaba/dubbo/common/store/DataStore.java" target="_blank" rel="external nofollow noopener noreferrer">DataStore</a>&nbsp;中，获得线程池。
+<ul>
+<li>DataStore 在&nbsp;<code>dubbo-common</code>&nbsp;模块，<a href="https://github.com/YunaiV/dubbo/tree/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-common/src/main/java/com/alibaba/dubbo/common/store" target="_blank" rel="external nofollow noopener noreferrer"><code>store</code></a>&nbsp;包下实现。目前的实现比较简单，可以认为是&nbsp;<code>ConcurrentMap&lt;String, ConcurrentMap&lt;String, Object&gt;&gt;</code>&nbsp;的集合。胖友可以自己看相关实现。</li>
+<li>此处的线程池，实际就是&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/thread-model.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 线程模型》</a>&nbsp;中说的<strong>线程池</strong>。在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/remoting-api-transport/">「8. Dispacher」</a>&nbsp;中，详细解析。</li>
+</ul>
+</li>
+</ul>
+<p><strong>连接服务器</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 连接锁，用于实现发起连接和断开连接互斥，避免并发。</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Lock connectLock = <span class="keyword">new</span> ReentrantLock();</span><br /><br /><span class="line">  <span class="number">1</span>: <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">connect</span><span class="params">()</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">  <span class="number">2</span>:     <span class="comment">// 获得锁</span></span><br /><span class="line">  <span class="number">3</span>:     connectLock.lock();</span><br /><span class="line">  <span class="number">4</span>:     <span class="keyword">try</span> {</span><br /><span class="line">  <span class="number">5</span>:         <span class="comment">// 已连接，</span></span><br /><span class="line">  <span class="number">6</span>:         <span class="keyword">if</span> (isConnected()) {</span><br /><span class="line">  <span class="number">7</span>:             <span class="keyword">return</span>;</span><br /><span class="line">  <span class="number">8</span>:         }</span><br /><span class="line">  <span class="number">9</span>:         <span class="comment">// 初始化重连线程</span></span><br /><span class="line"> <span class="number">10</span>:         initConnectStatusCheckCommand();</span><br /><span class="line"> <span class="number">11</span>:         <span class="comment">// 执行连接</span></span><br /><span class="line"> <span class="number">12</span>:         doConnect();</span><br /><span class="line"> <span class="number">13</span>:         <span class="comment">// 连接失败，抛出异常</span></span><br /><span class="line"> <span class="number">14</span>:         <span class="keyword">if</span> (!isConnected()) {</span><br /><span class="line"> <span class="number">15</span>:             <span class="keyword">throw</span> <span class="keyword">new</span> RemotingException(<span class="keyword">this</span>, <span class="string">"Failed connect to server "</span> + getRemoteAddress() + <span class="string">" from "</span> + getClass().getSimpleName() + <span class="string">" "</span></span><br /><span class="line"> <span class="number">16</span>:                     + NetUtils.getLocalHost() + <span class="string">" using dubbo version "</span> + Version.getVersion()</span><br /><span class="line"> <span class="number">17</span>:                     + <span class="string">", cause: Connect wait timeout: "</span> + getTimeout() + <span class="string">"ms."</span>);</span><br /><span class="line"> <span class="number">18</span>:         <span class="comment">// 连接成功，打印日志</span></span><br /><span class="line"> <span class="number">19</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">20</span>:             <span class="keyword">if</span> (logger.isInfoEnabled()) {</span><br /><span class="line"> <span class="number">21</span>:                 logger.info(<span class="string">"Successed connect to server "</span> + getRemoteAddress() + <span class="string">" from "</span> + getClass().getSimpleName() + <span class="string">" "</span></span><br /><span class="line"> <span class="number">22</span>:                         + NetUtils.getLocalHost() + <span class="string">" using dubbo version "</span> + Version.getVersion()</span><br /><span class="line"> <span class="number">23</span>:                         + <span class="string">", channel is "</span> + <span class="keyword">this</span>.getChannel());</span><br /><span class="line"> <span class="number">24</span>:             }</span><br /><span class="line"> <span class="number">25</span>:         }</span><br /><span class="line"> <span class="number">26</span>:         <span class="comment">// 设置重连次数归零</span></span><br /><span class="line"> <span class="number">27</span>:         reconnect_count.set(<span class="number">0</span>);</span><br /><span class="line"> <span class="number">28</span>:         <span class="comment">// 设置未打印过错误日志</span></span><br /><span class="line"> <span class="number">29</span>:         reconnect_error_log_flag.set(<span class="keyword">false</span>);</span><br /><span class="line"> <span class="number">30</span>:     } <span class="keyword">catch</span> (RemotingException e) {</span><br /><span class="line"> <span class="number">31</span>:         <span class="keyword">throw</span> e;</span><br /><span class="line"> <span class="number">32</span>:     } <span class="keyword">catch</span> (Throwable e) {</span><br /><span class="line"> <span class="number">33</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RemotingException(<span class="keyword">this</span>, <span class="string">"Failed connect to server "</span> + getRemoteAddress() + <span class="string">" from "</span> + getClass().getSimpleName() + <span class="string">" "</span></span><br /><span class="line"> <span class="number">34</span>:                 + NetUtils.getLocalHost() + <span class="string">" using dubbo version "</span> + Version.getVersion()</span><br /><span class="line"> <span class="number">35</span>:                 + <span class="string">", cause: "</span> + e.getMessage(), e);</span><br /><span class="line"> <span class="number">36</span>:     } <span class="keyword">finally</span> {</span><br /><span class="line"> <span class="number">37</span>:         <span class="comment">// 释放锁</span></span><br /><span class="line"> <span class="number">38</span>:         connectLock.unlock();</span><br /><span class="line"> <span class="number">39</span>:     }</span><br /><span class="line"> <span class="number">40</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 行：获得锁。在连接和断开连接时，通过锁，避免并发冲突。</li>
+<li>
+<p>第 5 至 8 行：调用&nbsp;<code>#isConnected()</code>&nbsp;方法，判断连接状态。若已经连接，就不重复连接。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">isConnected</span><span class="params">()</span> </span>{</span><br /><span class="line">    Channel channel = getChannel();</span><br /><span class="line">    <span class="keyword">return</span> channel != <span class="keyword">null</span> &amp;&amp; channel.isConnected();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>该方法，是因为实现 Channel 接口( Client 实现 Channel 接口 )，所以需要实现的。我们可以看到，实际方法内部，调用的是&nbsp;<code>channel</code>&nbsp;对象，进行判断。其它实现 Channel 的方法，也是这么处理的，例如&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractClient.java#L194-L245" target="_blank" rel="external nofollow noopener noreferrer"><code>#getAttribute(key)</code></a>&nbsp;等方法。</li>
+</ul>
+</li>
+<li>
+<p>第 10 行：调用&nbsp;<code>#initConnectStatusCheckCommand()</code>&nbsp;方法，初始化重连<strong>线程</strong>。</p>
+<ul>
+<li>🙂 方法会复杂一些，不杂糅在这里讲。</li>
+</ul>
+</li>
+<li>第 14 至 17 行：连接失败，抛出异常 RemotingException 。</li>
+<li>第 18 至 25 行：连接成功，打印日志。</li>
+<li>第 26 至 29 行：设置重连次数归零，打印过错误日志状态为否。下面，我们会看到这些状态字段的变更。</li>
+<li>第 38 行：释放锁。</li>
+</ul>
+<p><strong>初始化重连线程</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 重连次数</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicInteger reconnect_count = <span class="keyword">new</span> AtomicInteger(<span class="number">0</span>);</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 重连时，是否已经打印过错误日志。</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="comment">// Reconnection error log has been called before?</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicBoolean reconnect_error_log_flag = <span class="keyword">new</span> AtomicBoolean(<span class="keyword">false</span>);</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 重连执行任务 Future</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">volatile</span> ScheduledFuture&lt;?&gt; reconnectExecutorFuture = <span class="keyword">null</span>;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 最后成功连接时间</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="comment">// the last successed connected time</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">long</span> lastConnectedTime = System.currentTimeMillis();</span><br />    <br /><span class="line">  <span class="number">1</span>: <span class="function"><span class="keyword">private</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">initConnectStatusCheckCommand</span><span class="params">()</span> </span>{</span><br /><span class="line">  <span class="number">2</span>:     <span class="comment">//reconnect=false to close reconnect</span></span><br /><span class="line">  <span class="number">3</span>:     <span class="comment">// 获得获得重连频率，默认开启。</span></span><br /><span class="line">  <span class="number">4</span>:     <span class="keyword">int</span> reconnect = getReconnectParam(getUrl());</span><br /><span class="line">  <span class="number">5</span>:     <span class="comment">// 若开启重连功能，创建重连线程</span></span><br /><span class="line">  <span class="number">6</span>:     <span class="keyword">if</span> (reconnect &gt; <span class="number">0</span> &amp;&amp; (reconnectExecutorFuture == <span class="keyword">null</span> || reconnectExecutorFuture.isCancelled())) {</span><br /><span class="line">  <span class="number">7</span>:         <span class="comment">// 创建 Runnable 对象</span></span><br /><span class="line">  <span class="number">8</span>:         Runnable connectStatusCheckCommand = <span class="keyword">new</span> Runnable() {</span><br /><span class="line">  <span class="number">9</span>:             <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>{</span><br /><span class="line"> <span class="number">10</span>:                 <span class="keyword">try</span> {</span><br /><span class="line"> <span class="number">11</span>:                     <span class="comment">// 未连接，重连</span></span><br /><span class="line"> <span class="number">12</span>:                     <span class="keyword">if</span> (!isConnected()) {</span><br /><span class="line"> <span class="number">13</span>:                         connect();</span><br /><span class="line"> <span class="number">14</span>:                     <span class="comment">// 已连接，记录最后连接时间</span></span><br /><span class="line"> <span class="number">15</span>:                     } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">16</span>:                         lastConnectedTime = System.currentTimeMillis();</span><br /><span class="line"> <span class="number">17</span>:                     }</span><br /><span class="line"> <span class="number">18</span>:                 } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line"> <span class="number">19</span>:                     <span class="comment">// 超过一定时间未连接上，才打印异常日志。并且，仅打印一次。默认，15 分钟。</span></span><br /><span class="line"> <span class="number">20</span>:                     String errorMsg = <span class="string">"client reconnect to "</span> + getUrl().getAddress() + <span class="string">" find error . url: "</span> + getUrl();</span><br /><span class="line"> <span class="number">21</span>:                     <span class="comment">// wait registry sync provider list</span></span><br /><span class="line"> <span class="number">22</span>:                     <span class="keyword">if</span> (System.currentTimeMillis() - lastConnectedTime &gt; shutdown_timeout) {</span><br /><span class="line"> <span class="number">23</span>:                         <span class="keyword">if</span> (!reconnect_error_log_flag.get()) {</span><br /><span class="line"> <span class="number">24</span>:                             reconnect_error_log_flag.set(<span class="keyword">true</span>);</span><br /><span class="line"> <span class="number">25</span>:                             logger.error(errorMsg, t);</span><br /><span class="line"> <span class="number">26</span>:                             <span class="keyword">return</span>;</span><br /><span class="line"> <span class="number">27</span>:                         }</span><br /><span class="line"> <span class="number">28</span>:                     }</span><br /><span class="line"> <span class="number">29</span>:                     <span class="comment">// 每一定次发现未重连，才打印告警日志。默认，1800 次，1 小时。</span></span><br /><span class="line"> <span class="number">30</span>:                     <span class="keyword">if</span> (reconnect_count.getAndIncrement() % reconnect_warning_period == <span class="number">0</span>) {</span><br /><span class="line"> <span class="number">31</span>:                         logger.warn(errorMsg, t);</span><br /><span class="line"> <span class="number">32</span>:                     }</span><br /><span class="line"> <span class="number">33</span>:                 }</span><br /><span class="line"> <span class="number">34</span>:             }</span><br /><span class="line"> <span class="number">35</span>:         };</span><br /><span class="line"> <span class="number">36</span>:         <span class="comment">// 发起定时任务</span></span><br /><span class="line"> <span class="number">37</span>:         reconnectExecutorFuture = reconnectExecutorService.scheduleWithFixedDelay(connectStatusCheckCommand, reconnect, reconnect, TimeUnit.MILLISECONDS);</span><br /><span class="line"> <span class="number">38</span>:     }</span><br /><span class="line"> <span class="number">39</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 4 行：调用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractClient.java#L120-L142" target="_blank" rel="external nofollow noopener noreferrer"><code>#getReconnectParam(url)</code></a>&nbsp;方法，获得重连频率。默认开启，2000 毫秒。
+<ul>
+<li>🙂 代码比较简单，胖友自己点击方法查看。</li>
+</ul>
+</li>
+<li>第 6 至 38 行：若<strong>开启</strong>重连功能， 创建重连线程。
+<ul>
+<li>第 8 至 35 行：创建 Runnable 对象。
+<ul>
+<li>第 11 至 13 行：未连接时，调用&nbsp;<code>#connect()</code>&nbsp;方法，进行重连。</li>
+<li>第 14 至 17 行：已连接时，记录最后连接时间。</li>
+<li>第 18 至 33 行：<strong>符合</strong>条件时，打印<strong>错误</strong>或<strong>告警</strong>日志。为什么要符合条件才打印呢？之前也和朋友聊起来过，线上因为中间件组件，打印了太多的日志，结果整个 JVM 崩了。特别在网络场景 + 大量&ldquo;无限&rdquo;重试的场景，特别容易打出满屏的日志。这块，我们可以学习下。另外，Eureka 在集群同步，也有类似处理。</li>
+</ul>
+</li>
+<li>第 36 行：发起任务，<strong>定时</strong>检查，是否需要重连。</li>
+</ul>
+</li>
+<li><code>reconnect=false to close reconnect</code>&nbsp;，从目前代码上来看，未实现&nbsp;<code>#reset(url)</code>&nbsp;方法，在 URL 的&nbsp;<code>reconnect=false</code>&nbsp;配置项时，关闭重连线程。</li>
+</ul>
+<p><strong>发送消息</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">send</span><span class="params">(Object message, <span class="keyword">boolean</span> sent)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    <span class="comment">// 未连接时，开启重连功能，则先发起连接</span></span><br /><span class="line">    <span class="keyword">if</span> (send_reconnect &amp;&amp; !isConnected()) {</span><br /><span class="line">        connect();</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 发送消息</span></span><br /><span class="line">    Channel channel = getChannel();</span><br /><span class="line">    <span class="comment">//TODO Can the value returned by getChannel() be null? need improvement.</span></span><br /><span class="line">    <span class="keyword">if</span> (channel == <span class="keyword">null</span> || !channel.isConnected()) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RemotingException(<span class="keyword">this</span>, <span class="string">"message can not send, because channel is closed . url:"</span> + getUrl());</span><br /><span class="line">    }</span><br /><span class="line">    channel.send(message, sent);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>包装通道处理器</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// Constants.java</span></span><br /><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String DEFAULT_CLIENT_THREADPOOL = <span class="string">"cached"</span>;</span><br /><br /><span class="line"><span class="keyword">protected</span> <span class="keyword">static</span> <span class="keyword">final</span> String CLIENT_THREAD_POOL_NAME = <span class="string">"DubboClientHandler"</span>;</span><br /><br /><span class="line">  <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">  2:  * 包装通道处理器</span></span><br /><span class="line"><span class="comment">  3:  *</span></span><br /><span class="line"><span class="comment">  4:  * <span class="doctag">@param</span> url URL</span></span><br /><span class="line"><span class="comment">  5:  * <span class="doctag">@param</span> handler 被包装的通道处理器</span></span><br /><span class="line"><span class="comment">  6:  * <span class="doctag">@return</span> 包装后的通道处理器</span></span><br /><span class="line"><span class="comment">  7:  */</span></span><br /><span class="line">  <span class="number">8</span>: <span class="function"><span class="keyword">protected</span> <span class="keyword">static</span> ChannelHandler <span class="title">wrapChannelHandler</span><span class="params">(URL url, ChannelHandler handler)</span> </span>{</span><br /><span class="line">  <span class="number">9</span>:     <span class="comment">// 设置线程名</span></span><br /><span class="line"> <span class="number">10</span>:     url = ExecutorUtil.setThreadName(url, CLIENT_THREAD_POOL_NAME);</span><br /><span class="line"> <span class="number">11</span>:     <span class="comment">// 设置使用的线程池类型</span></span><br /><span class="line"> <span class="number">12</span>:     url = url.addParameterIfAbsent(Constants.THREADPOOL_KEY, Constants.DEFAULT_CLIENT_THREADPOOL);</span><br /><span class="line"> <span class="number">13</span>:     <span class="comment">// 包装通道处理器</span></span><br /><span class="line"> <span class="number">14</span>:     <span class="keyword">return</span> ChannelHandlers.wrap(handler, url);</span><br /><span class="line"> <span class="number">15</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 10 行：调用&nbsp;<code>ExecutorUtil#setThreadName(url, CLIENT_THREAD_POOL_NAME)</code>方法，设置<strong>线程名</strong>，即&nbsp;<code>URL.threadname=xxx</code>&nbsp;。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> URL <span class="title">setThreadName</span><span class="params">(URL url, String defaultName)</span> </span>{</span><br /><span class="line">    String name = url.getParameter(Constants.THREAD_NAME_KEY, defaultName);</span><br /><span class="line">    name = <span class="keyword">new</span> StringBuilder(<span class="number">32</span>).append(name).append(<span class="string">"-"</span>).append(url.getAddress()).toString();</span><br /><span class="line">    url = url.addParameter(Constants.THREAD_NAME_KEY, name);</span><br /><span class="line">    <span class="keyword">return</span> url;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>注意，线程名中，包含&nbsp;<strong>URL 的地址信息</strong>。</li>
+</ul>
+</li>
+<li>
+<p>第 12 行：设置<strong>线程类型</strong>，即&nbsp;<code>URL.threadpool=xxx</code>&nbsp;。默认情况下，使用&nbsp;<code>"cached"</code>&nbsp;类型，这个和 Server 是不同的，下面我们会看到。</p>
+<ul>
+<li><a href="http://svip.iocoder.cn/Dubbo/thread-pool/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 线程池》</a></li>
+</ul>
+</li>
+<li>第 14 行：调用&nbsp;<code>ChannelHandlers#wrap(handler, url)</code>&nbsp;方法，包装通道处理器。这里我们不细说，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/remoting-api-transport/">「8. Dispacher」</a>&nbsp;中，结合解析。</li>
+<li>🙂 这是一个非常关键的方法，在例如 NettyClient 等里，都会调用该方法。</li>
+</ul>
+<p><strong>其他方法</strong></p>
+<p>如下方法比较简单，艿艿就不重复啰嗦了。</p>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractClient.java#L291-L311" target="_blank" rel="external nofollow noopener noreferrer"><code>#disconnect()</code></a>&nbsp;方法，断开连接。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractClient.java#L313-L316" target="_blank" rel="external nofollow noopener noreferrer"><code>#reconnect()</code></a>&nbsp;方法，主动重连。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractClient.java#L318-L341" target="_blank" rel="external nofollow noopener noreferrer"><code>#close()</code></a>&nbsp;方法，强制关闭。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractClient.java#L343-L346" target="_blank" rel="external nofollow noopener noreferrer"><code>#close(timeout)</code></a>&nbsp;方法，优雅关闭。</li>
+</ul>
+<p><strong>子类类图</strong></p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_04/03.png" alt="类图" /></p>
+<h2 id="3-2-ClientDelegate">3.2 ClientDelegate</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/ClientDelegate.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.ClientDelegate</code></a>&nbsp;，实现 Client 接口，客户端装饰者实现类。在每个实现的方法里，直接调用被装饰的&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/ClientDelegate.java#L31" target="_blank" rel="external nofollow noopener noreferrer"><code>client</code></a>&nbsp;属性的方法。</p>
+<p>目前&nbsp;<code>dubbo-rpc-default</code>&nbsp;模块中，<a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-rpc/dubbo-rpc-default/src/main/java/com/alibaba/dubbo/rpc/protocol/dubbo/ChannelWrappedInvoker.java#L91-L160" target="_blank" rel="external nofollow noopener noreferrer">ChannelWrapper</a>&nbsp;继承了 ClientDelegate 类。但实际上，ChannelWrapper&nbsp;<strong>重新实现了所有的方法</strong>，并且，并未复用任何方法。所以，ClientDelegate 目前用途不大。</p>
+<h1 id="4-Server">4. Server</h1>
+<h2 id="4-1-AbstractServer">4.1 AbstractServer</h2>
+<p><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractServer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.AbstractServer</code></a>&nbsp;，实现 Server 接口，继承 AbstractEndpoint 抽象类，<strong>服务器</strong>抽象类，<strong>重点</strong>实现了公用的逻辑，同时抽象了开启、关闭等模板方法，供子类实现。抽象方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">doOpen</span><span class="params">()</span> <span class="keyword">throws</span> Throwable</span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">doClose</span><span class="params">()</span> <span class="keyword">throws</span> Throwable</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 线程池</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: ExecutorService executor;</span><br /><span class="line"> <span class="number">5</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 6:  * 服务地址</span></span><br /><span class="line"><span class="comment"> 7:  */</span></span><br /><span class="line"> <span class="number">8</span>: <span class="keyword">private</span> InetSocketAddress localAddress;</span><br /><span class="line"> <span class="number">9</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">10:  * 绑定地址</span></span><br /><span class="line"><span class="comment">11:  */</span></span><br /><span class="line"><span class="number">12</span>: <span class="keyword">private</span> InetSocketAddress bindAddress;</span><br /><span class="line"><span class="number">13</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">14:  * 服务器最大可接受连接数</span></span><br /><span class="line"><span class="comment">15:  */</span></span><br /><span class="line"><span class="number">16</span>: <span class="keyword">private</span> <span class="keyword">int</span> accepts;</span><br /><span class="line"><span class="number">17</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">18:  * 空闲超时时间，单位：毫秒</span></span><br /><span class="line"><span class="comment">19:  */</span></span><br /><span class="line"><span class="number">20</span>: <span class="keyword">private</span> <span class="keyword">int</span> idleTimeout; <span class="comment">//600 seconds</span></span><br /><span class="line"><span class="number">21</span>: </span><br /><span class="line"><span class="number">22</span>: <span class="function"><span class="keyword">public</span> <span class="title">AbstractServer</span><span class="params">(URL url, ChannelHandler handler)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line"><span class="number">23</span>:     <span class="keyword">super</span>(url, handler);</span><br /><span class="line"><span class="number">24</span>:     <span class="comment">// 服务地址</span></span><br /><span class="line"><span class="number">25</span>:     localAddress = getUrl().toInetSocketAddress();</span><br /><span class="line"><span class="number">26</span>:     <span class="comment">// 绑定地址</span></span><br /><span class="line"><span class="number">27</span>:     String bindIp = getUrl().getParameter(Constants.BIND_IP_KEY, getUrl().getHost());</span><br /><span class="line"><span class="number">28</span>:     <span class="keyword">int</span> bindPort = getUrl().getParameter(Constants.BIND_PORT_KEY, getUrl().getPort());</span><br /><span class="line"><span class="number">29</span>:     <span class="keyword">if</span> (url.getParameter(Constants.ANYHOST_KEY, <span class="keyword">false</span>) || NetUtils.isInvalidLocalHost(bindIp)) {</span><br /><span class="line"><span class="number">30</span>:         bindIp = NetUtils.ANYHOST;</span><br /><span class="line"><span class="number">31</span>:     }</span><br /><span class="line"><span class="number">32</span>:     bindAddress = <span class="keyword">new</span> InetSocketAddress(bindIp, bindPort);</span><br /><span class="line"><span class="number">33</span>:     <span class="comment">// 服务器最大可接受连接数</span></span><br /><span class="line"><span class="number">34</span>:     <span class="keyword">this</span>.accepts = url.getParameter(Constants.ACCEPTS_KEY, Constants.DEFAULT_ACCEPTS);</span><br /><span class="line"><span class="number">35</span>:     <span class="comment">// 空闲超时时间</span></span><br /><span class="line"><span class="number">36</span>:     <span class="keyword">this</span>.idleTimeout = url.getParameter(Constants.IDLE_TIMEOUT_KEY, Constants.DEFAULT_IDLE_TIMEOUT);</span><br /><span class="line"><span class="number">37</span>: </span><br /><span class="line"><span class="number">38</span>:     <span class="comment">// 开启服务器</span></span><br /><span class="line"><span class="number">39</span>:     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">40</span>:         doOpen();</span><br /><span class="line"><span class="number">41</span>:         <span class="keyword">if</span> (logger.isInfoEnabled()) {</span><br /><span class="line"><span class="number">42</span>:             logger.info(<span class="string">"Start "</span> + getClass().getSimpleName() + <span class="string">" bind "</span> + getBindAddress() + <span class="string">", export "</span> + getLocalAddress());</span><br /><span class="line"><span class="number">43</span>:         }</span><br /><span class="line"><span class="number">44</span>:     } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line"><span class="number">45</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RemotingException(url.toInetSocketAddress(), <span class="keyword">null</span>, <span class="string">"Failed to bind "</span> + getClass().getSimpleName()</span><br /><span class="line"><span class="number">46</span>:                 + <span class="string">" on "</span> + getLocalAddress() + <span class="string">", cause: "</span> + t.getMessage(), t);</span><br /><span class="line"><span class="number">47</span>:     }</span><br /><span class="line"><span class="number">48</span>: </span><br /><span class="line"><span class="number">49</span>:     <span class="comment">// 获得线程池</span></span><br /><span class="line"><span class="number">50</span>:     <span class="comment">//fixme replace this with better method</span></span><br /><span class="line"><span class="number">51</span>:     DataStore dataStore = ExtensionLoader.getExtensionLoader(DataStore.class).getDefaultExtension();</span><br /><span class="line"><span class="number">52</span>:     executor = (ExecutorService) dataStore.get(Constants.EXECUTOR_SERVICE_COMPONENT_KEY, Integer.toString(url.getPort()));</span><br /><span class="line"><span class="number">53</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 24 至 36 行：从 URL 中，加载&nbsp;<code>localAddress</code>&nbsp;<code>bindAddress</code>&nbsp;<code>accepts</code>&nbsp;<code>idleTimeout</code>&nbsp;配置项。比较难理解的，可能是两个地址属性，如下是比例提供的一个例子：<img src="http://static2.iocoder.cn/images/Dubbo/2018_12_04/02.png" alt="例子" />
+<ul>
+<li>配置项可在&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractServer.java#L80-L129" target="_blank" rel="external nofollow noopener noreferrer"><code>#reset(url)</code></a>&nbsp;方法中，重置属性。</li>
+</ul>
+</li>
+<li>第 38 至 47 行：调用&nbsp;<code>#doOpen()</code>&nbsp;方法，开启服务器。</li>
+<li>第 49 至 52 行：从&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-common/src/main/java/com/alibaba/dubbo/common/store/DataStore.java" target="_blank" rel="external nofollow noopener noreferrer">DataStore</a>&nbsp;中，获得线程池。
+<ul>
+<li><code>fixme replace this with better method</code>&nbsp;，说明<strong>官方</strong>在这块实现上，也不是很满意，后面会优化掉。</li>
+</ul>
+</li>
+</ul>
+<p><strong>被客户端连接</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">connected</span><span class="params">(Channel ch)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    <span class="comment">// If the server has entered the shutdown process, reject any new connection</span></span><br /><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>.isClosing() || <span class="keyword">this</span>.isClosed()) {</span><br /><span class="line">        logger.warn(<span class="string">"Close new channel "</span> + ch + <span class="string">", cause: server is closing or has been closed. For example, receive a new connect request while in shutdown process."</span>);</span><br /><span class="line">        ch.close();</span><br /><span class="line">        <span class="keyword">return</span>;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">// 超过上限，关闭新的链接</span></span><br /><span class="line">    Collection&lt;Channel&gt; channels = getChannels();</span><br /><span class="line">    <span class="keyword">if</span> (accepts &gt; <span class="number">0</span> &amp;&amp; channels.size() &gt; accepts) {</span><br /><span class="line">        logger.error(<span class="string">"Close channel "</span> + ch + <span class="string">", cause: The server "</span> + ch.getLocalAddress() + <span class="string">" connections greater than max config "</span> + accepts);</span><br /><span class="line">        ch.close(); <span class="comment">// 关闭新的链接</span></span><br /><span class="line">        <span class="keyword">return</span>;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 连接</span></span><br /><span class="line">    <span class="keyword">super</span>.connected(ch);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>发送消息</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">send</span><span class="params">(Object message, <span class="keyword">boolean</span> sent)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    <span class="comment">// 获得所有的客户端的通道</span></span><br /><span class="line">    Collection&lt;Channel&gt; channels = getChannels();</span><br /><span class="line">    <span class="comment">// 群发消息</span></span><br /><span class="line">    <span class="keyword">for</span> (Channel channel : channels) {</span><br /><span class="line">        <span class="keyword">if</span> (channel.isConnected()) {</span><br /><span class="line">            channel.send(message, sent);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>其他方法</strong></p>
+<p>如下方法比较简单，艿艿就不重复啰嗦了。</p>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractServer.java#L196-L203" target="_blank" rel="external nofollow noopener noreferrer"><code>#disconnect()</code></a>&nbsp;方法，断开连接。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractServer.java#L140-L155" target="_blank" rel="external nofollow noopener noreferrer"><code>#close()</code></a>&nbsp;方法，强制关闭。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractServer.java#L157-L160" target="_blank" rel="external nofollow noopener noreferrer"><code>#close(timeout)</code></a>&nbsp;方法，优雅关闭。</li>
+</ul>
+<p><strong>子类类图</strong></p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_04/04.png" alt="类图" /></p>
+<h2 id="4-2-ServerDelegate">4.2 ServerDelegate</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/ServerDelegate.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.ServerDelegate</code></a>&nbsp;，实现 Client 接口，客户端装饰者实现类。在每个实现的方法里，直接调用被装饰的&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/ServerDelegate.java#L35" target="_blank" rel="external nofollow noopener noreferrer"><code>server</code></a>&nbsp;属性的方法。</p>
+<p>目前&nbsp;<code>dubbo-remoting-p2p</code>&nbsp;模块中，PeerServer 会继承该类，后续再看。</p>
+<h1 id="5-Channel">5. Channel</h1>
+<h2 id="5-1-AbstractChannel">5.1 AbstractChannel</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/4fa80f25673c4e7060847a711a87ea37ed152d91/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractChannel.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.AbstractChannel</code></a>&nbsp;，实现 Channel 接口，实现 AbstractPeer 抽象类，<strong>通道</strong>抽象类。</p>
+<p><strong>发送消息</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">send</span><span class="params">(Object message, <span class="keyword">boolean</span> sent)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    <span class="keyword">if</span> (isClosed()) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RemotingException(<span class="keyword">this</span>, <span class="string">"Failed to send message "</span></span><br /><span class="line">                + (message == <span class="keyword">null</span> ? <span class="string">""</span> : message.getClass().getName()) + <span class="string">":"</span> + message</span><br /><span class="line">                + <span class="string">", cause: Channel closed. channel: "</span> + getLocalAddress() + <span class="string">" -&gt; "</span> + getRemoteAddress());</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>具体的发送方法，子类实现。在 AbstractChannel 中，目前只做状态检查。</li>
+</ul>
+<p><strong>子类类图</strong></p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_04/05.png" alt="类图" /></p>
+<h2 id="5-2-ChannelDelegate">5.2 ChannelDelegate</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/ChannelDelegate.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.ChannelDelegate</code></a>&nbsp;，实现 Channel 接口，通道装饰者实现类。在每个实现的方法里，直接调用被装饰的&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/31b3f1e868ed2d62c97a26b5cd233a921ce2205a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/ChannelDelegate.java#L31" target="_blank" rel="external nofollow noopener noreferrer"><code>channel</code></a>&nbsp;属性的方法。</p>
+<p>目前 Dubbo 中，暂未用到。</p>
+<h1 id="7-ChannelHandler">7. ChannelHandler</h1>
+<h2 id="7-1-ChannelHandlerAdapter">7.1 ChannelHandlerAdapter</h2>
+<p><code>com.alibaba.dubbo.remoting.transport.ChannelHandlerAdapter</code>&nbsp;，实现 ChannelHandler 接口，通道处理器<strong>适配器</strong>，每个方法为空实现。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">connected</span><span class="params">(Channel channel)</span> <span class="keyword">throws</span> RemotingException </span>{ }</span><br /><br /><span class="line"><span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">disconnected</span><span class="params">(Channel channel)</span> <span class="keyword">throws</span> RemotingException </span>{ }</span><br /><br /><span class="line"><span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">sent</span><span class="params">(Channel channel, Object message)</span> </span>{ }</span><br /><br /><span class="line"><span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">received</span><span class="params">(Channel channel, Object message)</span> <span class="keyword">throws</span> RemotingException </span>{ }</span><br /><br /><span class="line"><span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">caught</span><span class="params">(Channel channel, Throwable exception)</span> <span class="keyword">throws</span> RemotingException </span>{ }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>子类，可继承它，<strong>仅实现</strong>想要的方法。</p>
+<h2 id="7-2-ChannelHandlerDispatcher">7.2 ChannelHandlerDispatcher</h2>
+<p><code>com.alibaba.dubbo.remoting.transport.ChannelHandlerDispatcher</code>&nbsp;，实现 ChannelHandler 接口，通道处理器<strong>调度器</strong>。在它内部，有一个通道处理器数组&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/4fa80f25673c4e7060847a711a87ea37ed152d91/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/ChannelHandlerDispatcher.java#L35" target="_blank" rel="external nofollow noopener noreferrer"><code>channelHandlers</code></a>&nbsp;属性。</p>
+<p>每个实现的方法，都会循环调用&nbsp;<code>channelHandlers</code>&nbsp;的方法，例如：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">received</span><span class="params">(Channel channel, Object message)</span> </span>{</span><br /><span class="line">    <span class="keyword">for</span> (ChannelHandler listener : channelHandlers) {</span><br /><span class="line">        <span class="keyword">try</span> {</span><br /><span class="line">            listener.received(channel, message);</span><br /><span class="line">        } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line">            logger.error(t.getMessage(), t);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>搜索了下 ChannelHandlerDispatcher 的使用情况，主要用在&nbsp;<code>dubbo-remoting-p2p</code>&nbsp;的 AbstractGroup 中。</p>
+<h2 id="7-3-ChannelHandlerDelegate">7.3 ChannelHandlerDelegate</h2>
+<p><code>com.alibaba.dubbo.remoting.transport.ChannelHandlerDelegate</code>&nbsp;，实现 ChannelHandler 接口，通道处理器<strong>装饰者</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function">ChannelHandler <span class="title">getHandler</span><span class="params">()</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>正如，我们在上文中说道，<strong>装饰器模式</strong>，在&nbsp;<code>dubbo-remoting-api</code>&nbsp;扮演了非常重要的角色，那么最佳演员就是 ChannelHandlerDelegate 们。下面，开始他们的表演。</p>
+<h3 id="7-3-1-AbstractChannelHandlerDelegate">7.3.1 AbstractChannelHandlerDelegate</h3>
+<p><a href="https://github.com/YunaiV/dubbo/blob/4fa80f25673c4e7060847a711a87ea37ed152d91/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractChannelHandlerDelegate.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.AbstractChannelHandlerDelegate</code></a>&nbsp;，实现 ChannelHandlerDelegate 接口，通道处理器装饰者<strong>抽象实现类</strong>。在每个实现的方法里，直接调用被装饰的&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/4fa80f25673c4e7060847a711a87ea37ed152d91/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractChannelHandlerDelegate.java#L26" target="_blank" rel="external nofollow noopener noreferrer"><code>handler</code></a>&nbsp;属性的方法。</p>
+<h3 id="7-3-2-DecodeHandler">7.3.2 DecodeHandler</h3>
+<p><code>com.alibaba.dubbo.remoting.transport.DecodeHandler</code>&nbsp;，实现 AbstractChannelHandlerDelegate 抽象类，<strong>解码处理器</strong>，处理接收到的消息，实现了 Decodeable 接口的情况。</p>
+<p><strong>覆写了&nbsp;<code>#received(channel, message)</code>&nbsp;方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">received</span><span class="params">(Channel channel, Object message)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (message <span class="keyword">instanceof</span> Decodeable) {</span><br /><span class="line"> <span class="number">4</span>:         decode(message);</span><br /><span class="line"> <span class="number">5</span>:     }</span><br /><span class="line"> <span class="number">6</span>: </span><br /><span class="line"> <span class="number">7</span>:     <span class="keyword">if</span> (message <span class="keyword">instanceof</span> Request) {</span><br /><span class="line"> <span class="number">8</span>:         decode(((Request) message).getData());</span><br /><span class="line"> <span class="number">9</span>:     }</span><br /><span class="line"><span class="number">10</span>: </span><br /><span class="line"><span class="number">11</span>:     <span class="keyword">if</span> (message <span class="keyword">instanceof</span> Response) {</span><br /><span class="line"><span class="number">12</span>:         decode(((Response) message).getResult());</span><br /><span class="line"><span class="number">13</span>:     }</span><br /><span class="line"><span class="number">14</span>: </span><br /><span class="line"><span class="number">15</span>:     handler.received(channel, message);</span><br /><span class="line"><span class="number">16</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 至 5 行：当消息是 Decodeable 类型时，调用&nbsp;<code>#decode(message)</code>&nbsp;方法，解析消息。</li>
+<li>第 7 至 9 行：当消息是 Request 类型时，调用&nbsp;<code>#decode(message)</code>&nbsp;方法，解析&nbsp;<code>data</code>&nbsp;属性。</li>
+<li>第 11 至 13 行：当消息是 Response 类型时，调用&nbsp;<code>#decode(message)</code>&nbsp;方法，解析&nbsp;<code>result</code>&nbsp;属性。</li>
+<li>第 15 行：调用&nbsp;<code>ChannelHandler#received(channel, message)</code>&nbsp;方法，将消息交给委托的&nbsp;<code>handler</code>&nbsp;，继续处理。🙂 胖友是否感受到，装饰器模式的好处：通过组合的方式，实现功能的叠加。</li>
+</ul>
+<p><strong>解析消息</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">decode</span><span class="params">(Object message)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="keyword">if</span> (message != <span class="keyword">null</span> &amp;&amp; message <span class="keyword">instanceof</span> Decodeable) {</span><br /><span class="line"> <span class="number">3</span>:         <span class="keyword">try</span> {</span><br /><span class="line"> <span class="number">4</span>:             ((Decodeable) message).decode(); <span class="comment">// 解析消息</span></span><br /><span class="line"> <span class="number">5</span>:             <span class="keyword">if</span> (log.isDebugEnabled()) {</span><br /><span class="line"> <span class="number">6</span>:                 log.debug(<span class="keyword">new</span> StringBuilder(<span class="number">32</span>).append(<span class="string">"Decode decodeable message "</span>).append(message.getClass().getName()).toString());</span><br /><span class="line"> <span class="number">7</span>:             }</span><br /><span class="line"> <span class="number">8</span>:         } <span class="keyword">catch</span> (Throwable e) {</span><br /><span class="line"> <span class="number">9</span>:             <span class="keyword">if</span> (log.isWarnEnabled()) {</span><br /><span class="line"><span class="number">10</span>:                 log.warn(<span class="keyword">new</span> StringBuilder(<span class="number">32</span>).append(<span class="string">"Call Decodeable.decode failed: "</span>).append(e.getMessage()).toString(), e);</span><br /><span class="line"><span class="number">11</span>:             }</span><br /><span class="line"><span class="number">12</span>:         } <span class="comment">// ~ end of catch</span></span><br /><span class="line"><span class="number">13</span>:     } <span class="comment">// ~ end of if</span></span><br /><span class="line"><span class="number">14</span>: } <span class="comment">// ~ end of method decode</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 2 至 4 行：当类型是 Decodeable 时，调用&nbsp;<code>Decodeable#decode()</code>&nbsp;方法，进一步解析。</li>
+<li>在&nbsp;<code>dubbo-rpc-default</code>&nbsp;项目中，DecodeableRpcInvocation 和 DecodeableRpcResult 实现 Decodeable 接口，后面我们来分享。</li>
+</ul>
+<h3 id="7-3-3-MultiMessageHandler">7.3.3 MultiMessageHandler</h3>
+<p>`com.alibaba.dubbo.remoting.transport.MultiMessageHandler ，实现 AbstractChannelHandlerDelegate 抽象类，<strong>多消息处理器</strong>，处理一次性接收到多条消息的情况。</p>
+<p><strong>覆写了&nbsp;<code>#received(channel, message)</code>&nbsp;方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">received</span><span class="params">(Channel channel, Object message)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (message <span class="keyword">instanceof</span> MultiMessage) { <span class="comment">// 多消息</span></span><br /><span class="line"> <span class="number">4</span>:         MultiMessage list = (MultiMessage) message;</span><br /><span class="line"> <span class="number">5</span>:         <span class="keyword">for</span> (Object obj : list) {</span><br /><span class="line"> <span class="number">6</span>:             handler.received(channel, obj);</span><br /><span class="line"> <span class="number">7</span>:         }</span><br /><span class="line"> <span class="number">8</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">9</span>:         handler.received(channel, message);</span><br /><span class="line"><span class="number">10</span>:     }</span><br /><span class="line"><span class="number">11</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 至 7 行：当消息是 MultiMessage 类型，即<strong>多消息</strong>，<strong>循环</strong>提交给&nbsp;<code>handler</code>&nbsp;处理。</li>
+<li>第 8 至 10 行：当<strong>单消息</strong>时，<strong>直接</strong>提交给&nbsp;<code>handler</code>&nbsp;处理。</li>
+</ul>
+<hr />
+<p>🙂 在下面的文章，我们可以看到 ChannelHandlerDelegate 的<strong>组合使用的例子</strong>。</p>
+<h1 id="8-Dispacher">8. Dispacher</h1>
+<p>本小节内容，对应&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/thread-model.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 线程模型》</a>&nbsp;。</p>
+<p>简单概括这节，以<strong>接收消息</strong>举例子，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">executor.execute(<span class="keyword">new</span> Runnable() {</span><br /><span class="line">    handler.received(channel, message)</span><br /><span class="line">});</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>将 ChannelHandler 的具体操作，调度到线程池中，这也是为什么这个模块叫&nbsp;<code>dispacher</code>&nbsp;的原因。</p>
+<h2 id="8-1-ChannelHandlers">8.1 ChannelHandlers</h2>
+<p><code>com.alibaba.dubbo.remoting.transport.dispatcher.ChannelHandlers</code>&nbsp;，通道处理器<strong>工厂</strong>。在上文&nbsp;<a href="http://svip.iocoder.cn/Dubbo/remoting-api-transport/">「3.1 AbstractClient」</a>&nbsp;，我们看到&nbsp;<code>AbstractClient#wrapChannelHandler(url, handler)</code>&nbsp;方法中，会调用&nbsp;<code>ChannelHandlers#wrap(url, handler)</code>&nbsp;方法。实际上，Server 部分也会有这样类似的逻辑，只是代码实现上暂未统一。以&nbsp;<code>dubbo-remoting-netty4</code>&nbsp;来举例子：</p>
+<ul>
+<li>
+<p>NettyClient ：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">NettyClient</span><span class="params">(<span class="keyword">final</span> URL url, <span class="keyword">final</span> ChannelHandler handler)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    <span class="keyword">super</span>(url, wrapChannelHandler(url, handler));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>NettyServer ：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">NettyServer</span><span class="params">(URL url, ChannelHandler handler)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    <span class="keyword">super</span>(url, ChannelHandlers.wrap(handler, ExecutorUtil.setThreadName(url, SERVER_THREAD_POOL_NAME) <span class="comment">/* 设置线程名到 URL 上 */</span>));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<p>无论 Client 还是 Server ，都是类似的，将传入的&nbsp;<code>handler</code>&nbsp;，最终使用 ChannelHandlers 进行一次包装。OK ，我们来看看包装通道处理器的具体代码：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 单例</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: <span class="keyword">private</span> <span class="keyword">static</span> ChannelHandlers INSTANCE = <span class="keyword">new</span> ChannelHandlers();</span><br /><span class="line"> <span class="number">5</span>: </span><br /><span class="line"> <span class="number">6</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> ChannelHandler <span class="title">wrap</span><span class="params">(ChannelHandler handler, URL url)</span> </span>{</span><br /><span class="line"> <span class="number">7</span>:     <span class="keyword">return</span> ChannelHandlers.getInstance().wrapInternal(handler, url);</span><br /><span class="line"> <span class="number">8</span>: }</span><br /><span class="line"> <span class="number">9</span>: </span><br /><span class="line"><span class="number">10</span>: <span class="function"><span class="keyword">protected</span> ChannelHandler <span class="title">wrapInternal</span><span class="params">(ChannelHandler handler, URL url)</span> </span>{</span><br /><span class="line"><span class="number">11</span>:     <span class="keyword">return</span> <span class="keyword">new</span> MultiMessageHandler(</span><br /><span class="line"><span class="number">12</span>:             <span class="keyword">new</span> HeartbeatHandler(</span><br /><span class="line"><span class="number">13</span>:                     ExtensionLoader.getExtensionLoader(Dispatcher.class).getAdaptiveExtension().dispatch(handler, url)</span><br /><span class="line"><span class="number">14</span>:             )</span><br /><span class="line"><span class="number">15</span>:     );</span><br /><span class="line"><span class="number">16</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 11 至 15 行：在这里，我们就看到了多个 ChannelHandlerDelegate 的组合。包括，第 15 行的，<code>Dispatcher#dispatch(handler, url)</code>&nbsp;方法，实际上也是<strong>返回</strong>一个 ChannelHandlerDelegate 对象。</li>
+</ul>
+<h2 id="8-2-Dispatcher-实现类">8.2 Dispatcher 实现类</h2>
+<p>在 Dubbo 中，有多种 Dispatcher 的实现，如下：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/thread-model.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 线程模型》</a></p>
+<ul>
+<li><code>all</code>&nbsp;所有消息都派发到线程池，包括请求，响应，连接事件，断开事件，心跳等。</li>
+<li><code>direct</code>&nbsp;所有消息都不派发到线程池，全部在 IO 线程上直接执行。</li>
+<li><code>message</code>&nbsp;只有请求响应消息派发到线程池，其它连接断开事件，心跳等消息，直接在 IO 线程上执行。</li>
+<li><code>execution</code>&nbsp;只请求消息派发到线程池，不含响应，响应和其它连接断开事件，心跳等消息，直接在 IO 线程上执行。</li>
+<li><code>connection</code>&nbsp;在 IO 线程上，将连接断开事件放入队列，有序逐个执行，其它消息派发到线程池。</li>
+</ul>
+</blockquote>
+<p><strong>子类类图</strong></p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_04/07.png" alt="类图" /></p>
+<h3 id="8-2-1-AllDispatcher">8.2.1 AllDispatcher</h3>
+<p>我们以&nbsp;<code>all</code>&nbsp;对应的 AllDispatcher 举例子，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AllDispatcher</span> <span class="keyword">implements</span> <span class="title">Dispatcher</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String NAME = <span class="string">"all"</span>;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> ChannelHandler <span class="title">dispatch</span><span class="params">(ChannelHandler handler, URL url)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> AllChannelHandler(handler, url);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>在该类的&nbsp;<code>#dispatch(...)</code>&nbsp;的方法中，我们可以看到创建 AllChannelHandler 对象，并传入&nbsp;<code>handler</code>&nbsp;属性。🙂 聪慧如你，已经猜到 AllChannelHandler 也是 ChannelHandlerDelegate 类型。也就是说&ldquo;<strong>线程模型</strong>&rdquo;，也是通过<strong>装饰器模式</strong>，组合而成。</p>
+<p>每个 Dispatcher 实现类，都对应一个 ChannelHandler 实现类。默认<strong>未配置</strong>的情况下，使用 AllDispatcher 调度。</p>
+<h3 id="8-2-2-AllChannelHandler">8.2.2 AllChannelHandler</h3>
+<p><a href="http://svip.iocoder.cn/Dubbo/remoting-api-transport/com.alibaba.dubbo.remoting.transport.dispatcher.all"><code>com.alibaba.dubbo.remoting.transport.dispatcher.all.AllChannelHandler</code></a>&nbsp;，实现 WrappedChannelHandler 抽象类。覆写&nbsp;<code>#connected(channel)</code>&nbsp;方法如下：</p>
+<blockquote>
+<p>WrappedChannelHandler 是实现 ChannelHandlerDelegate 的抽象类，下文再看。</p>
+</blockquote>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">connected</span><span class="params">(Channel channel)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    ExecutorService cexecutor = getExecutorService();</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        cexecutor.execute(<span class="keyword">new</span> ChannelEventRunnable(channel, handler, ChannelState.CONNECTED));</span><br /><span class="line">    } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> ExecutionException(<span class="string">"connect event"</span>, channel, getClass() + <span class="string">" error when process connected event ."</span>, t);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>创建 ChannelEventRunnable 对象，提交给线程池执行。</li>
+<li>注意，传入的状态为&nbsp;<code>ChannelState.CONNECTED</code>&nbsp;。不同的实现方法，对应不同的状态。</li>
+</ul>
+<h2 id="8-3-ChannelEventRunnable">8.3 ChannelEventRunnable</h2>
+<p><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/dispatcher/ChannelEventRunnable.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.dispatcher.ChannelEventRunnable</code></a>&nbsp;，实现 Runnable 接口。代码比较简单，胖友自己看噢。主要分成三部分：</p>
+<ul>
+<li><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/dispatcher/ChannelEventRunnable.java#L27-L51" target="_blank" rel="external nofollow noopener noreferrer">构造方法</a></li>
+<li><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/dispatcher/ChannelEventRunnable.java#L98-L129" target="_blank" rel="external nofollow noopener noreferrer">ChannelState</a></li>
+<li>
+<p><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/dispatcher/ChannelEventRunnable.java#L53-L96" target="_blank" rel="external nofollow noopener noreferrer"><code>#run()</code></a>&nbsp;方法，简化代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">switch</span> (state) {</span><br /><span class="line">        <span class="keyword">case</span> CONNECTED: handler.connected(channel); <span class="keyword">break</span>;</span><br /><span class="line">        <span class="keyword">case</span> DISCONNECTED:handler.disconnected(channel); <span class="keyword">break</span>;</span><br /><span class="line">        <span class="keyword">case</span> SENT:handler.sent(channel, message);<span class="keyword">break</span>;</span><br /><span class="line">        <span class="keyword">case</span> RECEIVED:handler.received(channel, message);<span class="keyword">break</span>;</span><br /><span class="line">        <span class="keyword">case</span> CAUGHT:handler.caught(channel, exception);<span class="keyword">break</span>;</span><br /><span class="line">        <span class="keyword">default</span>: logger.warn(<span class="string">"unknown state: "</span> + state + <span class="string">", message is "</span> + message);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h2 id="8-4-WrappedChannelHandler">8.4 WrappedChannelHandler</h2>
+<p><code>com.alibaba.dubbo.remoting.transport.dispatcher.WrappedChannelHandler</code>&nbsp;，实现 ChannelHandlerDelegate 接口，<strong>包装的</strong>&nbsp;WrappedChannelHandler 实现类。</p>
+<blockquote>
+<p>从目前的实现来看，WrappedChannelHandler 继承 AbstractChannelHandlerDelegate 更合适，因为&nbsp;<code>#connected(channel)</code>&nbsp;等，实现的方法都是相同的。</p>
+</blockquote>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 线程池</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: <span class="keyword">protected</span> <span class="keyword">final</span> ExecutorService executor;</span><br /><span class="line"> <span class="number">5</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 6:  * 通道处理器</span></span><br /><span class="line"><span class="comment"> 7:  */</span></span><br /><span class="line"> <span class="number">8</span>: <span class="keyword">protected</span> <span class="keyword">final</span> ChannelHandler handler;</span><br /><span class="line"> <span class="number">9</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">10:  * URL</span></span><br /><span class="line"><span class="comment">11:  */</span></span><br /><span class="line"><span class="number">12</span>: <span class="keyword">protected</span> <span class="keyword">final</span> URL url;</span><br /><span class="line"><span class="number">13</span>: </span><br /><span class="line"><span class="number">14</span>: <span class="function"><span class="keyword">public</span> <span class="title">WrappedChannelHandler</span><span class="params">(ChannelHandler handler, URL url)</span> </span>{</span><br /><span class="line"><span class="number">15</span>:     <span class="keyword">this</span>.handler = handler;</span><br /><span class="line"><span class="number">16</span>:     <span class="keyword">this</span>.url = url;</span><br /><span class="line"><span class="number">17</span>: </span><br /><span class="line"><span class="number">18</span>:     <span class="comment">// 创建线程池</span></span><br /><span class="line"><span class="number">19</span>:     executor = (ExecutorService) ExtensionLoader.getExtensionLoader(ThreadPool.class).getAdaptiveExtension().getExecutor(url);</span><br /><span class="line"><span class="number">20</span>: </span><br /><span class="line"><span class="number">21</span>:     <span class="comment">// 添加线程池到 DataStore 中</span></span><br /><span class="line"><span class="number">22</span>:     String componentKey = Constants.EXECUTOR_SERVICE_COMPONENT_KEY;</span><br /><span class="line"><span class="number">23</span>:     <span class="keyword">if</span> (Constants.CONSUMER_SIDE.equalsIgnoreCase(url.getParameter(Constants.SIDE_KEY))) {</span><br /><span class="line"><span class="number">24</span>:         componentKey = Constants.CONSUMER_SIDE;</span><br /><span class="line"><span class="number">25</span>:     }</span><br /><span class="line"><span class="number">26</span>:     DataStore dataStore = ExtensionLoader.getExtensionLoader(DataStore.class).getDefaultExtension();</span><br /><span class="line"><span class="number">27</span>:     dataStore.put(componentKey, Integer.toString(url.getPort()), executor);</span><br /><span class="line"><span class="number">28</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 19 行：基于 Dubbo SPI Adaptive 机制，创建线程池。</li>
+<li>第 21 至 27 行：添加线程池到 DataStore 中。🙂 这就是上文 AbstractClient 或 AbstractServer 从 DataStore 获得线程池的<strong>方式</strong>。当然，官方也说了，这种方式不是很优雅，有点奇淫技巧，未来会优化掉。</li>
+</ul>
+<p><strong>共享线程池</strong></p>
+<p>在 WrappedChannelHandler 中，有一个内置的共享线程池，如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">protected</span> <span class="keyword">static</span> <span class="keyword">final</span> ExecutorService SHARED_EXECUTOR = Executors.newCachedThreadPool(<span class="keyword">new</span> NamedThreadFactory(<span class="string">"DubboSharedHandler"</span>, <span class="keyword">true</span>));</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>【TODO 8024】搞不懂，这个设计的意图，先mark留着。</p>
+<p><strong>子类类图</strong></p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_04/06.png" alt="类图" /></p>
+<h1 id="9-Codec">9. Codec</h1>
+<h2 id="9-1-CodecSupport">9.1 CodecSupport</h2>
+<p><code>com.alibaba.dubbo.remoting.transport.CodecSupport</code>&nbsp;，编解码工具类，提供查询 Serialization 的功能。</p>
+<p><strong>初始化</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 序列化对象集合</span></span><br /><span class="line"><span class="comment"> * key：序列化类型编号 {<span class="doctag">@link</span> Serialization#getContentTypeId()}</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> Map&lt;Byte, Serialization&gt; ID_SERIALIZATION_MAP = <span class="keyword">new</span> HashMap&lt;Byte, Serialization&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 序列化名集合</span></span><br /><span class="line"><span class="comment"> * key：序列化类型编号 {<span class="doctag">@link</span> Serialization#getContentTypeId()}</span></span><br /><span class="line"><span class="comment"> * value: 序列化拓展名</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> Map&lt;Byte, String&gt; ID_SERIALIZATIONNAME_MAP = <span class="keyword">new</span> HashMap&lt;Byte, String&gt;();</span><br /><br /><span class="line"><span class="keyword">static</span> {</span><br /><span class="line">    <span class="comment">// 基于 Dubbo SPI ，初始化</span></span><br /><span class="line">    Set&lt;String&gt; supportedExtensions = ExtensionLoader.getExtensionLoader(Serialization.class).getSupportedExtensions();</span><br /><span class="line">    <span class="keyword">for</span> (String name : supportedExtensions) {</span><br /><span class="line">        Serialization serialization = ExtensionLoader.getExtensionLoader(Serialization.class).getExtension(name);</span><br /><span class="line">        <span class="keyword">byte</span> idByte = serialization.getContentTypeId();</span><br /><span class="line">        <span class="keyword">if</span> (ID_SERIALIZATION_MAP.containsKey(idByte)) {</span><br /><span class="line">            logger.error(<span class="string">"Serialization extension "</span> + serialization.getClass().getName()</span><br /><span class="line">                    + <span class="string">" has duplicate id to Serialization extension "</span></span><br /><span class="line">                    + ID_SERIALIZATION_MAP.get(idByte).getClass().getName()</span><br /><span class="line">                    + <span class="string">", ignore this Serialization extension"</span>);</span><br /><span class="line">            <span class="keyword">continue</span>;</span><br /><span class="line">        }</span><br /><span class="line">        ID_SERIALIZATION_MAP.put(idByte, serialization);</span><br /><span class="line">        ID_SERIALIZATIONNAME_MAP.put(idByte, name);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>Dubbo 提供了多种序列化方式，此处初始化结果，如下图：<img src="http://static2.iocoder.cn/images/Dubbo/2018_12_04/08.png" alt="SERIALIZATION 集合" /></p>
+<p><strong>查找 Serialization 对象</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Serialization <span class="title">getSerialization</span><span class="params">(URL url, Byte id)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    Serialization serialization = getSerializationById(id);</span><br /><span class="line">    String serializationName = url.getParameter(Constants.SERIALIZATION_KEY, Constants.DEFAULT_REMOTING_SERIALIZATION); <span class="comment">// 默认，hessian2</span></span><br /><span class="line">    <span class="comment">// 出于安全的目的，针对 JDK 的序列化方式（对应编号为 3、4、7），检查连接到服务器的 URL 和实际传输的数据，协议是否一致。</span></span><br /><span class="line">    <span class="comment">// https://github.com/apache/incubator-dubbo/issues/1138</span></span><br /><span class="line">    <span class="comment">// Check if "serialization id" passed from network matches the id on this side(only take effect for JDK serialization), for security purpose.</span></span><br /><span class="line">    <span class="keyword">if</span> (serialization == <span class="keyword">null</span></span><br /><span class="line">            || ((id == <span class="number">3</span> || id == <span class="number">7</span> || id == <span class="number">4</span>) &amp;&amp; !(serializationName.equals(ID_SERIALIZATIONNAME_MAP.get(id))))) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IOException(<span class="string">"Unexpected serialization id:"</span> + id + <span class="string">" received from network, please check if the peer send the right id."</span>);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> serialization;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>🙂 在最新的 Dubbo 版本中，已经将&nbsp;<code>serialization</code>&nbsp;模块，从&nbsp;<code>dubbo-common</code>&nbsp;中，独立成&nbsp;<a href="https://github.com/apache/incubator-dubbo/blob/HEAD/dubbo-serialization/pom.xml" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-serialization</code></a>&nbsp;。So ，我们后面开一个系列来分享。</p>
+<h2 id="9-2-AbstractCodec">9.2 AbstractCodec</h2>
+<p><code>com.alibaba.dubbo.remoting.transport.AbstractCodec</code>&nbsp;，实现 Codec<strong>2</strong>&nbsp;接口，提供如下公用方法：</p>
+<ul>
+<li><a href="https://github.com/apache/incubator-dubbo/blob/05da8040e88ef5c9a544cb9dddf4c6abee6bd61a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractCodec.java#L38-L48" target="_blank" rel="external nofollow noopener noreferrer"><code>#checkPayload(channel, size)</code></a>&nbsp;<strong>静态</strong>方法，校验消息长度。</li>
+<li><a href="https://github.com/apache/incubator-dubbo/blob/05da8040e88ef5c9a544cb9dddf4c6abee6bd61a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractCodec.java#L50-L52" target="_blank" rel="external nofollow noopener noreferrer"><code>#getSerialization(channel)</code></a>&nbsp;方法，获得 Serialization 对象。</li>
+<li><a href="https://github.com/apache/incubator-dubbo/blob/05da8040e88ef5c9a544cb9dddf4c6abee6bd61a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractCodec.java#L54-L71" target="_blank" rel="external nofollow noopener noreferrer"><code>#isClientSide(channel)</code></a>&nbsp;方法，是否为客户端侧的通道。</li>
+<li><a href="https://github.com/apache/incubator-dubbo/blob/05da8040e88ef5c9a544cb9dddf4c6abee6bd61a/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractCodec.java#L73-L75" target="_blank" rel="external nofollow noopener noreferrer"><code>#isServerSide(channel)</code></a>&nbsp;方法，是否为服务端侧的通道。</li>
+</ul>
+<p><strong>子类类图</strong></p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_04/09.png" alt="类图" /></p>
+<p>编解码器的实现，通过<strong>继承</strong>的方式，获得更多的功能。每一个 Codec2 类实现对不同消息的编解码。通过<strong>协议头</strong>来判断，具体使用哪个编解码逻辑。听起来有点绕，我们来看一段简化 ExchangeCodec 的&nbsp;<code>#decode(...)</code>&nbsp;例子：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="number">1</span>: <span class="function"><span class="keyword">protected</span> Object <span class="title">decode</span><span class="params">(Channel channel, ChannelBuffer buffer, <span class="keyword">int</span> readable, <span class="keyword">byte</span>[] header)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line"><span class="number">2</span>:     <span class="comment">// check magic number.</span></span><br /><span class="line"><span class="number">3</span>:     <span class="keyword">if</span> (readable &gt; <span class="number">0</span> &amp;&amp; header[<span class="number">0</span>] != MAGIC_HIGH</span><br /><span class="line"><span class="number">4</span>:             || readable &gt; <span class="number">1</span> &amp;&amp; header[<span class="number">1</span>] != MAGIC_LOW) {</span><br /><span class="line"><span class="number">5</span>:         <span class="comment">// ... 省略</span></span><br /><span class="line"><span class="number">6</span>:         <span class="keyword">return</span> <span class="keyword">super</span>.decode(channel, buffer, readable, header);</span><br /><span class="line"><span class="number">7</span>:     }</span><br /><span class="line"><span class="number">8</span>:    </span><br /><span class="line"><span class="number">9</span>:      <span class="comment">// ... 省略</span></span><br /><span class="line"><span class="number">10</span>:    </span><br /><span class="line"><span class="number">11</span>:     <span class="keyword">return</span> decodeBody(channel, is, header);</span><br /><span class="line"><span class="number">12</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 2 至 7 行：通过 magic number 判断到，<strong>并非</strong>&nbsp;Dubbo Exchange&nbsp;<strong>信息交易的协议头</strong>，转交给父类 TelnetCodec 处理，一般此时是 Telnet 消息。</li>
+<li>第 8 至 11 行：通过 magic number 判断到，<strong>符合</strong>&nbsp;Dubbo Exchange&nbsp;<strong>信息交易的协议头</strong>，ExchangeCodec 自己处理。</li>
+</ul>
+<h3 id="9-2-1-TransportCodec">9.2.1 TransportCodec</h3>
+<p><code>com.alibaba.dubbo.remoting.transport.codec.TransportCodec</code>&nbsp;，传输编解码器，使用 Serialization 进行序列化/反序列化，直接编解码。</p>
+<p><strong>编码消息</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">encode</span><span class="params">(Channel channel, ChannelBuffer buffer, Object message)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// 获得反序列化的 ObjectOutput 对象</span></span><br /><span class="line"> <span class="number">4</span>:     OutputStream output = <span class="keyword">new</span> ChannelBufferOutputStream(buffer);</span><br /><span class="line"> <span class="number">5</span>:     ObjectOutput objectOutput = getSerialization(channel).serialize(channel.getUrl(), output);</span><br /><span class="line"> <span class="number">6</span>:     <span class="comment">// 写入 ObjectOutput</span></span><br /><span class="line"> <span class="number">7</span>:     encodeData(channel, objectOutput, message);</span><br /><span class="line"> <span class="number">8</span>:     objectOutput.flushBuffer();</span><br /><span class="line"> <span class="number">9</span>:     <span class="comment">// 释放</span></span><br /><span class="line"><span class="number">10</span>:     <span class="keyword">if</span> (objectOutput <span class="keyword">instanceof</span> Cleanable) {</span><br /><span class="line"><span class="number">11</span>:         ((Cleanable) objectOutput).cleanup();</span><br /><span class="line"><span class="number">12</span>:     }</span><br /><span class="line"><span class="number">13</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 至 5 行：获得对应的 Serialization 对象，并创建用于反序列化的 ObjectOutput 对象。不同的 Serialization 实现，对应不同的 ObjectOutput 实现类。🙂 这里，我们只要读懂大体流程，详细的，我们后面文章见。</li>
+<li>
+<p>第 7 行：调用&nbsp;<code>#encodeData(channel, objectOutput, message)</code>&nbsp;方法，写入 ObjectOutput。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">encodeData</span><span class="params">(Channel channel, ObjectOutput output, Object message)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    encodeData(output, message);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">encodeData</span><span class="params">(ObjectOutput output, Object message)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    output.writeObject(message);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 9 至 12 行：释放资源。目前，仅有&nbsp;<code>kryo</code>&nbsp;的 KryoObjectInput 、KryoObjectOutput 实现了 Cleanable 接口，需要释放资源。</p>
+</li>
+</ul>
+<p><strong>解码消息</strong></p>
+<p><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/codec/TransportCodec.java#L48-L56" target="_blank" rel="external nofollow noopener noreferrer"><code>#decode(channel, buffer)</code></a>&nbsp;<strong>实现</strong>方法，和解码消息基本一致，胖友自己查看。</p>
+<h2 id="9-3-CodecAdapter">9.3 CodecAdapter</h2>
+<p><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/codec/CodecAdapter.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport.codec.CodecAdapter</code></a>&nbsp;，实现 Code2&nbsp;<strong>接口</strong>，Codec&nbsp;<strong>适配器</strong>，将 Codec 适配成 Codec2 。</p>
+<p>🙂 代码比较简单，胖友自己查看。</p>
+</div>

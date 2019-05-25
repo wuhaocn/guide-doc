@@ -1,0 +1,399 @@
+<header class="article-header">
+<h1 class="article-title">集群容错（六）之 Configurator 实现</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文接&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-5-impl-merger/?self">《精尽 Dubbo 源码解析 &mdash;&mdash; 集群容错（五）之 Merger 实现》</a>&nbsp;一文，分享&nbsp;<code>dubbo-cluster</code>&nbsp;模块，&nbsp;<code>configurator</code>&nbsp;包，实现 Dubbo 的<strong>配置规则</strong>功能。</p>
+<p>Configurator 相关类，如下图：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2019_04_25/01.png" alt="Configurator 相关类" /></p>
+<blockquote>
+<p>老艿艿：本文对应&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/config-rule.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 配置规则》</a>&nbsp;文档。如果之前没了解过该功能的胖友，请先阅读了解下哈。</p>
+</blockquote>
+<h1 id="2-ConfiguratorFactory">2. ConfiguratorFactory</h1>
+<p><code>com.alibaba.dubbo.rpc.cluster.ConfiguratorFactory</code>&nbsp;，Configurator 工厂接口，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span></span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">ConfiguratorFactory</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get the configurator instance.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url - configurator url.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> configurator instance.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span>(<span class="string">"protocol"</span>)</span><br /><span class="line">    <span class="function">Configurator <span class="title">getConfigurator</span><span class="params">(URL url)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>@SPI</code>&nbsp;注解，Dubbo SPI&nbsp;<strong>拓展点</strong>，无默认值。</li>
+<li><code>@Adaptive("protocol")</code>&nbsp;注解，基于 Dubbo SPI Adaptive 机制，加载对应的 Configurator 实现，使用&nbsp;<code>URL.protocol</code>&nbsp;属性。</li>
+<li><code>#getConfigurator(URL url)</code>&nbsp;接口方法，获得 Configurator 对象。</li>
+</ul>
+<h2 id="2-1-OverrideConfiguratorFactory">2.1 OverrideConfiguratorFactory</h2>
+<p><code>com.alibaba.dubbo.rpc.cluster.configurator.override.OverrideConfiguratorFactory</code>&nbsp;，实现 ConfiguratorFactory 接口，<strong>OverrideConfigurator</strong>&nbsp;工厂。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">OverrideConfiguratorFactory</span> <span class="keyword">implements</span> <span class="title">ConfiguratorFactory</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Configurator <span class="title">getConfigurator</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> OverrideConfigurator(url);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="2-2-AbsentConfiguratorFactory">2.2 AbsentConfiguratorFactory</h2>
+<p><code>com.alibaba.dubbo.rpc.cluster.configurator.absent.AbsentConfiguratorFactory</code>&nbsp;，实现 ConfiguratorFactory 接口，<strong>AbsentConfigurator</strong>&nbsp;工厂。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AbsentConfiguratorFactory</span> <span class="keyword">implements</span> <span class="title">ConfiguratorFactory</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Configurator <span class="title">getConfigurator</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> AbsentConfigurator(url);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="3-Configurator">3. Configurator</h1>
+<p><code>com.alibaba.dubbo.rpc.cluster.Configurator</code>&nbsp;，实现 Comparable 接口，<strong>配置规则</strong>接口。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Configurator</span> <span class="keyword">extends</span> <span class="title">Comparable</span>&lt;<span class="title">Configurator</span>&gt; </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get the configurator url.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 配置规则</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> configurator url.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">URL <span class="title">getUrl</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Configure the provider url.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 配置到 URL 中</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url - old rovider url.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> new provider url.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">URL <span class="title">configure</span><span class="params">(URL url)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><strong>一个 Configurator 对象，对应一条配置规则</strong>。</li>
+<li>Configurator 有<strong>优先级</strong>的要求，所以实现 Comparable 接口。</li>
+<li><code>#getUrl()</code>&nbsp;接口方法，获得配置 URL ，里面带有配置规则。</li>
+<li><code>#configure(Url url)</code>&nbsp;接口方法，<strong>设置</strong>配置规则到指定 URL 中。</li>
+</ul>
+<h2 id="3-1-AbstractConfigurator">3.1 AbstractConfigurator</h2>
+<p><code>com.alibaba.dubbo.rpc.cluster.configurator.AbstractConfigurator</code>&nbsp;，实现 Configurator 接口，实现公用的配置规则的<strong>匹配</strong>、<strong>排序</strong>的逻辑。</p>
+<h3 id="3-1-1-getUrl">3.1.1 getUrl</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 配置规则 URL</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> URL configuratorUrl;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">AbstractConfigurator</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (url == <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"configurator url == null"</span>);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">this</span>.configuratorUrl = url;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> URL <span class="title">getUrl</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> configuratorUrl;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h3 id="3-1-2-configure">3.1.2 configure</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> URL <span class="title">configure</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (configuratorUrl.getHost() == <span class="keyword">null</span> || url == <span class="keyword">null</span> || url.getHost() == <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">4</span>:         <span class="keyword">return</span> url;</span><br /><span class="line"> <span class="number">5</span>:     }</span><br /><span class="line"> <span class="number">6</span>:     <span class="comment">// If override url has port, means it is a provider address. We want to control a specific provider with this override url, it may take effect on the specific provider instance or on consumers holding this provider instance.</span></span><br /><span class="line"> <span class="number">7</span>:     <span class="comment">// 配置规则，URL 带有端口( port )，意图是控制提供者机器。可以在提供端生效 也可以在消费端生效</span></span><br /><span class="line"> <span class="number">8</span>:     <span class="keyword">if</span> (configuratorUrl.getPort() != <span class="number">0</span>) {</span><br /><span class="line"> <span class="number">9</span>:         <span class="keyword">if</span> (url.getPort() == configuratorUrl.getPort()) {</span><br /><span class="line"><span class="number">10</span>:             <span class="keyword">return</span> configureIfMatch(url.getHost(), url);</span><br /><span class="line"><span class="number">11</span>:         }</span><br /><span class="line"><span class="number">12</span>:     <span class="comment">// override url don't have a port, means the ip override url specify is a consumer address or 0.0.0.0</span></span><br /><span class="line"><span class="number">13</span>:     <span class="comment">// 配置规则，URL 没有端口，override 输入消费端地址 或者 0.0.0.0</span></span><br /><span class="line"><span class="number">14</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">15</span>:         <span class="comment">// 1.If it is a consumer ip address, the intention is to control a specific consumer instance, it must takes effect at the consumer side, any provider received this override url should ignore;</span></span><br /><span class="line"><span class="number">16</span>:         <span class="comment">// 2.If the ip is 0.0.0.0, this override url can be used on consumer, and also can be used on provider</span></span><br /><span class="line"><span class="number">17</span>:         <span class="comment">// 1. 如果是消费端地址，则意图是控制消费者机器，必定在消费端生效，提供端忽略；</span></span><br /><span class="line"><span class="number">18</span>:         <span class="comment">// 2. 如果是0.0.0.0可能是控制提供端，也可能是控制提供端</span></span><br /><span class="line"><span class="number">19</span>:         <span class="keyword">if</span> (url.getParameter(Constants.SIDE_KEY, Constants.PROVIDER).equals(Constants.CONSUMER)) {</span><br /><span class="line"><span class="number">20</span>:             <span class="comment">// NetUtils.getLocalHost是消费端注册到zk的消费者地址</span></span><br /><span class="line"><span class="number">21</span>:             <span class="keyword">return</span> configureIfMatch(NetUtils.getLocalHost(), url);<span class="comment">// NetUtils.getLocalHost is the ip address consumer registered to registry.</span></span><br /><span class="line"><span class="number">22</span>:         } <span class="keyword">else</span> <span class="keyword">if</span> (url.getParameter(Constants.SIDE_KEY, Constants.CONSUMER).equals(Constants.PROVIDER)) {</span><br /><span class="line"><span class="number">23</span>:             <span class="comment">// 控制所有提供端，地址必定是0.0.0.0，否则就要配端口从而执行上面的if分支了</span></span><br /><span class="line"><span class="number">24</span>:             <span class="keyword">return</span> configureIfMatch(Constants.ANYHOST_VALUE, url);<span class="comment">// take effect on all providers, so address must be 0.0.0.0, otherwise it won't flow to this if branch</span></span><br /><span class="line"><span class="number">25</span>:         }</span><br /><span class="line"><span class="number">26</span>:     }</span><br /><span class="line"><span class="number">27</span>:     <span class="keyword">return</span> url;</span><br /><span class="line"><span class="number">28</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>我们可以看到，【第 6 至 26 行】一共有<strong>三种</strong>情况的判断：
+<ul>
+<li>【第一种】第 8 行：&nbsp;<code>configuratorUrl</code>&nbsp;带有<strong>端口( port )</strong>，意图是匹配<strong>指定一个</strong>服务提供者，因此使用&nbsp;<code>url.host</code>&nbsp;属性。</li>
+<li>【第二种】第 19 行：<code>url</code>&nbsp;的&nbsp;<code>side = consumer</code>&nbsp;，意图是匹配服务消费者，因此使用&nbsp;<code>NetUtils#getLocalHost()</code>&nbsp;属性。</li>
+<li>【第三种】第 22 行：<code>url</code>&nbsp;的&nbsp;<code>side = provider</code>&nbsp;，意图是匹配<strong>全部</strong>服务提供者，因此使用&nbsp;<code>Constants.ANYHOST_VALUE = *</code>&nbsp;属性。🙂 也就是说，目前暂不支持<strong>指定机器</strong>服务提供者。</li>
+</ul>
+</li>
+<li>第 10 行 || 第 21 行 || 第 24 行：调用&nbsp;<code>#configureIfMatch(host, url)</code>&nbsp;方法，配置到&nbsp;<code>url</code>&nbsp;中，若配置规则匹配。</li>
+</ul>
+<h4 id="3-1-2-1-configureIfMatch">3.1.2.1 configureIfMatch</h4>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">private</span> URL <span class="title">configureIfMatch</span><span class="params">(String host, URL url)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="comment">// 匹配 Host</span></span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (Constants.ANYHOST_VALUE.equals(configuratorUrl.getHost()) || host.equals(configuratorUrl.getHost())) {</span><br /><span class="line"> <span class="number">4</span>:         <span class="comment">// 匹配 "application"</span></span><br /><span class="line"> <span class="number">5</span>:         String configApplication = configuratorUrl.getParameter(Constants.APPLICATION_KEY, configuratorUrl.getUsername()); <span class="comment">// TODO 芋艿，为啥 username</span></span><br /><span class="line"> <span class="number">6</span>:         String currentApplication = url.getParameter(Constants.APPLICATION_KEY, url.getUsername());</span><br /><span class="line"> <span class="number">7</span>:         <span class="keyword">if</span> (configApplication == <span class="keyword">null</span> || Constants.ANY_VALUE.equals(configApplication)</span><br /><span class="line"> <span class="number">8</span>:                 || configApplication.equals(currentApplication)) {</span><br /><span class="line"> <span class="number">9</span>:             <span class="comment">// 配置 URL 中的条件 KEYS 集合。其中下面四个 KEY ，不算是条件，而是内置属性。考虑到下面要移除，所以添加到该集合中。</span></span><br /><span class="line"><span class="number">10</span>:             Set&lt;String&gt; conditionKeys = <span class="keyword">new</span> HashSet&lt;String&gt;();</span><br /><span class="line"><span class="number">11</span>:             conditionKeys.add(Constants.CATEGORY_KEY);</span><br /><span class="line"><span class="number">12</span>:             conditionKeys.add(Constants.CHECK_KEY);</span><br /><span class="line"><span class="number">13</span>:             conditionKeys.add(Constants.DYNAMIC_KEY);</span><br /><span class="line"><span class="number">14</span>:             conditionKeys.add(Constants.ENABLED_KEY);</span><br /><span class="line"><span class="number">15</span>:             <span class="comment">// 判断传入的 url 是否匹配配置规则 URL 的条件。除了 "application" 和 "side" 之外，带有 `"~"` 开头的 KEY ，也是条件。</span></span><br /><span class="line"><span class="number">16</span>:             <span class="keyword">for</span> (Map.Entry&lt;String, String&gt; entry : configuratorUrl.getParameters().entrySet()) {</span><br /><span class="line"><span class="number">17</span>:                 String key = entry.getKey();</span><br /><span class="line"><span class="number">18</span>:                 String value = entry.getValue();</span><br /><span class="line"><span class="number">19</span>:                 <span class="keyword">if</span> (key.startsWith(<span class="string">"~"</span>) || Constants.APPLICATION_KEY.equals(key) || Constants.SIDE_KEY.equals(key)) {</span><br /><span class="line"><span class="number">20</span>:                     conditionKeys.add(key);</span><br /><span class="line"><span class="number">21</span>:                     <span class="comment">// 若不相等，则不匹配配置规则，直接返回</span></span><br /><span class="line"><span class="number">22</span>:                     <span class="keyword">if</span> (value != <span class="keyword">null</span> &amp;&amp; !Constants.ANY_VALUE.equals(value)</span><br /><span class="line"><span class="number">23</span>:                             &amp;&amp; !value.equals(url.getParameter(key.startsWith(<span class="string">"~"</span>) ? key.substring(<span class="number">1</span>) : key))) {</span><br /><span class="line"><span class="number">24</span>:                         <span class="keyword">return</span> url;</span><br /><span class="line"><span class="number">25</span>:                     }</span><br /><span class="line"><span class="number">26</span>:                 }</span><br /><span class="line"><span class="number">27</span>:             }</span><br /><span class="line"><span class="number">28</span>:             <span class="comment">// 移除条件 KEYS 集合，并配置到 URL 中</span></span><br /><span class="line"><span class="number">29</span>:             <span class="keyword">return</span> doConfigure(url, configuratorUrl.removeParameters(conditionKeys));</span><br /><span class="line"><span class="number">30</span>:         }</span><br /><span class="line"><span class="number">31</span>:     }</span><br /><span class="line"><span class="number">32</span>:     <span class="keyword">return</span> url;</span><br /><span class="line"><span class="number">33</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 行：匹配&nbsp;<strong>HOST</strong>&nbsp;。</li>
+<li>第 4 至 8 行：匹配&nbsp;<strong><code>"application"</code></strong>&nbsp;。</li>
+<li>第 9 至 14 行：配置 URL 中的<strong>条件 KEYS 集合</strong>。其中下面四个 KEY ，不算是条件，而是<strong>内置属性</strong>。考虑到下面要移除，所以添加到该集合中。</li>
+<li>第 15 至 27 行：判断传入的&nbsp;<code>url</code>&nbsp;是否匹配配置规则 URL 的条件。除了&nbsp;<code>"application"</code>&nbsp;和&nbsp;<code>"side"</code>&nbsp;之外，<strong>带有&nbsp;<code>"~"</code>&nbsp;开头的 KEY ，也是条件</strong>。
+<ul>
+<li>第 21 至 25 行： 若<strong>不相等</strong>，则<strong>不匹配</strong>配置规则，直接返回&nbsp;<code>url</code>&nbsp;。</li>
+</ul>
+</li>
+<li>第 29 行：从&nbsp;<code>configuratorUrl</code>&nbsp;<strong>移除</strong>条件 KEYS 集合，并调用&nbsp;<code>#doConfigure(URL currentUrl, URL configUrl)</code>&nbsp;<strong>抽象</strong>方法，实现<strong>子类</strong>设置<strong>配置规则</strong>到&nbsp;<code>url</code>&nbsp;中。</li>
+</ul>
+<h4 id="3-1-2-2-doConfigure">3.1.2.2 doConfigure</h4>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> URL <span class="title">doConfigure</span><span class="params">(URL currentUrl, URL configUrl)</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h3 id="3-1-3-compareTo">3.1.3 compareTo</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">compareTo</span><span class="params">(Configurator o)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (o == <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">return</span> -<span class="number">1</span>;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// host 升序</span></span><br /><span class="line">    <span class="keyword">int</span> ipCompare = getUrl().getHost().compareTo(o.getUrl().getHost());</span><br /><span class="line">    <span class="comment">// 若 host 相同，按照 priority 降序</span></span><br /><span class="line">    <span class="keyword">if</span> (ipCompare == <span class="number">0</span>) {<span class="comment">//host is the same, sort by priority</span></span><br /><span class="line">        <span class="keyword">int</span> i = getUrl().getParameter(Constants.PRIORITY_KEY, <span class="number">0</span>);</span><br /><span class="line">        <span class="keyword">int</span> j = o.getUrl().getParameter(Constants.PRIORITY_KEY, <span class="number">0</span>);</span><br /><span class="line">        <span class="keyword">if</span> (i &lt; j) {</span><br /><span class="line">            <span class="keyword">return</span> -<span class="number">1</span>;</span><br /><span class="line">        } <span class="keyword">else</span> <span class="keyword">if</span> (i &gt; j) {</span><br /><span class="line">            <span class="keyword">return</span> <span class="number">1</span>;</span><br /><span class="line">        } <span class="keyword">else</span> {</span><br /><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br /><span class="line">        }</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        <span class="keyword">return</span> ipCompare;</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>优先，按照 host&nbsp;<strong>升序</strong>，即<strong>特定</strong>&nbsp;host&nbsp;<strong>高</strong>于&nbsp;<strong>anyhost</strong>(&nbsp;<code>"0.0.0.0"</code>&nbsp;) 。</li>
+<li>其次，按照&nbsp;<code>"priority"</code>&nbsp;<strong>降序</strong>。</li>
+</ul>
+<h2 id="3-2-OverrideConfigurator">3.2 OverrideConfigurator</h2>
+<p><code>com.alibaba.dubbo.rpc.cluster.configurator.override.OverrideConfigurator</code>&nbsp;，实现 AbstractConfigurator 抽象类，<code>override</code>&nbsp;Configurator 实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">OverrideConfigurator</span> <span class="keyword">extends</span> <span class="title">AbstractConfigurator</span> </span>{</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">OverrideConfigurator</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="keyword">super</span>(url);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> URL <span class="title">doConfigure</span><span class="params">(URL currentUrl, URL configUrl)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> currentUrl.addParameters(configUrl.getParameters()); <span class="comment">// 覆盖添加</span></span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><strong>覆盖</strong>添加。</li>
+</ul>
+<h2 id="3-3-AbsentConfigurator">3.3 AbsentConfigurator</h2>
+<p><code>com.alibaba.dubbo.rpc.cluster.configurator.absent.AbsentConfigurator</code>&nbsp;，实现 AbstractConfigurator 抽象类，<code>absent</code>&nbsp;Configurator 实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AbsentConfigurator</span> <span class="keyword">extends</span> <span class="title">AbstractConfigurator</span> </span>{</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">AbsentConfigurator</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="keyword">super</span>(url);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> URL <span class="title">doConfigure</span><span class="params">(URL currentUrl, URL configUrl)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> currentUrl.addParametersIfAbsent(configUrl.getParameters()); <span class="comment">// 不存在时添加</span></span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><strong>不存在时</strong>添加。</li>
+</ul>
+<p>从目前&nbsp;<code>dubbo-admin</code>&nbsp;项目来看，目前<strong>暂未使用</strong>&nbsp;<code>absent</code>&nbsp;的配置规则。</p>
+<h1 id="4-集成-Configurator-模块">4. 集成 Configurator 模块</h1>
+<p>如下图所示，我们可以看到，有<strong>三个类</strong>，调用&nbsp;<code>Configurator#configure(URL url)</code>&nbsp;方法，集成 Configurator 模块。</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2019_04_25/02.png" alt="集成" /></p>
+<h2 id="4-1-RegistryDirectory">4.1 RegistryDirectory</h2>
+<p>RegistryDirectory 将配置规则集成到其中，从而集成到<strong>服务消费者</strong>中。</p>
+<h3 id="4-1-1-toConfigurators">4.1.1 toConfigurators</h3>
+<p><code>#toConfigurators(List&lt;URL&gt; urls)</code>&nbsp;方法，官方注释如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 将overrideURL 转换为 map，供重新 refer 时使用.</span></span><br /><span class="line"><span class="comment"> * 每次下发全部规则，全部重新组装计算</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> urls 契约：</span></span><br /><span class="line"><span class="comment"> *             &lt;/br&gt;1.override://0.0.0.0/...(或override://ip:port...?anyhost=true)&amp;para1=value1...表示全局规则(对所有的提供者全部生效)</span></span><br /><span class="line"><span class="comment"> *             &lt;/br&gt;2.override://ip:port...?anyhost=false 特例规则（只针对某个提供者生效）</span></span><br /><span class="line"><span class="comment"> *             &lt;/br&gt;3.不支持override://规则... 需要注册中心自行计算.</span></span><br /><span class="line"><span class="comment"> *             &lt;/br&gt;4.不带参数的override://0.0.0.0/ 表示清除override</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> Configurator 集合</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"> <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> List&lt;Configurator&gt; <span class="title">toConfigurators</span><span class="params">(List&lt;URL&gt; urls)</span> </span>{</span><br /><span class="line">    <span class="comment">// ...省略代码</span></span><br /><span class="line"> }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>实际上，该注释说明了配置规则，在 RegistryDirectory 中，是<strong>如何集成配置规则模块</strong>。特别是<strong>四条</strong>契约，胖友好好理解下。</li>
+</ul>
+<p>该方法的真正注释，应该是：将配置规则 URL 集合，<strong>转换</strong>成对应的 Configurator 集合。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> List&lt;Configurator&gt; <span class="title">toConfigurators</span><span class="params">(List&lt;URL&gt; urls)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="comment">// 忽略，若配置规则 URL 集合为空</span></span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (urls == <span class="keyword">null</span> || urls.isEmpty()) {</span><br /><span class="line"> <span class="number">4</span>:         <span class="keyword">return</span> Collections.emptyList();</span><br /><span class="line"> <span class="number">5</span>:     }</span><br /><span class="line"> <span class="number">6</span>: </span><br /><span class="line"> <span class="number">7</span>:     <span class="comment">// 创建 Configurator 集合</span></span><br /><span class="line"> <span class="number">8</span>:     List&lt;Configurator&gt; configurators = <span class="keyword">new</span> ArrayList&lt;Configurator&gt;(urls.size());</span><br /><span class="line"> <span class="number">9</span>:     <span class="keyword">for</span> (URL url : urls) {</span><br /><span class="line"><span class="number">10</span>:         <span class="comment">// 若协议为 `empty://` ，意味着清空所有配置规则，因此返回空 Configurator 集合</span></span><br /><span class="line"><span class="number">11</span>:         <span class="keyword">if</span> (Constants.EMPTY_PROTOCOL.equals(url.getProtocol())) {</span><br /><span class="line"><span class="number">12</span>:             configurators.clear();</span><br /><span class="line"><span class="number">13</span>:             <span class="keyword">break</span>;</span><br /><span class="line"><span class="number">14</span>:         }</span><br /><span class="line"><span class="number">15</span>:         <span class="comment">// 对应第 4 条契约，不带参数的 override://0.0.0.0/ 表示清除 override</span></span><br /><span class="line"><span class="number">16</span>:         Map&lt;String, String&gt; override = <span class="keyword">new</span> HashMap&lt;String, String&gt;(url.getParameters());</span><br /><span class="line"><span class="number">17</span>:         <span class="comment">// The anyhost parameter of override may be added automatically, it can't change the judgement of changing url</span></span><br /><span class="line"><span class="number">18</span>:         <span class="comment">// override 上的 anyhost 可能是自动添加的，不能影响改变url判断</span></span><br /><span class="line"><span class="number">19</span>:         override.remove(Constants.ANYHOST_KEY);</span><br /><span class="line"><span class="number">20</span>:         <span class="keyword">if</span> (override.size() == <span class="number">0</span>) {</span><br /><span class="line"><span class="number">21</span>:             configurators.clear();</span><br /><span class="line"><span class="number">22</span>:             <span class="keyword">continue</span>;</span><br /><span class="line"><span class="number">23</span>:         }</span><br /><span class="line"><span class="number">24</span>:         <span class="comment">// 获得 Configurator 对象，并添加到 `configurators` 中</span></span><br /><span class="line"><span class="number">25</span>:         configurators.add(configuratorFactory.getConfigurator(url));</span><br /><span class="line"><span class="number">26</span>:     }</span><br /><span class="line"><span class="number">27</span>:     <span class="comment">// 排序</span></span><br /><span class="line"><span class="number">28</span>:     Collections.sort(configurators);</span><br /><span class="line"><span class="number">29</span>:     <span class="keyword">return</span> configurators;</span><br /><span class="line"><span class="number">30</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 2 至 5 行：<strong>忽略</strong>，若&nbsp;<code>urls</code>&nbsp;集合为空。</li>
+<li>的 8 行：创建 Configurator 集合&nbsp;<code>configurators</code>&nbsp;变量。</li>
+<li>第 9 至 26 行：<strong>循环</strong>&nbsp;<code>urls</code>&nbsp;集合，<strong>转换</strong>成对应的 Configurator 集合。🙂 中间的过程，胖友看下注释。</li>
+<li>第 28 行：将&nbsp;<code>configurators</code>&nbsp;集合，<strong>排序</strong>。具体的排序规则，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-6-impl-configurator/">「3.13 compareTo」</a>&nbsp;已经解析。</li>
+</ul>
+<h3 id="4-1-2-mergeUrl">4.1.2 mergeUrl</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">private</span> URL <span class="title">mergeUrl</span><span class="params">(URL providerUrl)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="comment">// 合并消费端参数</span></span><br /><span class="line"> <span class="number">3</span>:     providerUrl = ClusterUtils.mergeUrl(providerUrl, queryMap); <span class="comment">// Merge the consumer side parameters</span></span><br /><span class="line"> <span class="number">4</span>: </span><br /><span class="line"> <span class="number">5</span>:     <span class="comment">// 合并配置规则</span></span><br /><span class="line"> <span class="number">6</span>:     List&lt;Configurator&gt; localConfigurators = <span class="keyword">this</span>.configurators; <span class="comment">// local reference</span></span><br /><span class="line"> <span class="number">7</span>:     <span class="keyword">if</span> (localConfigurators != <span class="keyword">null</span> &amp;&amp; !localConfigurators.isEmpty()) {</span><br /><span class="line"> <span class="number">8</span>:         <span class="keyword">for</span> (Configurator configurator : localConfigurators) {</span><br /><span class="line"> <span class="number">9</span>:             providerUrl = configurator.configure(providerUrl);</span><br /><span class="line"><span class="number">10</span>:         }</span><br /><span class="line"><span class="number">11</span>:     }</span><br /><span class="line"><span class="number">12</span>: </span><br /><span class="line"><span class="number">13</span>:     <span class="comment">// 不检查连接是否成功，总是创建 Invoker ！</span></span><br /><span class="line"><span class="number">14</span>:     providerUrl = providerUrl.addParameter(Constants.CHECK_KEY, String.valueOf(<span class="keyword">false</span>)); <span class="comment">// Do not check whether the connection is successful or not, always create Invoker!</span></span><br /><span class="line"><span class="number">15</span>: </span><br /><span class="line"><span class="number">16</span>:     <span class="comment">// The combination of directoryUrl and override is at the end of notify, which can't be handled here</span></span><br /><span class="line"><span class="number">17</span>:     <span class="comment">// 仅合并提供者参数，因为 directoryUrl 与 override 合并是在 notify 的最后，这里不能够处理</span></span><br /><span class="line"><span class="number">18</span>:     <span class="keyword">this</span>.overrideDirectoryUrl = <span class="keyword">this</span>.overrideDirectoryUrl.addParametersIfAbsent(providerUrl.getParameters()); <span class="comment">// Merge the provider side parameters</span></span><br /><span class="line"><span class="number">19</span>: </span><br /><span class="line"><span class="number">20</span>:     <span class="comment">// 【忽略】因为是对 1.0 版本的兼容</span></span><br /><span class="line"><span class="number">21</span>:     <span class="keyword">if</span> ((providerUrl.getPath() == <span class="keyword">null</span> || providerUrl.getPath().length() == <span class="number">0</span>)</span><br /><span class="line"><span class="number">22</span>:             &amp;&amp; <span class="string">"dubbo"</span>.equals(providerUrl.getProtocol())) { <span class="comment">// Compatible version 1.0</span></span><br /><span class="line"><span class="number">23</span>:         <span class="comment">//fix by tony.chenl DUBBO-44</span></span><br /><span class="line"><span class="number">24</span>:         String path = directoryUrl.getParameter(Constants.INTERFACE_KEY);</span><br /><span class="line"><span class="number">25</span>:         <span class="keyword">if</span> (path != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">26</span>:             <span class="keyword">int</span> i = path.indexOf(<span class="string">'/'</span>);</span><br /><span class="line"><span class="number">27</span>:             <span class="keyword">if</span> (i &gt;= <span class="number">0</span>) {</span><br /><span class="line"><span class="number">28</span>:                 path = path.substring(i + <span class="number">1</span>);</span><br /><span class="line"><span class="number">29</span>:             }</span><br /><span class="line"><span class="number">30</span>:             i = path.lastIndexOf(<span class="string">':'</span>);</span><br /><span class="line"><span class="number">31</span>:             <span class="keyword">if</span> (i &gt;= <span class="number">0</span>) {</span><br /><span class="line"><span class="number">32</span>:                 path = path.substring(<span class="number">0</span>, i);</span><br /><span class="line"><span class="number">33</span>:             }</span><br /><span class="line"><span class="number">34</span>:             providerUrl = providerUrl.setPath(path);</span><br /><span class="line"><span class="number">35</span>:         }</span><br /><span class="line"><span class="number">36</span>:     }</span><br /><span class="line"><span class="number">37</span>: </span><br /><span class="line"><span class="number">38</span>:     <span class="comment">// 返回服务提供者 URL</span></span><br /><span class="line"><span class="number">39</span>:     <span class="keyword">return</span> providerUrl;</span><br /><span class="line"><span class="number">40</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 5 至 11 行：循环&nbsp;<code>configurators</code>&nbsp;集合，调用&nbsp;<code>Configurator#configure(URL url)</code>&nbsp;方法，合并<strong>配置规则</strong>到&nbsp;<code>providerUrl</code>&nbsp;中。</li>
+<li>第 14 行：<strong>仅</strong>合并提供者参数到&nbsp;<code>overrideDirectoryUrl</code>&nbsp;中，因为&nbsp;<code>directoryUrl</code>&nbsp;与配置规则的合并是在&nbsp;<code>#notify(List&lt;URL&gt; urls)</code>&nbsp;方法的<strong>最后</strong>，因而这里不能够处理。代码如下图所示：<img src="http://static2.iocoder.cn/images/Dubbo/2019_04_25/03.png" alt="notify" /></li>
+</ul>
+<h2 id="4-2-RegistryProtocol">4.2 RegistryProtocol</h2>
+<p>RegistryProtocol 通过向<strong>注册中心</strong>注册 OverrideListener 监听器，从而集成配置规则到<strong>服务提供者</strong>中。</p>
+<h3 id="4-2-1-export">4.2.1 export</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> &lt;T&gt; <span class="function">Exporter&lt;T&gt; <span class="title">export</span><span class="params">(<span class="keyword">final</span> Invoker&lt;T&gt; originInvoker)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// 暴露服务</span></span><br /><span class="line"> <span class="number">4</span>:     <span class="comment">// export invoker</span></span><br /><span class="line"> <span class="number">5</span>:     <span class="keyword">final</span> ExporterChangeableWrapper&lt;T&gt; exporter = doLocalExport(originInvoker);</span><br /><span class="line"> <span class="number">6</span>: </span><br /><span class="line"> <span class="number">7</span>:     <span class="comment">// 获得注册中心 URL</span></span><br /><span class="line"> <span class="number">8</span>:     URL registryUrl = getRegistryUrl(originInvoker);</span><br /><span class="line"> <span class="number">9</span>: </span><br /><span class="line"><span class="number">10</span>:     <span class="comment">// 获得注册中心对象</span></span><br /><span class="line"><span class="number">11</span>:     <span class="comment">// registry provider</span></span><br /><span class="line"><span class="number">12</span>:     <span class="keyword">final</span> Registry registry = getRegistry(originInvoker);</span><br /><span class="line"><span class="number">13</span>: </span><br /><span class="line"><span class="number">14</span>:     <span class="comment">// 获得服务提供者 URL</span></span><br /><span class="line"><span class="number">15</span>:     <span class="keyword">final</span> URL registedProviderUrl = getRegistedProviderUrl(originInvoker);</span><br /><span class="line"><span class="number">16</span>: </span><br /><span class="line"><span class="number">17</span>:     <span class="comment">//to judge to delay publish whether or not</span></span><br /><span class="line"><span class="number">18</span>:     <span class="keyword">boolean</span> register = registedProviderUrl.getParameter(<span class="string">"register"</span>, <span class="keyword">true</span>);</span><br /><span class="line"><span class="number">19</span>: </span><br /><span class="line"><span class="number">20</span>:     <span class="comment">// 向注册中心订阅服务消费者</span></span><br /><span class="line"><span class="number">21</span>:     ProviderConsumerRegTable.registerProvider(originInvoker, registryUrl, registedProviderUrl);</span><br /><span class="line"><span class="number">22</span>: </span><br /><span class="line"><span class="number">23</span>:     <span class="comment">// 向注册中心注册服务提供者（自己）</span></span><br /><span class="line"><span class="number">24</span>:     <span class="keyword">if</span> (register) {</span><br /><span class="line"><span class="number">25</span>:         register(registryUrl, registedProviderUrl);</span><br /><span class="line"><span class="number">26</span>:         ProviderConsumerRegTable.getProviderWrapper(originInvoker).setReg(<span class="keyword">true</span>); <span class="comment">// // 标记向本地注册表的注册服务提供者，已经注册</span></span><br /><span class="line"><span class="number">27</span>:     }</span><br /><span class="line"><span class="number">28</span>: </span><br /><span class="line"><span class="number">29</span>:     <span class="comment">// 使用 OverrideListener 对象，订阅配置规则</span></span><br /><span class="line"><span class="number">30</span>:     <span class="comment">// Subscribe the override data</span></span><br /><span class="line"><span class="number">31</span>:     <span class="comment">// FIXME When the provider subscribes, it will affect the scene : a certain JVM exposes the service and call the same service. Because the subscribed is cached key with the name of the service, it causes the subscription information to cover.</span></span><br /><span class="line"><span class="number">32</span>:     <span class="comment">// 创建订阅配置规则的 URL</span></span><br /><span class="line"><span class="number">33</span>:     <span class="keyword">final</span> URL overrideSubscribeUrl = getSubscribedOverrideUrl(registedProviderUrl);</span><br /><span class="line"><span class="number">34</span>:     <span class="comment">// 创建 OverrideListener 对象，并添加到 `overrideListeners` 中</span></span><br /><span class="line"><span class="number">35</span>:     <span class="keyword">final</span> OverrideListener overrideSubscribeListener = <span class="keyword">new</span> OverrideListener(overrideSubscribeUrl, originInvoker);</span><br /><span class="line"><span class="number">36</span>:     overrideListeners.put(overrideSubscribeUrl, overrideSubscribeListener);</span><br /><span class="line"><span class="number">37</span>:     <span class="comment">// 向注册中心，发起订阅</span></span><br /><span class="line"><span class="number">38</span>:     registry.subscribe(overrideSubscribeUrl, overrideSubscribeListener);</span><br /><span class="line"><span class="number">39</span>:     <span class="comment">//Ensure that a new exporter instance is returned every time export</span></span><br /><span class="line"><span class="number">40</span>:     <span class="keyword">return</span> <span class="keyword">new</span> DestroyableExporter&lt;T&gt;(exporter, originInvoker, overrideSubscribeUrl, registedProviderUrl);</span><br /><span class="line"><span class="number">41</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 29 至 38 行：使用&nbsp;<strong>OverrideListener</strong>&nbsp;对象，订阅配置规则。</p>
+<ul>
+<li>
+<p>第 33 行：调用&nbsp;<code>#getSubscribedOverrideUrl(registedProviderUrl)</code>&nbsp;方法，创建<strong>订阅配置规则</strong>的 URL 。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> URL <span class="title">getSubscribedOverrideUrl</span><span class="params">(URL registedProviderUrl)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> registedProviderUrl.setProtocol(Constants.PROVIDER_PROTOCOL)</span><br /><span class="line">            .addParameters(Constants.CATEGORY_KEY, Constants.CONFIGURATORS_CATEGORY, <span class="comment">// configurators</span></span><br /><span class="line">                    Constants.CHECK_KEY, String.valueOf(<span class="keyword">false</span>)); <span class="comment">// 订阅失败，不校验</span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>x</li>
+</ul>
+</li>
+<li>第 34 至 36 行：创建&nbsp;<strong>OverrideListener</strong>&nbsp;对象，并添加到&nbsp;<code>overrideListeners</code>&nbsp;中。</li>
+<li>第 38 行：调用&nbsp;<code>Registry#subscribe(overrideSubscribeUrl, overrideSubscribeListener)</code>&nbsp;方法，向注册中心注册&nbsp;<strong>OverrideListener</strong>&nbsp;监听器，订阅配置规则的变化。</li>
+</ul>
+</li>
+</ul>
+<h3 id="4-2-2-OverrideListener">4.2.2 OverrideListener</h3>
+<p>OverrideListener 是 RegistryProtocol&nbsp;<strong>内部类</strong>，实现 NotifyListener 接口，官方注释如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 重新 export ：protocol 中的 exporter destroy 问题</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * 1. 要求 registry protocol 返回的 exporter 可以正常 destroy</span></span><br /><span class="line"><span class="comment"> * 2. notify 后不需要重新向注册中心注册</span></span><br /><span class="line"><span class="comment"> * 3. export 方法传入的 invoker 最好能一直作为 exporter 的 invoker.</span></span><br /><span class="line"><span class="comment"> */</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>初看有点绕，我们来瞅瞅代码。</li>
+</ul>
+<h4 id="4-2-2-1-构造方法">4.2.2.1 构造方法</h4>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 订阅 URL 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> URL subscribeUrl;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 原始 Invoker 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Invoker originInvoker;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">OverrideListener</span><span class="params">(URL subscribeUrl, Invoker originalInvoker)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.subscribeUrl = subscribeUrl;</span><br /><span class="line">    <span class="keyword">this</span>.originInvoker = originalInvoker;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h4 id="4-2-2-2-notify">4.2.2.2 notify</h4>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">notify</span><span class="params">(List&lt;URL&gt; urls)</span> </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// 获得匹配的规则配置 URL 集合</span></span><br /><span class="line"> <span class="number">4</span>:     logger.debug(<span class="string">"original override urls: "</span> + urls);</span><br /><span class="line"> <span class="number">5</span>:     List&lt;URL&gt; matchedUrls = getMatchedUrls(urls, subscribeUrl);</span><br /><span class="line"> <span class="number">6</span>:     logger.debug(<span class="string">"subscribe url: "</span> + subscribeUrl + <span class="string">", override urls: "</span> + matchedUrls);</span><br /><span class="line"> <span class="number">7</span>:     <span class="comment">// No matching results</span></span><br /><span class="line"> <span class="number">8</span>:     <span class="keyword">if</span> (matchedUrls.isEmpty()) {</span><br /><span class="line"> <span class="number">9</span>:         <span class="keyword">return</span>;</span><br /><span class="line"><span class="number">10</span>:     }</span><br /><span class="line"><span class="number">11</span>:     <span class="comment">// 将配置规则 URL 集合，**转换**成对应的 Configurator 集合</span></span><br /><span class="line"><span class="number">12</span>:     List&lt;Configurator&gt; configurators = RegistryDirectory.toConfigurators(matchedUrls);</span><br /><span class="line"><span class="number">13</span>: </span><br /><span class="line"><span class="number">14</span>:     <span class="comment">// 获得真实的 Invoker 对象</span></span><br /><span class="line"><span class="number">15</span>:     <span class="keyword">final</span> Invoker&lt;?&gt; invoker;</span><br /><span class="line"><span class="number">16</span>:     <span class="keyword">if</span> (originInvoker <span class="keyword">instanceof</span> InvokerDelegete) {</span><br /><span class="line"><span class="number">17</span>:         invoker = ((InvokerDelegete&lt;?&gt;) originInvoker).getInvoker();</span><br /><span class="line"><span class="number">18</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">19</span>:         invoker = originInvoker;</span><br /><span class="line"><span class="number">20</span>:     }</span><br /><span class="line"><span class="number">21</span>:     <span class="comment">// The origin invoker</span></span><br /><span class="line"><span class="number">22</span>:     <span class="comment">// 获得真实的 Invoker 的 URL 对象</span></span><br /><span class="line"><span class="number">23</span>:     URL originUrl = RegistryProtocol.<span class="keyword">this</span>.getProviderUrl(invoker);</span><br /><span class="line"><span class="number">24</span>: </span><br /><span class="line"><span class="number">25</span>:     <span class="comment">// 忽略，若对应的 Exporter 对象不存在</span></span><br /><span class="line"><span class="number">26</span>:     String key = getCacheKey(originInvoker);</span><br /><span class="line"><span class="number">27</span>:     ExporterChangeableWrapper&lt;?&gt; exporter = bounds.get(key);</span><br /><span class="line"><span class="number">28</span>:     <span class="keyword">if</span> (exporter == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">29</span>:         logger.warn(<span class="keyword">new</span> IllegalStateException(<span class="string">"error state, exporter should not be null"</span>));</span><br /><span class="line"><span class="number">30</span>:         <span class="keyword">return</span>;</span><br /><span class="line"><span class="number">31</span>:     }</span><br /><span class="line"><span class="number">32</span>: </span><br /><span class="line"><span class="number">33</span>:     <span class="comment">// The current, may have been merged many times</span></span><br /><span class="line"><span class="number">34</span>:     <span class="comment">// 获得 Invoker 当前的 URL 对象，可能已经被之前的配置规则合并过</span></span><br /><span class="line"><span class="number">35</span>:     URL currentUrl = exporter.getInvoker().getUrl();</span><br /><span class="line"><span class="number">36</span>:     <span class="comment">// Merged with this configuration</span></span><br /><span class="line"><span class="number">37</span>:     <span class="comment">// 基于 originUrl 对象，合并配置规则，生成新的 newUrl 对象</span></span><br /><span class="line"><span class="number">38</span>:     URL newUrl = getConfigedInvokerUrl(configurators, originUrl);</span><br /><span class="line"><span class="number">39</span>:     <span class="comment">// 判断新老 Url 不匹配，重新暴露 Invoker</span></span><br /><span class="line"><span class="number">40</span>:     <span class="keyword">if</span> (!currentUrl.equals(newUrl)) {</span><br /><span class="line"><span class="number">41</span>:         RegistryProtocol.<span class="keyword">this</span>.doChangeLocalExport(originInvoker, newUrl);</span><br /><span class="line"><span class="number">42</span>:         logger.info(<span class="string">"exported provider url changed, origin url: "</span> + originUrl + <span class="string">", old export url: "</span> + currentUrl + <span class="string">", new export url: "</span> + newUrl);</span><br /><span class="line"><span class="number">43</span>:     }</span><br /><span class="line"><span class="number">44</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 3 至 10 行：调用&nbsp;<code>#getMatchedUrls(List&lt;URL&gt; configuratorUrls, URL currentSubscribe)</code>&nbsp;方法，获得匹配的<strong>规则配置</strong>&nbsp;URL 集合。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> List&lt;URL&gt; <span class="title">getMatchedUrls</span><span class="params">(List&lt;URL&gt; configuratorUrls, URL currentSubscribe)</span> </span>{</span><br /><span class="line">    List&lt;URL&gt; result = <span class="keyword">new</span> ArrayList&lt;URL&gt;();</span><br /><span class="line">    <span class="keyword">for</span> (URL url : configuratorUrls) {</span><br /><span class="line">        URL overrideUrl = url;</span><br /><span class="line">        <span class="comment">// 【忽略】，兼容老版本</span></span><br /><span class="line">        <span class="comment">// Compatible with the old version</span></span><br /><span class="line">        <span class="keyword">if</span> (url.getParameter(Constants.CATEGORY_KEY) == <span class="keyword">null</span></span><br /><span class="line">                &amp;&amp; Constants.OVERRIDE_PROTOCOL.equals(url.getProtocol())) {</span><br /><span class="line">            overrideUrl = url.addParameter(Constants.CATEGORY_KEY, Constants.CONFIGURATORS_CATEGORY);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// 判断是否匹配</span></span><br /><span class="line">        <span class="comment">// Check whether url is to be applied to the current service</span></span><br /><span class="line">        <span class="keyword">if</span> (UrlUtils.isMatch(currentSubscribe, overrideUrl)) {</span><br /><span class="line">            result.add(url);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> result;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>通过调用&nbsp;<code>UrlUtils#isMatch(currentSubscribe, overrideUrl)</code>&nbsp;方法，进行判断<strong>是否匹配</strong>。该方法具体实现的逻辑，比较简单，所以判断自己查看。</li>
+</ul>
+</li>
+<li>第 12 行：调用&nbsp;<code>RegistryDirectory#toConfigurators(matchedUrls)</code>&nbsp;方法，将配置规则 URL 集合，<strong>转换</strong>成对应的 Configurator 集合。</li>
+<li>第 14 至 23 行：获得<strong>真实</strong>的 Invoker 和<strong>对应</strong>的 URL 对应。</li>
+<li>第 25 至 31 行：<strong>忽略</strong>，若对应的 Exporter 对象不存在。</li>
+<li>==========&nbsp;<strong>重点</strong>&nbsp;==========</li>
+<li>第 35 行：通过&nbsp;<code>exporter</code>&nbsp;的 Invoker ，获得 Invoker&nbsp;<strong>当前</strong>的 URL 对象，<strong>可能已经被之前的配置规则合并过</strong>。</li>
+<li>
+<p>第 38 行：调用&nbsp;<code>#getConfigedInvokerUrl(configurators,originUrl)</code>&nbsp;方法，基于&nbsp;<code>originUrl</code>&nbsp;对象，<strong>合并配置规则</strong>，生成<strong>新的</strong>&nbsp;<code>newUrl</code>&nbsp;对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> URL <span class="title">getConfigedInvokerUrl</span><span class="params">(List&lt;Configurator&gt; configurators, URL url)</span> </span>{</span><br /><span class="line">    <span class="keyword">for</span> (Configurator configurator : configurators) {</span><br /><span class="line">        <span class="comment">// 合并配置规则</span></span><br /><span class="line">        url = configurator.configure(url);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> url;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 39 至 43 行：判断新老 URL 若<strong>不匹配</strong>，调用&nbsp;<code>RegistryProtocol#doChangeLocalExport(originInvoker, newUrl)</code>&nbsp;方法，<strong>重新暴露</strong>&nbsp;Invoker 对象。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-6-impl-configurator/">「4.2.3 doChangeLocalExport」</a>&nbsp;。</p>
+</li>
+</ul>
+<h3 id="4-2-3-doChangeLocalExport">4.2.3 doChangeLocalExport</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="keyword">private</span> &lt;T&gt; <span class="function"><span class="keyword">void</span> <span class="title">doChangeLocalExport</span><span class="params">(<span class="keyword">final</span> Invoker&lt;T&gt; originInvoker, URL newInvokerUrl)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="comment">// 校验对应的 Exporter 是否存在。若不存在，打印告警日志。</span></span><br /><span class="line"> <span class="number">3</span>:     String key = getCacheKey(originInvoker);</span><br /><span class="line"> <span class="number">4</span>:     <span class="keyword">final</span> ExporterChangeableWrapper&lt;T&gt; exporter = (ExporterChangeableWrapper&lt;T&gt;) bounds.get(key);</span><br /><span class="line"> <span class="number">5</span>:     <span class="keyword">if</span> (exporter == <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">6</span>:         logger.warn(<span class="keyword">new</span> IllegalStateException(<span class="string">"error state, exporter should not be null"</span>));</span><br /><span class="line"> <span class="number">7</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">8</span>:         <span class="comment">// 创建 InvokerDelegete 对象</span></span><br /><span class="line"> <span class="number">9</span>:         <span class="keyword">final</span> Invoker&lt;T&gt; invokerDelegete = <span class="keyword">new</span> InvokerDelegete&lt;T&gt;(originInvoker, newInvokerUrl);</span><br /><span class="line"><span class="number">10</span>:         <span class="comment">// 重新暴露 Invoker</span></span><br /><span class="line"><span class="number">11</span>:         <span class="comment">// 设置到 ExporterChangeableWrapper 中</span></span><br /><span class="line"><span class="number">12</span>:         exporter.setExporter(protocol.export(invokerDelegete));</span><br /><span class="line"><span class="number">13</span>:     }</span><br /><span class="line"><span class="number">14</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 2 至 6 行：<strong>校验</strong>对应的 ExporterChangeableWrapper 是否存在。若不存在，打印<strong>告警</strong>日志。</li>
+<li>第 9 行：创建 InvokerDelegete 对象。</li>
+<li>第 12 行：调用&nbsp;<code>Protocol$Adaptive#export(Invoker)</code>&nbsp;方法，<strong>重新暴露</strong>&nbsp;Invoker 对象。<br />😈 可能会有机智的胖友会问，原来的 Exporter 不进行<strong>销毁</strong>么?实际上<strong>不需要</strong>，原因有两点：
+<ul>
+<li>1、每个协议初始化的 Server 有<strong>缓存</strong>&nbsp;，所以重新初始化，可以重用<strong>缓存</strong>中的 Server 。</li>
+<li>2、如果<strong>销毁</strong>原有 Exporter ，会导致<strong>缓存</strong>的 Server 也一起销毁。<strong>而且，即使不销毁，原有 Exporter 也就是一个对象，可以被回收掉</strong>。</li>
+</ul>
+</li>
+<li>第 12 行：调用&nbsp;<code>ExporterChangeableWrapper#setExporter(exporter)</code>&nbsp;方法，设置<strong>新的</strong>&nbsp;Exporter 对象。</li>
+</ul>
+<h2 id="4-3-ServiceConfig">4.3 ServiceConfig</h2>
+<p>TODO 8038 ServiceConfig 为啥判断了 url.protocol</p>
+</div>

@@ -1,0 +1,308 @@
+<header class="article-header"><header class="article-header">
+<h1 class="article-title">序列化（三）之 Kryo 实现</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享基于&nbsp;<strong>Kryo</strong>&nbsp;的序列化拓展实现。</p>
+<blockquote>
+<p><strong>Java对象序列化框架 Kryo</strong></p>
+<p>Kryo 是一个快速高效的Java对象图形序列化框架，主要特点是性能、高效和易用。该项目用来序列化对象到文件、数据库或者网络。</p>
+<p>示例代码：</p>
+</blockquote>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">Kryo kryo = <span class="keyword">new</span> Kryo();</span><br /><span class="line"><span class="comment">// ...</span></span><br /><span class="line">Output output = <span class="keyword">new</span> Output(<span class="keyword">new</span> FileOutputStream(<span class="string">"file.bin"</span>));</span><br /><span class="line">SomeClass someObject = ...</span><br /><span class="line">kryo.writeObject(output, someObject);</span><br /><span class="line">output.close();</span><br /><span class="line"><span class="comment">// ...</span></span><br /><span class="line">Input input = <span class="keyword">new</span> Input(<span class="keyword">new</span> FileInputStream(<span class="string">"file.bin"</span>));</span><br /><span class="line">SomeClass someObject = kryo.readObject(input, SomeClass.class);</span><br /><span class="line">input.close();</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>本文涉及，类图如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2019_02_21/01.png" alt="类图" /></p>
+<h1 id="2-KryoSerialization">2. KryoSerialization</h1>
+<p><code>com.alibaba.dubbo.common.serialize.support.kryo.KryoSerialization</code>&nbsp;，实现 Serialization 接口，Kryo&nbsp;<strong>序列化</strong>实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">KryoSerialization</span> <span class="keyword">implements</span> <span class="title">Serialization</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">byte</span> <span class="title">getContentTypeId</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="number">8</span>;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">getContentType</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="string">"x-application/kryo"</span>;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> ObjectOutput <span class="title">serialize</span><span class="params">(URL url, OutputStream out)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> KryoObjectOutput(out);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> ObjectInput <span class="title">deserialize</span><span class="params">(URL url, InputStream is)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> KryoObjectInput(is);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="3-KryoObjectInput">3. KryoObjectInput</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/kryo/KryoObjectInput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.kryo.KryoObjectInput</code></a>&nbsp;，实现 ObjectInput, Cleanable 接口，Kryo 对象<strong>输入</strong>实现类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Kryo 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Kryo kryo;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Kryo 输入</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Input input;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">KryoObjectInput</span><span class="params">(InputStream inputStream)</span> </span>{</span><br /><span class="line">    input = <span class="keyword">new</span> Input(inputStream);</span><br /><span class="line">    <span class="keyword">this</span>.kryo = KryoUtils.get();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>kryo</code>&nbsp;属性，通过&nbsp;<code>KryoUtils#get()</code>&nbsp;方法，获取。</li>
+</ul>
+<p><strong>ObjectInput 实现方法</strong></p>
+<p>① 来自 DataInput 的实现方法，调用&nbsp;<code>input</code>&nbsp;对应的方法。例如：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">readBool</span><span class="params">()</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        <span class="keyword">return</span> input.readBoolean();</span><br /><span class="line">    } <span class="keyword">catch</span> (KryoException e) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IOException(e);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>② 来自 ObjectInput 的实现方法，调用&nbsp;<code>kryo</code>&nbsp;对应的方法。例如：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">readObject</span><span class="params">()</span> <span class="keyword">throws</span> IOException, ClassNotFoundException </span>{</span><br /><span class="line">    <span class="comment">// TODO optimization</span></span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        <span class="keyword">return</span> kryo.readClassAndObject(input);</span><br /><span class="line">    } <span class="keyword">catch</span> (KryoException e) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IOException(e);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>通过读取<strong>类</strong>，在根据类解析具体对象，字节内容&ldquo;<strong>大体</strong>&rdquo;是 [ Class, 对象二进制数据 ] 。在&nbsp;<a href="https://www.cnkirito.moe/2017/11/28/rpc-serialize-1/" target="_blank" rel="external nofollow noopener noreferrer">《深入理解RPC之序列化篇 &ndash; Kryo》</a>&nbsp;的&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-3-kryo/">「三种读写方式」</a>&nbsp;，对这块解析的相当不错。</li>
+</ul>
+<p><strong>Cleanable 实现方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">cleanup</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="comment">// 释放 Kryo 对象</span></span><br /><span class="line">    KryoUtils.release(kryo);</span><br /><span class="line">    <span class="comment">// 清空</span></span><br /><span class="line">    kryo = <span class="keyword">null</span>;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="4-KryoObjectOutput">4. KryoObjectOutput</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/kryo/KryoObjectOutput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.kryo.KryoObjectOutput</code></a>&nbsp;，实现 ObjectOutput, Cleanable 接口，Kryo 对象<strong>输出</strong>实现类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Kryo 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Kryo kryo;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Kryo 输出</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Output output;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">KryoObjectOutput</span><span class="params">(OutputStream outputStream)</span> </span>{</span><br /><span class="line">    output = <span class="keyword">new</span> Output(outputStream);</span><br /><span class="line">    <span class="keyword">this</span>.kryo = KryoUtils.get();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>kryo</code>&nbsp;属性，通过&nbsp;<code>KryoUtils#get()</code>&nbsp;方法，获取。</li>
+</ul>
+<p><strong>ObjectOutput 实现方法</strong></p>
+<p>① 来自 DataOutput 的实现方法，调用&nbsp;<code>input</code>&nbsp;对应的方法。例如：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">writeBool</span><span class="params">(<span class="keyword">boolean</span> v)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    output.writeBoolean(v);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>② 来自 ObjectOutput 的实现方法，调用&nbsp;<code>kryo</code>&nbsp;对应的方法。例如：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">writeObject</span><span class="params">(Object v)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    <span class="comment">// TODO carries class info every time.</span></span><br /><span class="line">    kryo.writeClassAndObject(output, v);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>通过写入<strong>类</strong>&nbsp;+ 具体对象，字节内容&ldquo;<strong>大体</strong>&rdquo;是 [ Class, 对象二进制数据 ] 。在&nbsp;<a href="https://www.cnkirito.moe/2017/11/28/rpc-serialize-1/" target="_blank" rel="external nofollow noopener noreferrer">《深入理解RPC之序列化篇 &ndash; Kryo》</a>&nbsp;的&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-3-kryo/">「三种读写方式」</a>&nbsp;，对这块解析的相当不错。</li>
+</ul>
+<p><strong>Cleanable 实现方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">cleanup</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="comment">// 释放 Kryo 对象</span></span><br /><span class="line">    KryoUtils.release(kryo);</span><br /><span class="line">    <span class="comment">// 清空</span></span><br /><span class="line">    kryo = <span class="keyword">null</span>;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="5-CompatibleKryo">5. CompatibleKryo</h1>
+<p><code>com.alibaba.dubbo.common.serialize.support.kryo.CompatibleKryo</code>&nbsp;，实现 Kryo 类，兼容<strong>空构造</strong>方法的 Kryo 实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> Serializer <span class="title">getDefaultSerializer</span><span class="params">(Class type)</span> </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (type == <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">4</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"type cannot be null."</span>);</span><br /><span class="line"> <span class="number">5</span>:     }</span><br /><span class="line"> <span class="number">6</span>:     <span class="comment">// 空构造方法时，使用 JavaSerializer ，Java 原生序列化实现</span></span><br /><span class="line"> <span class="number">7</span>:     <span class="keyword">if</span> (!type.isArray() &amp;&amp; !type.isEnum() &amp;&amp; !ReflectionUtils.checkZeroArgConstructor(type)) {</span><br /><span class="line"> <span class="number">8</span>:         <span class="keyword">if</span> (logger.isWarnEnabled()) {</span><br /><span class="line"> <span class="number">9</span>:             logger.warn(type + <span class="string">" has no zero-arg constructor and this will affect the serialization performance"</span>);</span><br /><span class="line"><span class="number">10</span>:         }</span><br /><span class="line"><span class="number">11</span>:         <span class="keyword">return</span> <span class="keyword">new</span> JavaSerializer();</span><br /><span class="line"><span class="number">12</span>:     }</span><br /><span class="line"><span class="number">13</span>:     <span class="comment">// 使用 Kryo 默认序列化实现</span></span><br /><span class="line"><span class="number">14</span>:     <span class="keyword">return</span> <span class="keyword">super</span>.getDefaultSerializer(type);</span><br /><span class="line"><span class="number">15</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 6 至 12 行：Kryo 不支持不包含<strong>空构造方法</strong>的类的序列化，因此，此时使用 Kryo 封装&nbsp;<strong>Java 原生序列化</strong>实现类&nbsp;<code>com.esotericsoftware.kryo.serializers.JavaSerializer</code>&nbsp;。</p>
+<ul>
+<li>
+<p><code>ReflectionUtils#checkZeroArgConstructor(type)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 判断类是否有空构造方法</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> clazz 类</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> 是否</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">checkZeroArgConstructor</span><span class="params">(Class clazz)</span> </span>{</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        clazz.getDeclaredConstructor();</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">true</span>;</span><br /><span class="line">    } <span class="keyword">catch</span> (NoSuchMethodException e) {</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">false</span>;</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>x</p>
+</li>
+</ul>
+</li>
+<li>
+<p>第 14 行：使用 Kryo&nbsp;<strong>默认</strong>序列化实现。</p>
+</li>
+</ul>
+<h1 id="6-KryoFactory">6. KryoFactory</h1>
+<h2 id="6-1-AbstractKryoFactory">6.1 AbstractKryoFactory</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/kryo/utils/AbstractKryoFactory.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.kryo.utils.AbstractKryoFactory</code></a>&nbsp;，实现&nbsp;<code>com.esotericsoftware.kryo.pool.KryoFactory</code>&nbsp;接口，Kryo&nbsp;<strong>工厂</strong>抽象类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 需要注册的类的集合</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Set&lt;Class&gt; registrations = <span class="keyword">new</span> LinkedHashSet&lt;Class&gt;();</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 是否开启注册行为</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">boolean</span> registrationRequired;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Kryo 是否已经创建</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">boolean</span> kryoCreated;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><code>registrations</code>&nbsp;<strong>静态</strong>属性，需要<strong>注册</strong>的类的集合。通过&nbsp;<code>#registerClass(Class)</code>&nbsp;方法，可以添加，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * only supposed to be called at startup time</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * later may consider adding support for custom serializer, custom id, etc</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">registerClass</span><span class="params">(Class clazz)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (kryoCreated) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Can't register class after creating kryo instance"</span>);</span><br /><span class="line">    }</span><br /><span class="line">    registrations.add(clazz);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p><code>registrationRequired</code>&nbsp;属性，是否开启<strong>注册</strong>行为，默认<strong>关闭</strong>。</p>
+<blockquote>
+<p>Kryo 支持对注册行为，如&nbsp;<code>kryo.register(SomeClazz.class);</code>&nbsp;，这会赋予该 Class 一个从 0 开始的编号，但 Kryo 使用注册行为最大的问题在于，其不保证同一个 Class 每一次注册的号码相同，这与注册的顺序有关，也就意味着在不同的机器、同一个机器重启前后都有可能拥有不同的编号，这会导致序列化产生问题，所以在分布式项目中，<strong>一般关闭注册行为</strong>。</p>
+</blockquote>
+</li>
+<li>
+<p><code>kryoCreated</code>&nbsp;属性，Kryo 是否已经创建。</p>
+</li>
+</ul>
+<p><strong>抽象方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 返还 Kryo 对象</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> kryo Kyro</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">returnKryo</span><span class="params">(Kryo kryo)</span></span>;</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 获得 Kryo 对象</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> Kryo 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">abstract</span> Kryo <span class="title">getKryo</span><span class="params">()</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>create</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> Kryo <span class="title">create</span><span class="params">()</span> </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// 标记已创建</span></span><br /><span class="line"> <span class="number">4</span>:     <span class="keyword">if</span> (!kryoCreated) {</span><br /><span class="line"> <span class="number">5</span>:         kryoCreated = <span class="keyword">true</span>;</span><br /><span class="line"> <span class="number">6</span>:     }</span><br /><span class="line"> <span class="number">7</span>: </span><br /><span class="line"> <span class="number">8</span>:     <span class="comment">// 创建 CompatibleKryo 对象</span></span><br /><span class="line"> <span class="number">9</span>:     Kryo kryo = <span class="keyword">new</span> CompatibleKryo();</span><br /><span class="line"><span class="number">10</span>: </span><br /><span class="line"><span class="number">11</span>:     <span class="comment">// TODO</span></span><br /><span class="line"><span class="number">12</span>: <span class="comment">//    kryo.setReferences(false);</span></span><br /><span class="line"><span class="number">13</span>:     kryo.setRegistrationRequired(registrationRequired);</span><br /><span class="line"><span class="number">14</span>: </span><br /><span class="line"><span class="number">15</span>:     <span class="comment">// 注册常用类</span></span><br /><span class="line"><span class="number">16</span>:     kryo.register(Collections.singletonList(<span class="string">""</span>).getClass(), <span class="keyword">new</span> ArraysAsListSerializer());</span><br /><span class="line"><span class="number">17</span>:     kryo.register(GregorianCalendar.class, <span class="keyword">new</span> GregorianCalendarSerializer());</span><br /><span class="line"><span class="number">18</span>:     kryo.register(InvocationHandler.class, <span class="keyword">new</span> JdkProxySerializer());</span><br /><span class="line"><span class="number">19</span>:     kryo.register(BigDecimal.class, <span class="keyword">new</span> DefaultSerializers.BigDecimalSerializer());</span><br /><span class="line"><span class="number">20</span>:     kryo.register(BigInteger.class, <span class="keyword">new</span> DefaultSerializers.BigIntegerSerializer());</span><br /><span class="line"><span class="number">21</span>:     kryo.register(Pattern.class, <span class="keyword">new</span> RegexSerializer());</span><br /><span class="line"><span class="number">22</span>:     kryo.register(BitSet.class, <span class="keyword">new</span> BitSetSerializer());</span><br /><span class="line"><span class="number">23</span>:     kryo.register(URI.class, <span class="keyword">new</span> URISerializer());</span><br /><span class="line"><span class="number">24</span>:     kryo.register(UUID.class, <span class="keyword">new</span> UUIDSerializer());</span><br /><span class="line"><span class="number">25</span>:     UnmodifiableCollectionsSerializer.registerSerializers(kryo);</span><br /><span class="line"><span class="number">26</span>:     SynchronizedCollectionsSerializer.registerSerializers(kryo);</span><br /><span class="line"><span class="number">27</span>: </span><br /><span class="line"><span class="number">28</span>:     <span class="comment">// 注册常用数据结构</span></span><br /><span class="line"><span class="number">29</span>:     <span class="comment">// now just added some very common classes</span></span><br /><span class="line"><span class="number">30</span>:     <span class="comment">// TODO optimization</span></span><br /><span class="line"><span class="number">31</span>:     kryo.register(HashMap.class);</span><br /><span class="line"><span class="number">32</span>:     kryo.register(ArrayList.class);</span><br /><span class="line"><span class="number">33</span>:     kryo.register(LinkedList.class);</span><br /><span class="line"><span class="number">34</span>:     kryo.register(HashSet.class);</span><br /><span class="line"><span class="number">35</span>:     kryo.register(TreeSet.class);</span><br /><span class="line"><span class="number">36</span>:     kryo.register(Hashtable.class);</span><br /><span class="line"><span class="number">37</span>:     kryo.register(Date.class);</span><br /><span class="line"><span class="number">38</span>:     kryo.register(Calendar.class);</span><br /><span class="line"><span class="number">39</span>:     kryo.register(ConcurrentHashMap.class);</span><br /><span class="line"><span class="number">40</span>:     kryo.register(SimpleDateFormat.class);</span><br /><span class="line"><span class="number">41</span>:     kryo.register(GregorianCalendar.class);</span><br /><span class="line"><span class="number">42</span>:     kryo.register(Vector.class);</span><br /><span class="line"><span class="number">43</span>:     kryo.register(BitSet.class);</span><br /><span class="line"><span class="number">44</span>:     kryo.register(StringBuffer.class);</span><br /><span class="line"><span class="number">45</span>:     kryo.register(StringBuilder.class);</span><br /><span class="line"><span class="number">46</span>:     kryo.register(Object.class);</span><br /><span class="line"><span class="number">47</span>:     kryo.register(Object[].class);</span><br /><span class="line"><span class="number">48</span>:     kryo.register(String[].class);</span><br /><span class="line"><span class="number">49</span>:     kryo.register(<span class="keyword">byte</span>[].class);</span><br /><span class="line"><span class="number">50</span>:     kryo.register(<span class="keyword">char</span>[].class);</span><br /><span class="line"><span class="number">51</span>:     kryo.register(<span class="keyword">int</span>[].class);</span><br /><span class="line"><span class="number">52</span>:     kryo.register(<span class="keyword">float</span>[].class);</span><br /><span class="line"><span class="number">53</span>:     kryo.register(<span class="keyword">double</span>[].class);</span><br /><span class="line"><span class="number">54</span>: </span><br /><span class="line"><span class="number">55</span>:     <span class="comment">// `registrations` 的注册</span></span><br /><span class="line"><span class="number">56</span>:     <span class="keyword">for</span> (Class clazz : registrations) {</span><br /><span class="line"><span class="number">57</span>:         kryo.register(clazz);</span><br /><span class="line"><span class="number">58</span>:     }</span><br /><span class="line"><span class="number">59</span>: </span><br /><span class="line"><span class="number">60</span>:     <span class="comment">// SerializableClassRegistry 的注册</span></span><br /><span class="line"><span class="number">61</span>:     <span class="keyword">for</span> (Class clazz : SerializableClassRegistry.getRegisteredClasses()) {</span><br /><span class="line"><span class="number">62</span>:         kryo.register(clazz);</span><br /><span class="line"><span class="number">63</span>:     }</span><br /><span class="line"><span class="number">64</span>: </span><br /><span class="line"><span class="number">65</span>:     <span class="keyword">return</span> kryo;</span><br /><span class="line"><span class="number">66</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 至 6 行：标记已创建&nbsp;<code>kryoCreated = true</code>。</li>
+<li>第 9 行：创建 CompatibleKryo 对象。</li>
+<li>第 13 行：调用&nbsp;<code>Kryo#setRegistrationRequired(registrationRequired)</code>&nbsp;方法，设置是否要<strong>开启</strong>注册的功能。</li>
+<li>🙂 开始一顿注册。
+<ul>
+<li>第 15 至 26 行：注册<strong>常用类</strong>到 Kryo 对象。</li>
+<li>第 28 至 53 行：注册<strong>常用数据结构</strong>到 Kryo 对象。</li>
+<li>第 55 至 58 行：注册&nbsp;<code>registrations</code>&nbsp;到 Kryo 对象。</li>
+<li>第 60 至 63 行：注册 SerializableClassRegistry 到 Kryo 对象。</li>
+</ul>
+</li>
+</ul>
+<h2 id="6-2-ThreadLocalKryoFactory">6.2 ThreadLocalKryoFactory</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/kryo/utils/ThreadLocalKryoFactory.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.kryo.utils.ThreadLocalKryoFactory</code></a>&nbsp;，实现 AbstractKryoFactory 抽象类，基于&nbsp;<strong>ThreadLocal</strong>&nbsp;的 Kryo 工厂实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ThreadLocalKryoFactory</span> <span class="keyword">extends</span> <span class="title">AbstractKryoFactory</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ThreadLocal&lt;Kryo&gt; holder = <span class="keyword">new</span> ThreadLocal&lt;Kryo&gt;() {</span><br /><br /><span class="line">        <span class="meta">@Override</span></span><br /><span class="line">        <span class="function"><span class="keyword">protected</span> Kryo <span class="title">initialValue</span><span class="params">()</span> </span>{</span><br /><span class="line">            <span class="keyword">return</span> create(); <span class="comment">// 创建 Kryo</span></span><br /><span class="line">        }</span><br /><br /><span class="line">    };</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">returnKryo</span><span class="params">(Kryo kryo)</span> </span>{</span><br /><span class="line">        <span class="comment">// do nothing</span></span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Kryo <span class="title">getKryo</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> holder.get();</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>Kryo 的序列化和反序列的过程，是<strong>非线程安全</strong>的。所以通过 ThreadLocal 来保证，每个线程拥有一个 Kryo 对象。</li>
+</ul>
+<h2 id="6-3-KryoUtils">6.3 KryoUtils</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/kryo/utils/KryoUtils.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.kryo.utils.KryoUtils</code></a>&nbsp;，Kryo 工具类，目前仅仅对 KryoFactory 进行操作。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">KryoUtils</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> AbstractKryoFactory kryoFactory = <span class="keyword">new</span> ThreadLocalKryoFactory();</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Kryo <span class="title">get</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> kryoFactory.getKryo();</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">release</span><span class="params">(Kryo kryo)</span> </span>{</span><br /><span class="line">        kryoFactory.returnKryo(kryo);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">register</span><span class="params">(Class&lt;?&gt; clazz)</span> </span>{</span><br /><span class="line">        kryoFactory.registerClass(clazz);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">setRegistrationRequired</span><span class="params">(<span class="keyword">boolean</span> registrationRequired)</span> </span>{</span><br /><span class="line">        kryoFactory.setRegistrationRequired(registrationRequired);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="666-彩蛋">666. 彩蛋</h1>
+<p>推荐阅读：</p>
+<ul>
+<li><a href="https://www.cnkirito.moe/2017/11/28/rpc-serialize-1/" target="_blank" rel="external nofollow noopener noreferrer">《深入理解RPC之序列化篇 &ndash; Kryo》</a></li>
+<li><a href="https://blog.csdn.net/fanjunjaden/article/details/72823866" target="_blank" rel="external nofollow noopener noreferrer">《Kryo官方文档-中文翻译》</a></li>
+</ul>
+</div>
+</header>

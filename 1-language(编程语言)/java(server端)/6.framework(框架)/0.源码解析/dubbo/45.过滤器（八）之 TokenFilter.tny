@@ -1,0 +1,50 @@
+<header class="article-header">
+<h1 class="article-title">过滤器（八）之 TokenFilter</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享 TokenFilter 过滤器，用于服务<strong>提供者</strong>中，提供&nbsp;<strong>令牌验证</strong>&nbsp;的功能。在&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/token-authorization.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 令牌验证》</a>&nbsp;定义如下：</p>
+<blockquote>
+<p>通过令牌验证在<strong>注册中心</strong>控制权限，以决定要不要下发令牌给消费者，可以防止消费者绕过注册中心访问提供者。</p>
+<p>另外通过注册中心可灵活改变授权方式，而不需修改或升级提供者。</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_11_19/01.png" alt="认证流程" /></p>
+</blockquote>
+<ul>
+<li>官方文档写的很全，胖友请点击链接看完哈。</li>
+</ul>
+<p>So ，可能和大多数胖友（包括我），一开始理解和期望的不太一样 🙂 。</p>
+<h1 id="2-【服务消费者】随机-Token">2.【服务消费者】随机 Token</h1>
+<p>在 ServiceConfig 的&nbsp;<code>#doExportUrlsFor1Protocol(protocolConfig, registryURLs)</code>&nbsp;方法中，随机生成 Token ：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// token ，参见《令牌校验》http://dubbo.apache.org/zh-cn/docs/user/demos/token-authorization.html</span></span><br /><span class="line"><span class="keyword">if</span> (!ConfigUtils.isEmpty(token)) {</span><br /><span class="line">    <span class="keyword">if</span> (ConfigUtils.isDefault(token)) { <span class="comment">// true || default 时，UUID 随机生成</span></span><br /><span class="line">        map.put(<span class="string">"token"</span>, UUID.randomUUID().toString());</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        map.put(<span class="string">"token"</span>, token);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="3-【服务消费者】接收-Token">3.【服务消费者】接收 Token</h1>
+<p>服务<strong>消费者</strong>，从注册中心，获取服务提供者的&nbsp;<strong>URL</strong>&nbsp;，从而获得该服务着的 Token 。<br />所以，即使服务提供者随机生成 Token ，消费者一样可以拿到。</p>
+<h1 id="3-【服务消费者】发送-Token">3.【服务消费者】发送 Token</h1>
+<p>RpcInvocation 在创建时，&ldquo;<strong>自动</strong>&rdquo;带上 Token ，如下图所示：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_11_19/02.png" alt="RpcInvocation" /></p>
+<h1 id="4-【服务提供者】认证-Token">4.【服务提供者】认证 Token</h1>
+<p><code>com.alibaba.dubbo.rpc.filter.TokenFilter</code>&nbsp;，实现 Filter 接口，<strong>令牌验证</strong>&nbsp;Filter 实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Activate</span>(group = Constants.PROVIDER, value = Constants.TOKEN_KEY)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TokenFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation inv)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">        <span class="comment">// 获得服务提供者配置的 Token 值</span></span><br /><span class="line">        String token = invoker.getUrl().getParameter(Constants.TOKEN_KEY);</span><br /><span class="line">        <span class="keyword">if</span> (ConfigUtils.isNotEmpty(token)) {</span><br /><span class="line">            <span class="comment">// 从隐式参数中，获得 Token 值。</span></span><br /><span class="line">            Class&lt;?&gt; serviceType = invoker.getInterface();</span><br /><span class="line">            Map&lt;String, String&gt; attachments = inv.getAttachments();</span><br /><span class="line">            String remoteToken = attachments == <span class="keyword">null</span> ? <span class="keyword">null</span> : attachments.get(Constants.TOKEN_KEY);</span><br /><span class="line">            <span class="comment">// 对比，若不一致，抛出 RpcException 异常</span></span><br /><span class="line">            <span class="keyword">if</span> (!token.equals(remoteToken)) {</span><br /><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Invalid token! Forbid invoke remote service "</span> + serviceType + <span class="string">" method "</span> + inv.getMethodName() + <span class="string">"() from consumer "</span> + RpcContext.getContext().getRemoteHost() + <span class="string">" to provider "</span> + RpcContext.getContext().getLocalHost());</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// 服务调用</span></span><br /><span class="line">        <span class="keyword">return</span> invoker.invoke(inv);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</div>

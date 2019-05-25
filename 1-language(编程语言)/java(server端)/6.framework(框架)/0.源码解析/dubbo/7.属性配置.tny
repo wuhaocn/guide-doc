@@ -1,0 +1,135 @@
+<header class="article-header">
+<h1 class="article-title">属性配置</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<blockquote>
+<p>友情提示，【<strong>配置</strong>】这块的内容，会相对比较枯燥。所以，如果看到一些很难懂的地方，建议先跳过。</p>
+<p>对于 Dubbo ，重点是要去理解，多协议、RPC、容错等等模块，而不是【<strong>配置</strong>】。</p>
+<p>😈 估计好多胖友被【<strong>配置</strong>】这章劝退了把？？？</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>首先，我们来看看<strong>属性配置</strong>的定义：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/configuration/properties.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 属性配置》</a></p>
+<p>如果公共配置很<strong>简单</strong>，没有多注册中心，多协议等情况，或者想多个 Spring 容器想共享配置，可以使用&nbsp;<code>dubbo.properties</code>&nbsp;作为缺省配置。</p>
+<p>Dubbo 将自动加载 classpath 根目录下的&nbsp;<code>dubbo.properties</code>，可以通过JVM启动参数&nbsp;<code>-Ddubbo.properties.file=xxx.properties</code>&nbsp;改变缺省配置位置。</p>
+</blockquote>
+<p>从定义上，很关键的一个词是 &ldquo;<strong>简单</strong>&rdquo; 。</p>
+<ul>
+<li><strong>属性配置</strong>，不支持多注册中心，多协议等情况，原因见代码。</li>
+<li><strong>外部化配置</strong>，能够解决上述的问题，感兴趣的胖友可以自己看下&nbsp;<a href="https://github.com/mercyblitz/blogs/blob/master/java/dubbo/Dubbo-Externalized-Configuration.md" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 外部化配置（Externalized Configuration）》</a>&nbsp;。当然，这块内容后面分享，不在本文的范畴。</li>
+</ul>
+<p>OK ，下面在开始看看具体代码之前，胖友先仔细阅读下&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/configuration/properties.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 属性配置》</a>&nbsp;，有助于下面代码的理解。</p>
+<h1 id="2-AbstractConfig">2. AbstractConfig</h1>
+<p>在 AbstractConfig 中，提供了&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/d3c3975f320c78452f96098b04441fed4c00ab70/dubbo-config/dubbo-config-api/src/main/java/com/alibaba/dubbo/config/AbstractConfig.java#L132-L212" target="_blank" rel="external nofollow noopener noreferrer"><code>#appendProperties(config)</code></a>&nbsp;方法，读取<strong>启动参数变量</strong>和&nbsp;<strong>properties 配置</strong>到配置对象。在前面的几篇文章里，我们多次看到这个方法被调用，如下图所示：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_01_13/01.png" alt="读取调用" /></p>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">protected</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">appendProperties</span><span class="params">(AbstractConfig config)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="keyword">if</span> (config == <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">3</span>:         <span class="keyword">return</span>;</span><br /><span class="line"> <span class="number">4</span>:     }</span><br /><span class="line"> <span class="number">5</span>:     String prefix = <span class="string">"dubbo."</span> + getTagName(config.getClass()) + <span class="string">"."</span>;</span><br /><span class="line"> <span class="number">6</span>:     Method[] methods = config.getClass().getMethods();</span><br /><span class="line"> <span class="number">7</span>:     <span class="keyword">for</span> (Method method : methods) {</span><br /><span class="line"> <span class="number">8</span>:         <span class="keyword">try</span> {</span><br /><span class="line"> <span class="number">9</span>:             String name = method.getName();</span><br /><span class="line"><span class="number">10</span>:             <span class="keyword">if</span> (name.length() &gt; <span class="number">3</span> &amp;&amp; name.startsWith(<span class="string">"set"</span>) &amp;&amp; Modifier.isPublic(method.getModifiers()) <span class="comment">// 方法是 public 的 setting 方法。</span></span><br /><span class="line"><span class="number">11</span>:                     &amp;&amp; method.getParameterTypes().length == <span class="number">1</span> &amp;&amp; isPrimitive(method.getParameterTypes()[<span class="number">0</span>])) { <span class="comment">// 方法的唯一参数是基本数据类型</span></span><br /><span class="line"><span class="number">12</span>:                 <span class="comment">// 获得属性名，例如 `ApplicationConfig#setName(...)` 方法，对应的属性名为 name 。</span></span><br /><span class="line"><span class="number">13</span>:                 String property = StringUtils.camelToSplitName(name.substring(<span class="number">3</span>, <span class="number">4</span>).toLowerCase() + name.substring(<span class="number">4</span>), <span class="string">"."</span>);</span><br /><span class="line"><span class="number">14</span>: </span><br /><span class="line"><span class="number">15</span>:                 <span class="comment">// 【启动参数变量】优先从带有 `Config#id` 的配置中获取，例如：`dubbo.application.demo-provider.name` 。</span></span><br /><span class="line"><span class="number">16</span>:                 String value = <span class="keyword">null</span>;</span><br /><span class="line"><span class="number">17</span>:                 <span class="keyword">if</span> (config.getId() != <span class="keyword">null</span> &amp;&amp; config.getId().length() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">18</span>:                     String pn = prefix + config.getId() + <span class="string">"."</span> + property; <span class="comment">// 带有 `Config#id`</span></span><br /><span class="line"><span class="number">19</span>:                     value = System.getProperty(pn);</span><br /><span class="line"><span class="number">20</span>:                     <span class="keyword">if</span> (!StringUtils.isBlank(value)) {</span><br /><span class="line"><span class="number">21</span>:                         logger.info(<span class="string">"Use System Property "</span> + pn + <span class="string">" to config dubbo"</span>);</span><br /><span class="line"><span class="number">22</span>:                     }</span><br /><span class="line"><span class="number">23</span>:                 }</span><br /><span class="line"><span class="number">24</span>:                 <span class="comment">// 【启动参数变量】获取不到，其次不带 `Config#id` 的配置中获取，例如：`dubbo.application.name` 。</span></span><br /><span class="line"><span class="number">25</span>:                 <span class="keyword">if</span> (value == <span class="keyword">null</span> || value.length() == <span class="number">0</span>) {</span><br /><span class="line"><span class="number">26</span>:                     String pn = prefix + property; <span class="comment">// // 不带 `Config#id`</span></span><br /><span class="line"><span class="number">27</span>:                     value = System.getProperty(pn);</span><br /><span class="line"><span class="number">28</span>:                     <span class="keyword">if</span> (!StringUtils.isBlank(value)) {</span><br /><span class="line"><span class="number">29</span>:                         logger.info(<span class="string">"Use System Property "</span> + pn + <span class="string">" to config dubbo"</span>);</span><br /><span class="line"><span class="number">30</span>:                     }</span><br /><span class="line"><span class="number">31</span>:                 }</span><br /><span class="line"><span class="number">32</span>:                 <span class="keyword">if</span> (value == <span class="keyword">null</span> || value.length() == <span class="number">0</span>) {</span><br /><span class="line"><span class="number">33</span>:                     <span class="comment">// 覆盖优先级为：启动参数变量 &gt; XML 配置 &gt; properties 配置，因此需要使用 getter 判断 XML 是否已经设置</span></span><br /><span class="line"><span class="number">34</span>:                     Method getter;</span><br /><span class="line"><span class="number">35</span>:                     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">36</span>:                         getter = config.getClass().getMethod(<span class="string">"get"</span> + name.substring(<span class="number">3</span>), <span class="keyword">new</span> Class&lt;?&gt;[<span class="number">0</span>]);</span><br /><span class="line"><span class="number">37</span>:                     } <span class="keyword">catch</span> (NoSuchMethodException e) {</span><br /><span class="line"><span class="number">38</span>:                         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">39</span>:                             getter = config.getClass().getMethod(<span class="string">"is"</span> + name.substring(<span class="number">3</span>), <span class="keyword">new</span> Class&lt;?&gt;[<span class="number">0</span>]);</span><br /><span class="line"><span class="number">40</span>:                         } <span class="keyword">catch</span> (NoSuchMethodException e2) {</span><br /><span class="line"><span class="number">41</span>:                             getter = <span class="keyword">null</span>;</span><br /><span class="line"><span class="number">42</span>:                         }</span><br /><span class="line"><span class="number">43</span>:                     }</span><br /><span class="line"><span class="number">44</span>:                     <span class="keyword">if</span> (getter != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">45</span>:                         <span class="keyword">if</span> (getter.invoke(config, <span class="keyword">new</span> Object[<span class="number">0</span>]) == <span class="keyword">null</span>) { <span class="comment">// 使用 getter 判断 XML 是否已经设置</span></span><br /><span class="line"><span class="number">46</span>:                             <span class="comment">// 【properties 配置】优先从带有 `Config#id` 的配置中获取，例如：`dubbo.application.demo-provider.name` 。</span></span><br /><span class="line"><span class="number">47</span>:                             <span class="keyword">if</span> (config.getId() != <span class="keyword">null</span> &amp;&amp; config.getId().length() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">48</span>:                                 value = ConfigUtils.getProperty(prefix + config.getId() + <span class="string">"."</span> + property);</span><br /><span class="line"><span class="number">49</span>:                             }</span><br /><span class="line"><span class="number">50</span>:                             <span class="comment">// 【properties 配置】获取不到，其次不带 `Config#id` 的配置中获取，例如：`dubbo.application.name` 。</span></span><br /><span class="line"><span class="number">51</span>:                             <span class="keyword">if</span> (value == <span class="keyword">null</span> || value.length() == <span class="number">0</span>) {</span><br /><span class="line"><span class="number">52</span>:                                 value = ConfigUtils.getProperty(prefix + property);</span><br /><span class="line"><span class="number">53</span>:                             }</span><br /><span class="line"><span class="number">54</span>:                             <span class="comment">// 【properties 配置】老版本兼容，获取不到，最后不带 `Config#id` 的配置中获取，例如：`dubbo.protocol.name` 。</span></span><br /><span class="line"><span class="number">55</span>:                             <span class="keyword">if</span> (value == <span class="keyword">null</span> || value.length() == <span class="number">0</span>) {</span><br /><span class="line"><span class="number">56</span>:                                 String legacyKey = legacyProperties.get(prefix + property);</span><br /><span class="line"><span class="number">57</span>:                                 <span class="keyword">if</span> (legacyKey != <span class="keyword">null</span> &amp;&amp; legacyKey.length() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">58</span>:                                     value = convertLegacyValue(legacyKey, ConfigUtils.getProperty(legacyKey));</span><br /><span class="line"><span class="number">59</span>:                                 }</span><br /><span class="line"><span class="number">60</span>:                             }</span><br /><span class="line"><span class="number">61</span>: </span><br /><span class="line"><span class="number">62</span>:                         }</span><br /><span class="line"><span class="number">63</span>:                     }</span><br /><span class="line"><span class="number">64</span>:                 }</span><br /><span class="line"><span class="number">65</span>:                 <span class="comment">// 获取到值，进行反射设置。</span></span><br /><span class="line"><span class="number">66</span>:                 <span class="keyword">if</span> (value != <span class="keyword">null</span> &amp;&amp; value.length() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">67</span>:                     method.invoke(config, <span class="keyword">new</span> Object[]{convertPrimitive(method.getParameterTypes()[<span class="number">0</span>], value)});</span><br /><span class="line"><span class="number">68</span>:                 }</span><br /><span class="line"><span class="number">69</span>:             }</span><br /><span class="line"><span class="number">70</span>:         } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line"><span class="number">71</span>:             logger.error(e.getMessage(), e);</span><br /><span class="line"><span class="number">72</span>:         }</span><br /><span class="line"><span class="number">73</span>:     }</span><br /><span class="line"><span class="number">74</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 5 行：获得配置项<strong>前缀</strong>。此处的&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/d3c3975f320c78452f96098b04441fed4c00ab70/dubbo-config/dubbo-config-api/src/main/java/com/alibaba/dubbo/config/AbstractConfig.java#L214-L230" target="_blank" rel="external nofollow noopener noreferrer"><code>#getTagName(Class&lt;?&gt;)</code></a>&nbsp;方法，使用配置类的类名，获得对应的属性标签。该方法代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 配置类名的后缀</span></span><br /><span class="line"><span class="comment"> 3:  * 例如，ServiceConfig 后缀为 Config；ServiceBean 后缀为 Bean。</span></span><br /><span class="line"><span class="comment"> 4:  */</span></span><br /><span class="line"> <span class="number">5</span>: <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String[] SUFFIXES = <span class="keyword">new</span> String[]{<span class="string">"Config"</span>, <span class="string">"Bean"</span>};</span><br /><span class="line"> <span class="number">6</span>: </span><br /><span class="line"> <span class="number">7</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 8:  * 获取类名对应的属性标签，例如，ServiceConfig 对应为 service 。</span></span><br /><span class="line"><span class="comment"> 9:  *</span></span><br /><span class="line"><span class="comment">10:  * <span class="doctag">@param</span> cls 类名</span></span><br /><span class="line"><span class="comment">11:  * <span class="doctag">@return</span> 标签</span></span><br /><span class="line"><span class="comment">12:  */</span></span><br /><span class="line"><span class="number">13</span>: <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> String <span class="title">getTagName</span><span class="params">(Class&lt;?&gt; cls)</span> </span>{</span><br /><span class="line"><span class="number">14</span>:     String tag = cls.getSimpleName();</span><br /><span class="line"><span class="number">15</span>:     <span class="keyword">for</span> (String suffix : SUFFIXES) {</span><br /><span class="line"><span class="number">16</span>:         <span class="keyword">if</span> (tag.endsWith(suffix)) {</span><br /><span class="line"><span class="number">17</span>:             tag = tag.substring(<span class="number">0</span>, tag.length() - suffix.length());</span><br /><span class="line"><span class="number">18</span>:             <span class="keyword">break</span>;</span><br /><span class="line"><span class="number">19</span>:         }</span><br /><span class="line"><span class="number">20</span>:     }</span><br /><span class="line"><span class="number">21</span>:     tag = tag.toLowerCase();</span><br /><span class="line"><span class="number">22</span>:     <span class="keyword">return</span> tag;</span><br /><span class="line"><span class="number">23</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 6 行：获得配置类的所有方法，用于下面通过<strong>反射</strong>获得配置项的属性名，再用属性名，去读取<strong>启动参数变量</strong>和&nbsp;<strong>properties 配置</strong>到配置对象。</p>
+</li>
+<li>
+<p>第 10 至 11 行：public &amp;&amp; setting 方法 &amp;&amp;&nbsp;<strong>唯一</strong>参数为基本类型。</p>
+<ul>
+<li>其中<strong>唯一</strong>参数为<strong>基本类型</strong>，决定了一个配置对象无法设置另外一个配置对象<strong>数组</strong>为属性，即<strong>没有多注册中心，多协议等情况</strong>。例如，ServiceConfig 无法通过<strong>属性配置</strong>设置多个 ProtocolConfig 对象。</li>
+<li>当然上述问题，正如文初所说，<a href="https://github.com/mercyblitz/blogs/blob/master/java/dubbo/Dubbo-Externalized-Configuration.md" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 外部化配置（Externalized Configuration）》</a>&nbsp;已经支持。</li>
+<li>
+<p>另外，<strong>属性配置</strong>和<strong>外部化配置</strong>有一定的相似点：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="https://github.com/mercyblitz/blogs/blob/master/java/dubbo/Dubbo-Externalized-Configuration.md" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 外部化配置（Externalized Configuration）》</a></p>
+</blockquote>
+<p>在 Dubbo 官方用户手册的<a href="http://dubbo.apache.org/zh-cn/docs/user/configuration/properties.html" target="_blank" rel="external nofollow noopener noreferrer">&ldquo;属性配置&rdquo;</a>章节中，<code>dubbo.properties</code>&nbsp;配置属性能够映射到&nbsp;<code>ApplicationConfig</code>、<code>ProtocolConfig</code>&nbsp;以及&nbsp;<code>RegistryConfig</code>&nbsp;的字段。从某种意义上来说，<code>dubbo.properties</code>&nbsp;也是 Dubbo 的外部化配置。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>第 13 行：获得属性名。例如，<code>ApplicationConfig#setName(...)</code>&nbsp;方法，对应的属性名为&nbsp;<code>"name"</code>&nbsp;。</p>
+</li>
+<li>
+<p>读取的<strong>覆盖策略</strong>如下：</p>
+<blockquote>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_01_13/02.png" alt="覆盖策略" /></p>
+</blockquote>
+</li>
+<li>
+<p>第 15 至 31 行：优先从【<strong>启动参数变量</strong>】获取配置项的值。</p>
+<ul>
+<li>🙂 有<strong>两种</strong>情况，胖友细看下注释。</li>
+</ul>
+</li>
+<li>第 33 至 45 行：因为 XML配置 的优先级<strong>大于</strong>&nbsp;properties配置，因此需要<strong>获取并使用</strong>&nbsp;getting 方法，判断配置对象<strong>已经拥有</strong>该配置项的值。如果有，则不从 properties配置 读取对应的值。</li>
+<li>
+<p>第 46 至 59 行：最后从【<strong>properties配置</strong>】获取配置项的值。</p>
+<ul>
+<li>🙂 有<strong>三种</strong>情况，前两种和【<strong>启动参数变量</strong>】相同。</li>
+<li>
+<p>最后一种，主要是兼容老版本的配置项。代码如下：</p>
+<pre><code class="Java"> <span class="number">1</span>: <span class="comment">/**</span>
+<span class="comment"> 2:  * 新老版本的 properties 的 key 映射</span>
+<span class="comment"> 3:  *</span>
+<span class="comment"> 4:  * key：新版本的配置 映射</span>
+<span class="comment"> 5:  * value：旧版本的配置 映射</span>
+<span class="comment"> 6:  *</span>
+<span class="comment"> 7:  * 来自 2012/3/8 下午 5：51 cb1f705 提交</span>
+<span class="comment"> 8:  * DUBBO-251 增加API覆盖dubbo.properties的测试，以及旧版本配置项测试。</span>
+<span class="comment"> 9:  */</span>
+<span class="number">10</span>: <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Map&lt;String, String&gt; legacyProperties = <span class="keyword">new</span> HashMap&lt;String, String&gt;();
+<span class="number">11</span>: 
+<span class="number">12</span>: <span class="comment">/**</span>
+<span class="comment">13:  * 将键对应的值转换成目标的值。</span>
+<span class="comment">14:  *</span>
+<span class="comment">15:  * 因为，新老配置可能有一些差异，通过该方法进行转换。</span>
+<span class="comment">16:  *</span>
+<span class="comment">17:  * <span class="doctag">@param</span> key 键</span>
+<span class="comment">18:  * <span class="doctag">@param</span> value 值</span>
+<span class="comment">19:  * <span class="doctag">@return</span> 转换后的值</span>
+<span class="comment">20:  */</span>
+<span class="number">21</span>: <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> String <span class="title">convertLegacyValue</span><span class="params">(String key, String value)</span> </span>{
+<span class="number">22</span>:     <span class="keyword">if</span> (value != <span class="keyword">null</span> &amp;&amp; value.length() &gt; <span class="number">0</span>) {
+<span class="number">23</span>:         <span class="keyword">if</span> (<span class="string">"dubbo.service.max.retry.providers"</span>.equals(key)) {
+<span class="number">24</span>:             <span class="keyword">return</span> String.valueOf(Integer.parseInt(value) - <span class="number">1</span>);
+<span class="number">25</span>:         } <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"dubbo.service.allow.no.provider"</span>.equals(key)) {
+<span class="number">26</span>:             <span class="keyword">return</span> String.valueOf(!Boolean.parseBoolean(value));
+<span class="number">27</span>:         }
+<span class="number">28</span>:     }
+<span class="number">29</span>:     <span class="keyword">return</span> value;
+<span class="number">30</span>: }
+</code></pre>
+<ul>
+<li>x</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>第 65 至 68 行：有值，通过反射进行设置到配置对象中。</li>
+<li>第 70 至 72 行：逻辑中间发生异常，<strong>不抛出异常</strong>，仅打印错误日志。</li>
+</ul>
+</div>

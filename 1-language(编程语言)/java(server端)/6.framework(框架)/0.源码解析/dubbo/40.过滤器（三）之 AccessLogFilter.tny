@@ -1,0 +1,132 @@
+<header class="article-header">
+<h1 class="article-title">过滤器（三）之 AccessLogFilter</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享记录<strong>访问日志</strong>的过滤器 AccessLogFilter ，需要在&nbsp;<code>&lt;dubbo:protocol /&gt;</code>&nbsp;或&nbsp;<code>&lt;dubbo:provider /&gt;</code>&nbsp;或&nbsp;<code>&lt;dubbo:service /&gt;</code>&nbsp;中，设置&nbsp;<code>"accesslog"</code>&nbsp;配置项<strong>开启</strong>。有两种配置项选择：</p>
+<ul>
+<li>【配置方式一】&nbsp;<code>true</code>&nbsp;：将向日志组件 logger 中输出访问日志。</li>
+<li>【配置方式二】访问日志文件路径：直接把访问日志输出到<strong>指定</strong>文件。</li>
+</ul>
+<h1 id="2-AccessLogFilter">2. AccessLogFilter</h1>
+<p><code>com.alibaba.dubbo.rpc.filter.AccessLogFilter</code>&nbsp;，实现 Filter 接口，记录<strong>服务</strong>的访问日志的过滤器实现类。</p>
+<h2 id="2-1-构造方法">2.1 构造方法</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 访问日志在 {<span class="doctag">@link</span> LoggerFactory} 中的日志名</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String ACCESS_LOG_KEY = <span class="string">"dubbo.accesslog"</span>;</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 访问日志的文件后缀</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String FILE_DATE_FORMAT = <span class="string">"yyyyMMdd"</span>;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 日历的时间格式化</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String MESSAGE_DATE_FORMAT = <span class="string">"yyyy-MM-dd HH:mm:ss"</span>;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 队列大小，即 {<span class="doctag">@link</span> #logQueue} 值的大小</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> LOG_MAX_BUFFER = <span class="number">5000</span>;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 日志输出频率，单位：毫秒。仅适用于 {<span class="doctag">@link</span> #logFuture}</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">long</span> LOG_OUTPUT_INTERVAL = <span class="number">5000</span>;</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 日志队列</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key：访问日志名</span></span><br /><span class="line"><span class="comment"> * value：日志集合</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, Set&lt;String&gt;&gt; logQueue = <span class="keyword">new</span> ConcurrentHashMap&lt;String, Set&lt;String&gt;&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 定时任务线程池</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> ScheduledExecutorService logScheduled = Executors.newScheduledThreadPool(<span class="number">2</span>, <span class="keyword">new</span> NamedThreadFactory(<span class="string">"Dubbo-Access-Log"</span>, <span class="keyword">true</span>));</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 记录日志任务</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">volatile</span> ScheduledFuture&lt;?&gt; logFuture = <span class="keyword">null</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>【配置方式一】
+<ul>
+<li><code>ACCESS_LOG_KEY</code></li>
+</ul>
+</li>
+<li>【配置方式二】
+<ul>
+<li>文件相关：
+<ul>
+<li><code>FILE_DATE_FORMAT</code></li>
+<li><code>MESSAGE_DATE_FORMAT</code></li>
+</ul>
+</li>
+<li>队列相关：
+<ul>
+<li><code>logQueue</code></li>
+<li><code>LOG_MAX_BUFFER</code></li>
+</ul>
+</li>
+<li>任务相关：
+<ul>
+<li><code>logScheduled</code></li>
+<li><code>LOG_OUTPUT_INTERVAL</code></li>
+<li><code>logFuture</code></li>
+</ul>
+</li>
+<li>日志流向为：<strong>logMessage</strong>&nbsp;=&gt; 队列 =&gt; 任务 =&gt; 文件。</li>
+</ul>
+</li>
+</ul>
+<h2 id="2-2-invoke">2.2 invoke</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="meta">@SuppressWarnings</span>(<span class="string">"Duplicates"</span>)</span><br /><span class="line"> <span class="number">3</span>: <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation inv)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">4</span>:     <span class="keyword">try</span> {</span><br /><span class="line"> <span class="number">5</span>:         <span class="comment">// 记录访问日志的文件名</span></span><br /><span class="line"> <span class="number">6</span>:         String accesslog = invoker.getUrl().getParameter(Constants.ACCESS_LOG_KEY);</span><br /><span class="line"> <span class="number">7</span>:         <span class="keyword">if</span> (ConfigUtils.isNotEmpty(accesslog)) {</span><br /><span class="line"> <span class="number">8</span>:             <span class="comment">// 服务的名字、版本、分组信息</span></span><br /><span class="line"> <span class="number">9</span>:             RpcContext context = RpcContext.getContext();</span><br /><span class="line"><span class="number">10</span>:             String serviceName = invoker.getInterface().getName();</span><br /><span class="line"><span class="number">11</span>:             String version = invoker.getUrl().getParameter(Constants.VERSION_KEY);</span><br /><span class="line"><span class="number">12</span>:             String group = invoker.getUrl().getParameter(Constants.GROUP_KEY);</span><br /><span class="line"><span class="number">13</span>:             <span class="comment">// 拼接日志内容</span></span><br /><span class="line"><span class="number">14</span>:             StringBuilder sn = <span class="keyword">new</span> StringBuilder();</span><br /><span class="line"><span class="number">15</span>:             sn.append(<span class="string">"["</span>).append(<span class="keyword">new</span> SimpleDateFormat(MESSAGE_DATE_FORMAT).format(<span class="keyword">new</span> Date())).append(<span class="string">"] "</span>) <span class="comment">// 时间</span></span><br /><span class="line"><span class="number">16</span>:                     .append(context.getRemoteHost()).append(<span class="string">":"</span>).append(context.getRemotePort()) <span class="comment">// 调用方地址</span></span><br /><span class="line"><span class="number">17</span>:                     .append(<span class="string">" -&gt; "</span>).append(context.getLocalHost()).append(<span class="string">":"</span>).append(context.getLocalPort()) <span class="comment">// 本地地址</span></span><br /><span class="line"><span class="number">18</span>:                     .append(<span class="string">" - "</span>);</span><br /><span class="line"><span class="number">19</span>:             <span class="keyword">if</span> (<span class="keyword">null</span> != group &amp;&amp; group.length() &gt; <span class="number">0</span>) { <span class="comment">// 分组</span></span><br /><span class="line"><span class="number">20</span>:                 sn.append(group).append(<span class="string">"/"</span>);</span><br /><span class="line"><span class="number">21</span>:             }</span><br /><span class="line"><span class="number">22</span>:             sn.append(serviceName); <span class="comment">// 服务名</span></span><br /><span class="line"><span class="number">23</span>:             <span class="keyword">if</span> (<span class="keyword">null</span> != version &amp;&amp; version.length() &gt; <span class="number">0</span>) { <span class="comment">// 版本</span></span><br /><span class="line"><span class="number">24</span>:                 sn.append(<span class="string">":"</span>).append(version);</span><br /><span class="line"><span class="number">25</span>:             }</span><br /><span class="line"><span class="number">26</span>:             sn.append(<span class="string">" "</span>);</span><br /><span class="line"><span class="number">27</span>:             sn.append(inv.getMethodName()); <span class="comment">// 方法名</span></span><br /><span class="line"><span class="number">28</span>:             sn.append(<span class="string">"("</span>);</span><br /><span class="line"><span class="number">29</span>:             Class&lt;?&gt;[] types = inv.getParameterTypes(); <span class="comment">// 参数类型</span></span><br /><span class="line"><span class="number">30</span>:             <span class="keyword">if</span> (types != <span class="keyword">null</span> &amp;&amp; types.length &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">31</span>:                 <span class="keyword">boolean</span> first = <span class="keyword">true</span>;</span><br /><span class="line"><span class="number">32</span>:                 <span class="keyword">for</span> (Class&lt;?&gt; type : types) {</span><br /><span class="line"><span class="number">33</span>:                     <span class="keyword">if</span> (first) {</span><br /><span class="line"><span class="number">34</span>:                         first = <span class="keyword">false</span>;</span><br /><span class="line"><span class="number">35</span>:                     } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">36</span>:                         sn.append(<span class="string">","</span>);</span><br /><span class="line"><span class="number">37</span>:                     }</span><br /><span class="line"><span class="number">38</span>:                     sn.append(type.getName());</span><br /><span class="line"><span class="number">39</span>:                 }</span><br /><span class="line"><span class="number">40</span>:             }</span><br /><span class="line"><span class="number">41</span>:             sn.append(<span class="string">") "</span>);</span><br /><span class="line"><span class="number">42</span>:             Object[] args = inv.getArguments(); <span class="comment">// 参数值</span></span><br /><span class="line"><span class="number">43</span>:             <span class="keyword">if</span> (args != <span class="keyword">null</span> &amp;&amp; args.length &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">44</span>:                 sn.append(JSON.toJSONString(args));</span><br /><span class="line"><span class="number">45</span>:             }</span><br /><span class="line"><span class="number">46</span>:             String msg = sn.toString();</span><br /><span class="line"><span class="number">47</span>:             <span class="comment">// 【方式一】使用日志组件，例如 Log4j 等写</span></span><br /><span class="line"><span class="number">48</span>:             <span class="keyword">if</span> (ConfigUtils.isDefault(accesslog)) {</span><br /><span class="line"><span class="number">49</span>:                 LoggerFactory.getLogger(ACCESS_LOG_KEY + <span class="string">"."</span> + invoker.getInterface().getName()).info(msg);</span><br /><span class="line"><span class="number">50</span>:             <span class="comment">// 【方式二】异步输出到指定文件</span></span><br /><span class="line"><span class="number">51</span>:             } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">52</span>:                 log(accesslog, msg);</span><br /><span class="line"><span class="number">53</span>:             }</span><br /><span class="line"><span class="number">54</span>:         }</span><br /><span class="line"><span class="number">55</span>:     } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line"><span class="number">56</span>:         logger.warn(<span class="string">"Exception in AcessLogFilter of service("</span> + invoker + <span class="string">" -&gt; "</span> + inv + <span class="string">")"</span>, t);</span><br /><span class="line"><span class="number">57</span>:     }</span><br /><span class="line"><span class="number">58</span>:     <span class="comment">// 服务调用</span></span><br /><span class="line"><span class="number">59</span>:     <span class="keyword">return</span> invoker.invoke(inv);</span><br /><span class="line"><span class="number">60</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 6 行：获得访问日志的<strong>配置项</strong>。</li>
+<li>第 8 至 12 行：获得服务的名字、版本、分组信息。</li>
+<li>
+<p>第 13 至 46 行：拼接日志的内容。例子如下：</p>
+<figure class="highlight plain">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">[2018-04-14 11:57:58] 192.168.3.17:57207 -&gt; 192.168.3.17:20880 - com.alibaba.dubbo.demo.DemoService say01(java.lang.String) [null]</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 47 至 49 行：调用&nbsp;<code>ConfigUtils#isDefault(value)</code>&nbsp;方法，判断是否使用日志组件记录日志。例如 Log4J 等等。详细参见&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/logger-strategy.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 日志适配》</a>&nbsp;。</p>
+</li>
+<li>
+<p>第 50 至 53 行：调用&nbsp;<code>#log(accesslog, logMessage)</code>&nbsp;方法，添加日志内容到日志队列。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 初始化任务</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">init</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (logFuture == <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">synchronized</span> (logScheduled) {</span><br /><span class="line">            <span class="keyword">if</span> (logFuture == <span class="keyword">null</span>) { <span class="comment">// 双重锁，避免重复初始化</span></span><br /><span class="line">                logFuture = logScheduled.scheduleWithFixedDelay(<span class="keyword">new</span> LogTask(), LOG_OUTPUT_INTERVAL, LOG_OUTPUT_INTERVAL, TimeUnit.MILLISECONDS);</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 添加日志内容到日志队列</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> accesslog 日志文件</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> logmessage 日志内容</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">log</span><span class="params">(String accesslog, String logmessage)</span> </span>{</span><br /><span class="line">    <span class="comment">// 初始化</span></span><br /><span class="line">    init();</span><br /><span class="line">    <span class="comment">// 获得队列，以文件名为 Key</span></span><br /><span class="line">    Set&lt;String&gt; logSet = logQueue.get(accesslog);</span><br /><span class="line">    <span class="keyword">if</span> (logSet == <span class="keyword">null</span>) {</span><br /><span class="line">        logQueue.putIfAbsent(accesslog, <span class="keyword">new</span> ConcurrentHashSet&lt;String&gt;());</span><br /><span class="line">        logSet = logQueue.get(accesslog);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 若未超过队列大小，添加到队列中</span></span><br /><span class="line">    <span class="keyword">if</span> (logSet.size() &lt; LOG_MAX_BUFFER) {</span><br /><span class="line">        logSet.add(logmessage);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h2 id="2-3-LogTask">2.3 LogTask</h2>
+<blockquote>
+<p>LogTask 是 AccessLogFilter 的内部类</p>
+</blockquote>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 日志任务</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: <span class="keyword">private</span> <span class="class"><span class="keyword">class</span> <span class="title">LogTask</span> <span class="keyword">implements</span> <span class="title">Runnable</span> </span>{</span><br /><span class="line"> <span class="number">5</span>: </span><br /><span class="line"> <span class="number">6</span>:     <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">7</span>:     <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>{</span><br /><span class="line"> <span class="number">8</span>:         <span class="keyword">try</span> {</span><br /><span class="line"> <span class="number">9</span>:             <span class="keyword">if</span> (logQueue.size() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">10</span>:                 <span class="keyword">for</span> (Map.Entry&lt;String, Set&lt;String&gt;&gt; entry : logQueue.entrySet()) {</span><br /><span class="line"><span class="number">11</span>:                     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">12</span>:                         String accesslog = entry.getKey();</span><br /><span class="line"><span class="number">13</span>:                         Set&lt;String&gt; logSet = entry.getValue();</span><br /><span class="line"><span class="number">14</span>:                         <span class="comment">// 获得日志文件</span></span><br /><span class="line"><span class="number">15</span>:                         File file = <span class="keyword">new</span> File(accesslog);</span><br /><span class="line"><span class="number">16</span>:                         File dir = file.getParentFile();</span><br /><span class="line"><span class="number">17</span>:                         <span class="keyword">if</span> (<span class="keyword">null</span> != dir &amp;&amp; !dir.exists()) {</span><br /><span class="line"><span class="number">18</span>:                             dir.mkdirs();</span><br /><span class="line"><span class="number">19</span>:                         }</span><br /><span class="line"><span class="number">20</span>:                         <span class="keyword">if</span> (logger.isDebugEnabled()) {</span><br /><span class="line"><span class="number">21</span>:                             logger.debug(<span class="string">"Append log to "</span> + accesslog);</span><br /><span class="line"><span class="number">22</span>:                         }</span><br /><span class="line"><span class="number">23</span>:                         <span class="comment">// 归档历史日志文件，例如： `accesslog` =&gt; `access.20181023`</span></span><br /><span class="line"><span class="number">24</span>:                         <span class="keyword">if</span> (file.exists()) {</span><br /><span class="line"><span class="number">25</span>:                             String now = <span class="keyword">new</span> SimpleDateFormat(FILE_DATE_FORMAT).format(<span class="keyword">new</span> Date());</span><br /><span class="line"><span class="number">26</span>:                             String last = <span class="keyword">new</span> SimpleDateFormat(FILE_DATE_FORMAT).format(<span class="keyword">new</span> Date(file.lastModified())); <span class="comment">// 最后修改时间</span></span><br /><span class="line"><span class="number">27</span>:                             <span class="keyword">if</span> (!now.equals(last)) {</span><br /><span class="line"><span class="number">28</span>:                                 File archive = <span class="keyword">new</span> File(file.getAbsolutePath() + <span class="string">"."</span> + last);</span><br /><span class="line"><span class="number">29</span>:                                 file.renameTo(archive);</span><br /><span class="line"><span class="number">30</span>:                             }</span><br /><span class="line"><span class="number">31</span>:                         }</span><br /><span class="line"><span class="number">32</span>:                         <span class="comment">// 输出日志到指定文件</span></span><br /><span class="line"><span class="number">33</span>:                         FileWriter writer = <span class="keyword">new</span> FileWriter(file, <span class="keyword">true</span>);</span><br /><span class="line"><span class="number">34</span>:                         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">35</span>:                             <span class="keyword">for</span> (Iterator&lt;String&gt; iterator = logSet.iterator(); iterator.hasNext(); iterator.remove()) {</span><br /><span class="line"><span class="number">36</span>:                                 writer.write(iterator.next()); <span class="comment">// 写入一行日志</span></span><br /><span class="line"><span class="number">37</span>:                                 writer.write(<span class="string">"\r\n"</span>); <span class="comment">// 换行</span></span><br /><span class="line"><span class="number">38</span>:                             }</span><br /><span class="line"><span class="number">39</span>:                             writer.flush(); <span class="comment">// 刷盘</span></span><br /><span class="line"><span class="number">40</span>:                         } <span class="keyword">finally</span> {</span><br /><span class="line"><span class="number">41</span>:                             writer.close(); <span class="comment">// 关闭</span></span><br /><span class="line"><span class="number">42</span>:                         }</span><br /><span class="line"><span class="number">43</span>:                     } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line"><span class="number">44</span>:                         logger.error(e.getMessage(), e);</span><br /><span class="line"><span class="number">45</span>:                     }</span><br /><span class="line"><span class="number">46</span>:                 }</span><br /><span class="line"><span class="number">47</span>:             }</span><br /><span class="line"><span class="number">48</span>:         } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line"><span class="number">49</span>:             logger.error(e.getMessage(), e);</span><br /><span class="line"><span class="number">50</span>:         }</span><br /><span class="line"><span class="number">51</span>:     }</span><br /><span class="line"><span class="number">52</span>: </span><br /><span class="line"><span class="number">53</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>从&nbsp;<code>#init()</code>&nbsp;方法，我们可以看到，LogTask 每 5000 (&nbsp;<code>LOG_OUTPUT_INTERVAL</code>&nbsp;) 毫秒，执行一次。</li>
+<li>第 9 至 10 行：循环日志队列&nbsp;<code>logQueue</code>&nbsp;。<strong>注意</strong>，日志集合使用了 ConcurrentHashSet ，所以会有一定的<strong>乱序</strong>，在最终输出到指定文件后。</li>
+<li>第 14 至 22 行：获得日志文件。</li>
+<li>第 23 至 31 行：归档历史日志文件，例如：<code>accesslog</code>&nbsp;=&gt;&nbsp;<code>access.20181023</code>&nbsp;。
+<ul>
+<li><strong>注意</strong>，因为是按照<strong>文件最后修改时间</strong>，所以极端情况（写着写着到了<strong>第二天</strong>），那么就不会归档了。</li>
+</ul>
+</li>
+<li>第 32 至 42 行：输出日志到指定文件。</li>
+</ul>
+</div>

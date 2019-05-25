@@ -1,0 +1,80 @@
+<header class="article-header">
+<h1 class="article-title">调用特性（一）之回声测试</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享<strong>回声测试</strong>。我们来看下&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/echo-service.html" target="_blank" rel="external nofollow noopener noreferrer">《用户指南 &mdash;&mdash; 回声测试》</a>&nbsp;的定义：</p>
+<blockquote>
+<p>回声测试用于检测服务是否可用，回声测试按照正常请求流程执行，能够测试整个调用是否通畅，可用于监控。</p>
+</blockquote>
+<h1 id="2-服务消费者">2. 服务消费者</h1>
+<h2 id="2-1-EchoService">2.1 EchoService</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/service/EchoService.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.service.EchoService</code></a>&nbsp;，Echo 服务接口。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">EchoService</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * echo test.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> message message.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> message.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    Object $echo(Object message);</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<blockquote>
+<p>所有服务自动实现 EchoService 接口，只需将任意服务引用强制转型为 EchoService，即可使用。</p>
+</blockquote>
+<p>在 AbstractProxyFactory 中，<code>#getProxy(invoker)</code>&nbsp;方法，创建服务消费者的 Proxy 对象时，自动实现 EchoService 接口，代码如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_11_05/01.png" alt="AbstractProxyFactory" /></p>
+<h2 id="2-2-使用示例">2.2 使用示例</h2>
+<blockquote>
+<p>旁白君：如下部分，从官方文档，直接复制粘贴的。</p>
+</blockquote>
+<p>Spring 配置：</p>
+<figure class="highlight xml">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="tag">&lt;<span class="name">dubbo:reference</span> <span class="attr">id</span>=<span class="string">"memberService"</span> <span class="attr">interface</span>=<span class="string">"com.xxx.MemberService"</span> /&gt;</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>代码：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// 远程服务引用</span></span><br /><span class="line">MemberService memberService = ctx.getBean(<span class="string">"memberService"</span>); </span><br /><br /><span class="line">EchoService echoService = (EchoService) memberService; <span class="comment">// 强制转型为EchoService</span></span><br /><br /><span class="line"><span class="comment">// 回声测试可用性</span></span><br /><span class="line">String status = echoService.$echo(<span class="string">"OK"</span>); </span><br /><br /><span class="line"><span class="keyword">assert</span>(status.equals(<span class="string">"OK"</span>));</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="3-服务提供者">3. 服务提供者</h1>
+<p>服务提供者，是<strong>不实现</strong>&nbsp;EchoService 接口，而是通过 EchoFilter 实现。</p>
+<h2 id="3-1-EchoFilter">3.1 EchoFilter</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/filter/EchoFilter.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.filter.EchoFilter</code></a>&nbsp;，实现 Filter 接口，回声过滤器。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Activate</span>(group = Constants.PROVIDER, order = -<span class="number">110000</span>)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">EchoFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation inv)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">        <span class="comment">// 方法名为 `$echo` ，参数只有一个</span></span><br /><span class="line">        <span class="keyword">if</span> (inv.getMethodName().equals(Constants.$ECHO) &amp;&amp; inv.getArguments() != <span class="keyword">null</span> &amp;&amp; inv.getArguments().length == <span class="number">1</span>) {</span><br /><span class="line">            <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(inv.getArguments()[<span class="number">0</span>]);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">return</span> invoker.invoke(inv);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>使用 Dubbo SPI Adaptive 机制，<strong>自动加载</strong>，仅限<strong>服务提供者</strong>。</li>
+<li>如果调用方法是<strong>回声</strong>调用时，通过方法名(&nbsp;<code>$echo</code>&nbsp;) 和方法参数数量为&nbsp;<strong>1</strong>&nbsp;，直接返回方法参数。</li>
+<li>若果调用方法非<strong>回声</strong>调用时，调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，继续走后面的过滤链。</li>
+</ul>
+</div>

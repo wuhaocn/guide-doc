@@ -1,0 +1,424 @@
+<header class="article-header">
+<h1 class="article-title">注册中心（一）之抽象 API</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/registry-api/">《精尽 Dubbo 源码分析 &mdash;&mdash; 项目结构一览》「3.5 dubbo-registry」</a>&nbsp;中，对&nbsp;<code>dubbo-registry</code>&nbsp;<strong>注册中心</strong>这个大模块做了大体的介绍。那么从本文开始，分享注册中心的代码实现。</p>
+<p>本文分享&nbsp;<code>dubbo-registry-api</code>&nbsp;模块，注册中心的抽象 API ，类结构如下图：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_08_01/01.png" alt="类图" /></p>
+<p>😈 整体比较易懂，笔者在这里先不介绍，胖友可以看完本文，回过头看看，自己是不是理解了？！</p>
+<p>下面，我们按照从左到右的顺序，逐个分享。</p>
+<h1 id="2-RegistryFactory">2. RegistryFactory</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/7ece72959dd8c96e17fc240a2b22b40391265bcc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/RegistryFactory.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.RegistryFactory</code></a>&nbsp;，注册中心工厂<strong>接口</strong>，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span>(<span class="string">"dubbo"</span>)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">RegistryFactory</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 连接注册中心.</span></span><br /><span class="line"><span class="comment">     * &lt;p&gt;</span></span><br /><span class="line"><span class="comment">     * 连接注册中心需处理契约：&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 1. 当设置check=false时表示不检查连接，否则在连接不上时抛出异常。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 2. 支持URL上的username:password权限认证。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 3. 支持backup=10.20.153.10备选注册中心集群地址。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 4. 支持file=registry.cache本地磁盘文件缓存。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 5. 支持timeout=1000请求超时设置。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 6. 支持session=60000会话超时或过期设置。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url 注册中心地址，不允许为空</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> 注册中心引用，总不返回空</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span>({<span class="string">"protocol"</span>})</span><br /><span class="line">    <span class="function">Registry <span class="title">getRegistry</span><span class="params">(URL url)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>RegistryFactory 是一个 Dubbo SPI 拓展接口。</li>
+<li><code>#getRegistry(url)</code>&nbsp;方法，获得注册中心 Registry 对象。
+<ul>
+<li>注意方法上注释的<strong>处理契约</strong>。</li>
+<li><code>@Adaptive({"protocol"})</code>&nbsp;注解，Dubbo SPI 会自动实现 RegistryFactory$Adaptive 类，根据&nbsp;<code>url.protocol</code>&nbsp;获得对应的 RegistryFactory 实现类。例如，<code>url.protocol = zookeeper</code>&nbsp;时，获得 ZookeeperRegistryFactory 实现类。</li>
+</ul>
+</li>
+</ul>
+<h2 id="2-1-AbstractRegistryFactory">2.1 AbstractRegistryFactory</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/7ece72959dd8c96e17fc240a2b22b40391265bcc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistryFactory.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.support.AbstractRegistryFactory</code></a>&nbsp;，实现 RegistryFactory 接口，RegistryFactory 抽象类，实现了 Registry 的<strong>容器管理</strong>。</p>
+<h3 id="2-1-1-属性">2.1.1 属性</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// The lock for the acquisition process of the registry</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ReentrantLock LOCK = <span class="keyword">new</span> ReentrantLock();</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Registry 集合</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key：{<span class="doctag">@link</span> URL#toServiceString()}</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="comment">// Registry Collection Map&lt;RegistryAddress, Registry&gt;</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Map&lt;String, Registry&gt; REGISTRIES = <span class="keyword">new</span> ConcurrentHashMap&lt;String, Registry&gt;();</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>REGISTRIES</code>&nbsp;静态属性，Registry 集合。</li>
+<li><code>LOCK</code>&nbsp;静态属性，锁，用于&nbsp;<code>#destroyAll()</code>&nbsp;和&nbsp;<code>#getRegistry(url)</code>&nbsp;方法，对&nbsp;<code>REGISTRIES</code>&nbsp;访问的竞争。</li>
+</ul>
+<h3 id="2-1-2-createRegistry">2.1.2 createRegistry</h3>
+<p><code>#createRegistry(url)</code>&nbsp;<strong>抽象</strong>方法，创建 Registry 对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 创建 Registry 对象</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> url 注册中心地址</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> Registry 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> Registry <span class="title">createRegistry</span><span class="params">(URL url)</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>子类实现该方法，创建其对应的 Registry 实现类。例如，ZookeeperRegistryFactory 的该方法，创建 ZookeeperRegistry 对象。</p>
+<h3 id="2-1-3-getRegistry">2.1.3 getRegistry</h3>
+<p><a href="https://github.com/YunaiV/dubbo/blob/d7c9cec324901c8285e602fdd3256cc9f5586357/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistryFactory.java#L96-L132" target="_blank" rel="external nofollow noopener noreferrer"><code>#getRegistry(url)</code></a>&nbsp;<strong>实现</strong>方法，获得注册中心 Registry 对象。优先从缓存中获取，否则进行创建。</p>
+<ul>
+<li>🙂 实现比较易懂，点击链接查看，有代码注释。</li>
+</ul>
+<h3 id="2-1-4-destroyAll">2.1.4 destroyAll</h3>
+<p><a href="https://github.com/YunaiV/dubbo/blob/d7c9cec324901c8285e602fdd3256cc9f5586357/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistryFactory.java#L65-L94" target="_blank" rel="external nofollow noopener noreferrer"><code>#destroyAll()</code></a>&nbsp;方法，销毁所有 Registry 对象。</p>
+<ul>
+<li>🙂 实现比较易懂，点击链接查看，有代码注释。</li>
+</ul>
+<h1 id="3-RegistryService">3. RegistryService</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/f2458c11b045f85f654ed1719c75f9b0ba6397fe/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/RegistryService.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.RegistryService</code></a>&nbsp;，注册中心服务<strong>接口</strong>，定义了注册、订阅、查询<strong>三种</strong>操作方法，如下：</p>
+<ul>
+<li><code>#register(url)</code>&nbsp;方法，<strong>注册</strong>数据，比如：提供者地址，消费者地址，路由规则，覆盖规则，等数据。
+<ul>
+<li><code>#unregister(url)</code>&nbsp;方法，取消注册。</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li>
+<p><code>#subscribe(url, NotifyListener)</code>&nbsp;方法，<strong>订阅</strong>符合条件的已注册数据，当有注册数据变更时自动推送。</p>
+<ul>
+<li><code>#unsubscribe(url, NotifyListener)</code>&nbsp;方法，取消订阅。</li>
+<li>在&nbsp;<code>URL.parameters.category</code>&nbsp;属性上，表示订阅的数据分类。目前有四种类型：
+<ul>
+<li><code>consumers</code>&nbsp;，服务消费者列表。</li>
+<li><code>providers</code>&nbsp;，服务提供者列表。</li>
+<li><code>routers</code>&nbsp;，<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/routing-rule.html" target="_blank" rel="external nofollow noopener noreferrer">路由规则</a>列表。</li>
+<li><code>configurations</code>&nbsp;，<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/config-rule.html" target="_blank" rel="external nofollow noopener noreferrer">配置规则</a>列表。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><code>#lookup(url)</code>&nbsp;方法，<strong>查询</strong>符合条件的已注册数据，与订阅的推模式相对应，这里为拉模式，只返回一次结果。</p>
+</li>
+</ul>
+<p>ps：注意方法上注释的处理契约。</p>
+<h2 id="3-1-Registry">3.1 Registry</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/f2458c11b045f85f654ed1719c75f9b0ba6397fe/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/Registry.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.Registry</code></a>&nbsp;，注册中心<strong>接口</strong>。Registry 继承了：</p>
+<ul>
+<li>RegistryService 接口，拥有拥有注册、订阅、查询三种操作方法。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/f2458c11b045f85f654ed1719c75f9b0ba6397fe/dubbo-common/src/main/java/com/alibaba/dubbo/common/Node.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.Node</code></a>&nbsp;接口，拥有节点相关的方法。</li>
+</ul>
+<h2 id="3-2-AbstractRegistry">3.2 AbstractRegistry</h2>
+<p><a href="http://svip.iocoder.cn/Dubbo/registry-api/"><code>com.alibaba.dubbo.registry.support.AbstractRegistry</code></a>&nbsp;，实现 Registry 接口，Registry 抽象类，实现了如下方法：</p>
+<ul>
+<li>通用的注册、订阅、查询、通知等方法。</li>
+<li>持久化注册数据到文件，以 properties 格式存储。应用于，重启时，无法从注册中心加载服务提供者列表等信息时，从该文件中读取。</li>
+</ul>
+<h3 id="3-2-1-属性">3.2.1 属性</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">// URL地址分隔符，用于文件缓存中，服务提供者URL分隔</span></span><br /><span class="line"> <span class="number">2</span>: <span class="comment">// URL address separator, used in file cache, service provider URL separation</span></span><br /><span class="line"> <span class="number">3</span>: <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">char</span> URL_SEPARATOR = <span class="string">' '</span>;</span><br /><span class="line"> <span class="number">4</span>: <span class="comment">// URL地址分隔正则表达式，用于解析文件缓存中服务提供者URL列表</span></span><br /><span class="line"> <span class="number">5</span>: <span class="comment">// URL address separated regular expression for parsing the service provider URL list in the file cache</span></span><br /><span class="line"> <span class="number">6</span>: <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String URL_SPLIT = <span class="string">"\\s+"</span>;</span><br /><span class="line"> <span class="number">7</span>: </span><br /><span class="line"> <span class="number">8</span>: <span class="comment">// Log output</span></span><br /><span class="line"> <span class="number">9</span>: <span class="keyword">protected</span> <span class="keyword">final</span> Logger logger = LoggerFactory.getLogger(getClass());</span><br /><span class="line"><span class="number">10</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">11:  *  本地磁盘缓存。</span></span><br /><span class="line"><span class="comment">12:  *</span></span><br /><span class="line"><span class="comment">13:  *  1. 其中特殊的 key 值 .registies 记录注册中心列表</span></span><br /><span class="line"><span class="comment">14:  *  2. 其它均为 {<span class="doctag">@link</span> #notified} 服务提供者列表</span></span><br /><span class="line"><span class="comment">15:  */</span></span><br /><span class="line"><span class="number">16</span>: <span class="comment">// Local disk cache, where the special key value.registies records the list of registry centers, and the others are the list of notified service providers</span></span><br /><span class="line"><span class="number">17</span>: <span class="keyword">private</span> <span class="keyword">final</span> Properties properties = <span class="keyword">new</span> Properties();</span><br /><span class="line"><span class="number">18</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">19:  * 注册中心缓存写入执行器。</span></span><br /><span class="line"><span class="comment">20:  *</span></span><br /><span class="line"><span class="comment">21:  * 线程数=1</span></span><br /><span class="line"><span class="comment">22:  */</span></span><br /><span class="line"><span class="number">23</span>: <span class="comment">// File cache timing writing</span></span><br /><span class="line"><span class="number">24</span>: <span class="keyword">private</span> <span class="keyword">final</span> ExecutorService registryCacheExecutor = Executors.newFixedThreadPool(<span class="number">1</span>, <span class="keyword">new</span> NamedThreadFactory(<span class="string">"DubboSaveRegistryCache"</span>, <span class="keyword">true</span>));</span><br /><span class="line"><span class="number">25</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">26:  * 是否同步保存文件</span></span><br /><span class="line"><span class="comment">27:  */</span></span><br /><span class="line"><span class="number">28</span>: <span class="comment">// Is it synchronized to save the file</span></span><br /><span class="line"><span class="number">29</span>: <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">boolean</span> syncSaveFile;</span><br /><span class="line"><span class="number">30</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">31:  * 数据版本号</span></span><br /><span class="line"><span class="comment">32:  *</span></span><br /><span class="line"><span class="comment">33:  * {<span class="doctag">@link</span> #properties}</span></span><br /><span class="line"><span class="comment">34:  */</span></span><br /><span class="line"><span class="number">35</span>: <span class="keyword">private</span> <span class="keyword">final</span> AtomicLong lastCacheChanged = <span class="keyword">new</span> AtomicLong();</span><br /><span class="line"><span class="number">36</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">37:  * 已注册 URL 集合。</span></span><br /><span class="line"><span class="comment">38:  *</span></span><br /><span class="line"><span class="comment">39:  * 注意，注册的 URL 不仅仅可以是服务提供者的，也可以是服务消费者的</span></span><br /><span class="line"><span class="comment">40:  */</span></span><br /><span class="line"><span class="number">41</span>: <span class="keyword">private</span> <span class="keyword">final</span> Set&lt;URL&gt; registered = <span class="keyword">new</span> ConcurrentHashSet&lt;URL&gt;();</span><br /><span class="line"><span class="number">42</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">43:  * 订阅 URL 的监听器集合</span></span><br /><span class="line"><span class="comment">44:  *</span></span><br /><span class="line"><span class="comment">45:  * key：消费者的 URL ，例如消费者的 URL</span></span><br /><span class="line"><span class="comment">46:  */</span></span><br /><span class="line"><span class="number">47</span>: <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;URL, Set&lt;NotifyListener&gt;&gt; subscribed = <span class="keyword">new</span> ConcurrentHashMap&lt;URL, Set&lt;NotifyListener&gt;&gt;();</span><br /><span class="line"><span class="number">48</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">49:  * 被通知的 URL 集合</span></span><br /><span class="line"><span class="comment">50:  *</span></span><br /><span class="line"><span class="comment">51:  * key1：消费者的 URL ，例如消费者的 URL ，和 {<span class="doctag">@link</span> #subscribed} 的键一致</span></span><br /><span class="line"><span class="comment">52:  * key2：分类，例如：providers、consumers、routes、configurators。【实际无 consumers ，因为消费者不会去订阅另外的消费者的列表】</span></span><br /><span class="line"><span class="comment">53:  *            在 {<span class="doctag">@link</span> Constants} 中，以 "_CATEGORY" 结尾</span></span><br /><span class="line"><span class="comment">54:  */</span></span><br /><span class="line"><span class="number">55</span>: <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;URL, Map&lt;String, List&lt;URL&gt;&gt;&gt; notified = <span class="keyword">new</span> ConcurrentHashMap&lt;URL, Map&lt;String, List&lt;URL&gt;&gt;&gt;();</span><br /><span class="line"><span class="number">56</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">57:  * 注册中心 URL</span></span><br /><span class="line"><span class="comment">58:  */</span></span><br /><span class="line"><span class="number">59</span>: <span class="keyword">private</span> URL registryUrl;</span><br /><span class="line"><span class="number">60</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">61:  * 本地磁盘缓存文件，缓存注册中心的数据</span></span><br /><span class="line"><span class="comment">62:  */</span></span><br /><span class="line"><span class="number">63</span>: <span class="comment">// Local disk cache file</span></span><br /><span class="line"><span class="number">64</span>: <span class="keyword">private</span> File file;</span><br /><span class="line"><span class="number">65</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">66:  * 是否销毁</span></span><br /><span class="line"><span class="comment">67:  */</span></span><br /><span class="line"><span class="number">68</span>: <span class="keyword">private</span> AtomicBoolean destroyed = <span class="keyword">new</span> AtomicBoolean(<span class="keyword">false</span>);</span><br /><span class="line"><span class="number">69</span>: </span><br /><span class="line"><span class="number">70</span>: <span class="function"><span class="keyword">public</span> <span class="title">AbstractRegistry</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line"><span class="number">71</span>:     setUrl(url);</span><br /><span class="line"><span class="number">72</span>:     <span class="comment">// Start file save timer</span></span><br /><span class="line"><span class="number">73</span>:     syncSaveFile = url.getParameter(Constants.REGISTRY_FILESAVE_SYNC_KEY, <span class="keyword">false</span>);</span><br /><span class="line"><span class="number">74</span>:     <span class="comment">// 获得 `file`</span></span><br /><span class="line"><span class="number">75</span>:     String filename = url.getParameter(Constants.FILE_KEY, System.getProperty(<span class="string">"user.home"</span>) + <span class="string">"/.dubbo/dubbo-registry-"</span> + url.getParameter(Constants.APPLICATION_KEY) + <span class="string">"-"</span> + url.getAddress() + <span class="string">".cache"</span>);</span><br /><span class="line"><span class="number">76</span>:     File file = <span class="keyword">null</span>;</span><br /><span class="line"><span class="number">77</span>:     <span class="keyword">if</span> (ConfigUtils.isNotEmpty(filename)) {</span><br /><span class="line"><span class="number">78</span>:         file = <span class="keyword">new</span> File(filename);</span><br /><span class="line"><span class="number">79</span>:         <span class="keyword">if</span> (!file.exists() &amp;&amp; file.getParentFile() != <span class="keyword">null</span> &amp;&amp; !file.getParentFile().exists()) {</span><br /><span class="line"><span class="number">80</span>:             <span class="keyword">if</span> (!file.getParentFile().mkdirs()) {</span><br /><span class="line"><span class="number">81</span>:                 <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"Invalid registry store file "</span> + file + <span class="string">", cause: Failed to create directory "</span> + file.getParentFile() + <span class="string">"!"</span>);</span><br /><span class="line"><span class="number">82</span>:             }</span><br /><span class="line"><span class="number">83</span>:         }</span><br /><span class="line"><span class="number">84</span>:     }</span><br /><span class="line"><span class="number">85</span>:     <span class="keyword">this</span>.file = file;</span><br /><span class="line"><span class="number">86</span>:     <span class="comment">// 加载本地磁盘缓存文件到内存缓存</span></span><br /><span class="line"><span class="number">87</span>:     loadProperties();</span><br /><span class="line"><span class="number">88</span>:     <span class="comment">// 通知监听器，URL 变化结果</span></span><br /><span class="line"><span class="number">89</span>:     notify(url.getBackupUrls());</span><br /><span class="line"><span class="number">90</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>file</code>&nbsp;属性，<em>见代码注释</em>。</li>
+<li><code>properties</code>&nbsp;属性，<em>见代码注释</em>。
+<ul>
+<li>数据流向
+<ul>
+<li>启动时，从&nbsp;<code>file</code>&nbsp;读取数据到&nbsp;<code>properties</code>&nbsp;中。</li>
+<li>注册中心数据发生变更时，通知到 Registry 后，修改&nbsp;<code>properties</code>&nbsp;对应的值，并写入&nbsp;<code>file</code>&nbsp;。</li>
+</ul>
+</li>
+<li>数据键值
+<ul>
+<li>大多数情况下，键为服务消费者的 URL 的服务键(&nbsp;<code>URL#serviceKey()</code>&nbsp;)，对应的值为服务提供者列表、<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/config-rule.html" target="_blank" rel="external nofollow noopener noreferrer">路由规则</a>列表、<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/routing-rule.html" target="_blank" rel="external nofollow noopener noreferrer">配置规则</a>列表。</li>
+<li>特殊情况下，【TODO 8019】.registies</li>
+<li>因为值会存在为列表的情况，使用空格(&nbsp;<code>URL_SEPARATOR</code>&nbsp;) 分隔。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>syncSaveFile</code>&nbsp;属性，<code>properties</code>&nbsp;发生变更时候，是同步还是异步写入&nbsp;<code>file</code>&nbsp;。</li>
+<li><code>registryCacheExecutor</code>&nbsp;属性，<em>见代码注释</em>。</li>
+<li><code>lastCacheChanged</code>&nbsp;属性，<em>见代码注释</em>。
+<ul>
+<li>因为每次写入&nbsp;<code>file</code>&nbsp;是全量，而不是增量写入，通过版本号，避免老版本覆盖新版本。</li>
+</ul>
+</li>
+<li><code>registered</code>&nbsp;属性，<em>见代码注释</em>。</li>
+<li><code>subscribed</code>&nbsp;属性，<em>见代码注释</em>。</li>
+<li><code>notified</code>&nbsp;属性，<em>见代码注释</em>。
+<ul>
+<li>从数据上，和&nbsp;<code>properties</code>&nbsp;比较相似。笔者认为有两点差异：1）数据格式上，<code>notified</code>&nbsp;根据<strong>分类</strong>做了聚合；2）不从&nbsp;<code>file</code>&nbsp;中读取，都是从注册中心读取的数据。</li>
+</ul>
+</li>
+<li><code>registryUrl</code>&nbsp;属性，<em>见代码注释</em>。</li>
+<li><code>destroyed</code>&nbsp;属性，<em>见代码注释</em>。</li>
+<li><strong>构造方法</strong>，<em>见代码注释</em>。
+<ul>
+<li>第 87 行：调用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/06155d670fd1331fa1d2f41f7050338f9e9502c5/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistry.java#L265-L291" target="_blank" rel="external nofollow noopener noreferrer"><code>#loadProperties()</code></a>&nbsp;方法，加载本地磁盘缓存文件到内存缓存。
+<ul>
+<li>🙂 代码比较简单，点击链接查看。</li>
+</ul>
+</li>
+<li>第 89 行：// 【TODO 8020】为什么构造方法，要通知，连监听器都没注册</li>
+</ul>
+</li>
+</ul>
+<h3 id="3-2-2-register-amp-amp-unregister">3.2.2 register &amp;&amp; unregister</h3>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/06155d670fd1331fa1d2f41f7050338f9e9502c5/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistry.java#L356-L366" target="_blank" rel="external nofollow noopener noreferrer"><code>#register(url)</code></a>
+<ul>
+<li>从实现上，我们可以看出，并未向注册中心发起注册，仅仅是添加到&nbsp;<code>registered</code>&nbsp;中，进行状态的维护。实际上，真正的实现在 FailbackRegistry 类中。</li>
+</ul>
+</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/06155d670fd1331fa1d2f41f7050338f9e9502c5/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistry.java#L368-L378" target="_blank" rel="external nofollow noopener noreferrer"><code>#unregister(url)</code></a>
+<ul>
+<li>和&nbsp;<code>#register(url)</code>&nbsp;的<strong>处理方式</strong>相同。</li>
+</ul>
+</li>
+</ul>
+<h3 id="3-2-3-subscribe-amp-amp-unsubscribe">3.2.3 subscribe &amp;&amp; unsubscribe</h3>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/06155d670fd1331fa1d2f41f7050338f9e9502c5/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistry.java#L380-L398" target="_blank" rel="external nofollow noopener noreferrer"><code>#subscribe(url, listener)</code></a>
+<ul>
+<li>和&nbsp;<code>#register(url)</code>&nbsp;的<strong>处理方式</strong>相同。</li>
+</ul>
+</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/06155d670fd1331fa1d2f41f7050338f9e9502c5/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistry.java#L400-L416" target="_blank" rel="external nofollow noopener noreferrer"><code>#unsubscribe(url, listener)</code></a>
+<ul>
+<li>和&nbsp;<code>#register(url)</code>&nbsp;的<strong>处理方式</strong>相同。</li>
+</ul>
+</li>
+</ul>
+<h3 id="3-2-4-notify">3.2.4 notify</h3>
+<p><a href="https://github.com/YunaiV/dubbo/blob/06155d670fd1331fa1d2f41f7050338f9e9502c5/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistry.java#L477-L535" target="_blank" rel="external nofollow noopener noreferrer"><code>#notify(url, listener, urls)</code></a>&nbsp;方法，通知监听器，URL 变化结果。这里我们有两点要注意下：</p>
+<ul>
+<li>第一，向注册中心发起订阅后，会获取到<strong>全量</strong>数据，此时会被调用&nbsp;<code>#notify(...)</code>&nbsp;方法，即 Registry 获取到了全量数据。</li>
+<li>第二，每次注册中心发生变更时，会调用&nbsp;<code>#notify(...)</code>&nbsp;方法，虽然变化是<strong>增量</strong>，调用这个方法的调用方，已经进行处理，传入的&nbsp;<code>urls</code>&nbsp;依然是<strong>全量</strong>的。</li>
+</ul>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 通知监听器，URL 变化结果。</span></span><br /><span class="line"><span class="comment"> 3:  *</span></span><br /><span class="line"><span class="comment"> 4:  * 数据流向 `urls` =&gt; {<span class="doctag">@link</span> #notified} =&gt; {<span class="doctag">@link</span> #properties} =&gt; {<span class="doctag">@link</span> #file}</span></span><br /><span class="line"><span class="comment"> 5:  *</span></span><br /><span class="line"><span class="comment"> 6:  * <span class="doctag">@param</span> url 消费者 URL</span></span><br /><span class="line"><span class="comment"> 7:  * <span class="doctag">@param</span> listener 监听器</span></span><br /><span class="line"><span class="comment"> 8:  * <span class="doctag">@param</span> urls 通知的 URL 变化结果（全量数据）</span></span><br /><span class="line"><span class="comment"> 9:  */</span></span><br /><span class="line"><span class="number">10</span>: <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span>  <span class="title">notify</span><span class="params">(URL url, NotifyListener listener, List&lt;URL&gt; urls)</span> </span>{</span><br /><span class="line"><span class="number">11</span>:     <span class="keyword">if</span> (url == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">12</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"notify url == null"</span>);</span><br /><span class="line"><span class="number">13</span>:     }</span><br /><span class="line"><span class="number">14</span>:     <span class="keyword">if</span> (listener == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">15</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"notify listener == null"</span>);</span><br /><span class="line"><span class="number">16</span>:     }</span><br /><span class="line"><span class="number">17</span>:     <span class="keyword">if</span> ((urls == <span class="keyword">null</span> || urls.isEmpty())</span><br /><span class="line"><span class="number">18</span>:             &amp;&amp; !Constants.ANY_VALUE.equals(url.getServiceInterface())) {</span><br /><span class="line"><span class="number">19</span>:         logger.warn(<span class="string">"Ignore empty notify urls for subscribe url "</span> + url);</span><br /><span class="line"><span class="number">20</span>:         <span class="keyword">return</span>;</span><br /><span class="line"><span class="number">21</span>:     }</span><br /><span class="line"><span class="number">22</span>:     <span class="keyword">if</span> (logger.isInfoEnabled()) {</span><br /><span class="line"><span class="number">23</span>:         logger.info(<span class="string">"Notify urls for subscribe url "</span> + url + <span class="string">", urls: "</span> + urls);</span><br /><span class="line"><span class="number">24</span>:     }</span><br /><span class="line"><span class="number">25</span>:     <span class="comment">// 将 `urls` 按照 `url.parameter.category` 分类，添加到集合</span></span><br /><span class="line"><span class="number">26</span>:     Map&lt;String, List&lt;URL&gt;&gt; result = <span class="keyword">new</span> HashMap&lt;String, List&lt;URL&gt;&gt;();</span><br /><span class="line"><span class="number">27</span>:     <span class="keyword">for</span> (URL u : urls) {</span><br /><span class="line"><span class="number">28</span>:         <span class="keyword">if</span> (UrlUtils.isMatch(url, u)) {</span><br /><span class="line"><span class="number">29</span>:             String category = u.getParameter(Constants.CATEGORY_KEY, Constants.DEFAULT_CATEGORY);</span><br /><span class="line"><span class="number">30</span>:             List&lt;URL&gt; categoryList = result.get(category);</span><br /><span class="line"><span class="number">31</span>:             <span class="keyword">if</span> (categoryList == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">32</span>:                 categoryList = <span class="keyword">new</span> ArrayList&lt;URL&gt;();</span><br /><span class="line"><span class="number">33</span>:                 result.put(category, categoryList);</span><br /><span class="line"><span class="number">34</span>:             }</span><br /><span class="line"><span class="number">35</span>:             categoryList.add(u);</span><br /><span class="line"><span class="number">36</span>:         }</span><br /><span class="line"><span class="number">37</span>:     }</span><br /><span class="line"><span class="number">38</span>:     <span class="keyword">if</span> (result.size() == <span class="number">0</span>) {</span><br /><span class="line"><span class="number">39</span>:         <span class="keyword">return</span>;</span><br /><span class="line"><span class="number">40</span>:     }</span><br /><span class="line"><span class="number">41</span>:     <span class="comment">// 获得消费者 URL 对应的在 `notified` 中，通知的 URL 变化结果（全量数据）</span></span><br /><span class="line"><span class="number">42</span>:     Map&lt;String, List&lt;URL&gt;&gt; categoryNotified = notified.get(url);</span><br /><span class="line"><span class="number">43</span>:     <span class="keyword">if</span> (categoryNotified == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">44</span>:         notified.putIfAbsent(url, <span class="keyword">new</span> ConcurrentHashMap&lt;String, List&lt;URL&gt;&gt;());</span><br /><span class="line"><span class="number">45</span>:         categoryNotified = notified.get(url);</span><br /><span class="line"><span class="number">46</span>:     }</span><br /><span class="line"><span class="number">47</span>:     <span class="comment">// 处理通知的 URL 变化结果（全量数据）</span></span><br /><span class="line"><span class="number">48</span>:     <span class="keyword">for</span> (Map.Entry&lt;String, List&lt;URL&gt;&gt; entry : result.entrySet()) {</span><br /><span class="line"><span class="number">49</span>:         String category = entry.getKey();</span><br /><span class="line"><span class="number">50</span>:         List&lt;URL&gt; categoryList = entry.getValue();</span><br /><span class="line"><span class="number">51</span>:         <span class="comment">// 覆盖到 `notified`</span></span><br /><span class="line"><span class="number">52</span>:         <span class="comment">// 当某个分类的数据为空时，会依然有 urls 。其中 `urls[0].protocol = empty` ，通过这样的方式，处理所有服务提供者为空的情况。</span></span><br /><span class="line"><span class="number">53</span>:         categoryNotified.put(category, categoryList);</span><br /><span class="line"><span class="number">54</span>:         <span class="comment">// 保存到文件</span></span><br /><span class="line"><span class="number">55</span>:         saveProperties(url);</span><br /><span class="line"><span class="number">56</span>:         <span class="comment">// 通知监听器</span></span><br /><span class="line"><span class="number">57</span>:         listener.notify(categoryList);</span><br /><span class="line"><span class="number">58</span>:     }</span><br /><span class="line"><span class="number">59</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 25 至 37 行：将&nbsp;<code>urls</code>&nbsp;按照&nbsp;<code>url.parameter.category</code>&nbsp;分类，添加到集合&nbsp;<code>result</code>&nbsp;中。
+<ul>
+<li>第 28 行：TODO 芋艿</li>
+<li>这里有一点要注意，每次传入的&nbsp;<code>urls</code>&nbsp;的&ldquo;<strong>全量</strong>&rdquo;，指的是至少要是<strong>一个分类</strong>的全量，而不一定是全部数据。</li>
+</ul>
+</li>
+<li>第 41 至 46 行：获得消费者 URL 对应的在&nbsp;<code>notified</code>&nbsp;中的数据。</li>
+<li>第 47 至 58 行：按照<strong>分类</strong>，循环处理通知的 URL 变化结果（全量数据）。
+<ul>
+<li>第 51 至 53 行：将&nbsp;<code>result</code>&nbsp;覆盖到&nbsp;<code>notified</code>&nbsp;中。这里又有一点需要注意，当某个分类的数据为空时，会依然有&nbsp;<code>urls</code>&nbsp;。其中&nbsp;<code>urls[0].protocol = empty</code>&nbsp;，通过这样的方式，处理<strong>所有服务提供者为空</strong>的情况。</li>
+<li>第 55 行：调用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/06155d670fd1331fa1d2f41f7050338f9e9502c5/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistry.java#L539-L576" target="_blank" rel="external nofollow noopener noreferrer"><code>#saveProperties(url)</code></a>&nbsp;方法，保存到文件。
+<ul>
+<li>🙂 代码比较简单，点击链接查看。</li>
+</ul>
+</li>
+<li>第 57 行：调用&nbsp;<code>NotifyListener#notify(urls)</code>&nbsp;方法，通知监听器处理。例如，有新的服务提供者启动时，被通知，创建新的 Invoker 对象。</li>
+</ul>
+</li>
+</ul>
+<h3 id="3-2-5-recover">3.2.5 recover</h3>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/06155d670fd1331fa1d2f41f7050338f9e9502c5/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistry.java#L418-L447" target="_blank" rel="external nofollow noopener noreferrer"><code>#recover()</code></a>
+<ul>
+<li>和&nbsp;<code>#register(url)</code>&nbsp;的<strong>处理方式</strong>相同。</li>
+</ul>
+</li>
+</ul>
+<p>在注册中心断开，重连成功，调用&nbsp;<code>#recover()</code>&nbsp;方法，进行恢复注册和订阅。</p>
+<h3 id="3-2-6-destroy">3.2.6 destroy</h3>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/06155d670fd1331fa1d2f41f7050338f9e9502c5/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistry.java#L578-L622" target="_blank" rel="external nofollow noopener noreferrer"><code>#destroy()</code></a>
+<ul>
+<li>和&nbsp;<code>#register(url)</code>&nbsp;的<strong>处理方式</strong>相同。</li>
+</ul>
+</li>
+</ul>
+<p>在 JVM 关闭时，调用&nbsp;<code>#destroy()</code>&nbsp;方法，进行取消注册和订阅。</p>
+<h2 id="3-3-FailbackRegistry">3.3 FailbackRegistry</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/414a4799cef08f0b5263d838eeaf8d8f169f2cdc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/AbstractRegistry.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.support.FailbackRegistry</code></a>&nbsp;，实现 AbstractRegistry 抽象类，支持失败重试的 Registry 抽象类。</p>
+<p>在上文中的代码中，我们可以看到，AbstractRegistry 进行的注册、订阅等操作，更多的是修改状态，而无和注册中心实际的操作。FailbackRegistry 在 AbstractRegistry 的基础上，实现了和注册中心实际的操作，并且支持失败重试的特性。</p>
+<h3 id="3-3-1-属性">3.3.1 属性</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 定时任务执行器</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: <span class="comment">// Scheduled executor service</span></span><br /><span class="line"> <span class="number">5</span>: <span class="keyword">private</span> <span class="keyword">final</span> ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(<span class="number">1</span>, <span class="keyword">new</span> NamedThreadFactory(<span class="string">"DubboRegistryFailedRetryTimer"</span>, <span class="keyword">true</span>));</span><br /><span class="line"> <span class="number">6</span>: </span><br /><span class="line"> <span class="number">7</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 8:  * 失败重试定时器，定时检查是否有请求失败，如有，无限次重试</span></span><br /><span class="line"><span class="comment"> 9:  */</span></span><br /><span class="line"><span class="number">10</span>: <span class="comment">// Timer for failure retry, regular check if there is a request for failure, and if there is, an unlimited retry</span></span><br /><span class="line"><span class="number">11</span>: <span class="keyword">private</span> <span class="keyword">final</span> ScheduledFuture&lt;?&gt; retryFuture;</span><br /><span class="line"><span class="number">12</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">13:  * 失败发起注册失败的 URL 集合</span></span><br /><span class="line"><span class="comment">14:  */</span></span><br /><span class="line"><span class="number">15</span>: <span class="keyword">private</span> <span class="keyword">final</span> Set&lt;URL&gt; failedRegistered = <span class="keyword">new</span> ConcurrentHashSet&lt;URL&gt;();</span><br /><span class="line"><span class="number">16</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">17:  * 失败取消注册失败的 URL 集合</span></span><br /><span class="line"><span class="comment">18:  */</span></span><br /><span class="line"><span class="number">19</span>: <span class="keyword">private</span> <span class="keyword">final</span> Set&lt;URL&gt; failedUnregistered = <span class="keyword">new</span> ConcurrentHashSet&lt;URL&gt;();</span><br /><span class="line"><span class="number">20</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">21:  * 失败发起订阅失败的监听器集合</span></span><br /><span class="line"><span class="comment">22:  */</span></span><br /><span class="line"><span class="number">23</span>: <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;URL, Set&lt;NotifyListener&gt;&gt; failedSubscribed = <span class="keyword">new</span> ConcurrentHashMap&lt;URL, Set&lt;NotifyListener&gt;&gt;();</span><br /><span class="line"><span class="number">24</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">25:  * 失败取消订阅失败的监听器集合</span></span><br /><span class="line"><span class="comment">26:  */</span></span><br /><span class="line"><span class="number">27</span>: <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;URL, Set&lt;NotifyListener&gt;&gt; failedUnsubscribed = <span class="keyword">new</span> ConcurrentHashMap&lt;URL, Set&lt;NotifyListener&gt;&gt;();</span><br /><span class="line"><span class="number">28</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">29:  * 失败通知通知的 URL 集合</span></span><br /><span class="line"><span class="comment">30:  */</span></span><br /><span class="line"><span class="number">31</span>: <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;URL, Map&lt;NotifyListener, List&lt;URL&gt;&gt;&gt; failedNotified = <span class="keyword">new</span> ConcurrentHashMap&lt;URL, Map&lt;NotifyListener, List&lt;URL&gt;&gt;&gt;();</span><br /><span class="line"><span class="number">32</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">33:  * 是否销毁</span></span><br /><span class="line"><span class="comment">34:  */</span></span><br /><span class="line"><span class="number">35</span>: <span class="keyword">private</span> AtomicBoolean destroyed = <span class="keyword">new</span> AtomicBoolean(<span class="keyword">false</span>);</span><br /><span class="line"><span class="number">36</span>: </span><br /><span class="line"><span class="number">37</span>: <span class="function"><span class="keyword">public</span> <span class="title">FailbackRegistry</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line"><span class="number">38</span>:     <span class="keyword">super</span>(url);</span><br /><span class="line"><span class="number">39</span>:     <span class="comment">// 重试频率，单位：毫秒</span></span><br /><span class="line"><span class="number">40</span>:     <span class="keyword">int</span> retryPeriod = url.getParameter(Constants.REGISTRY_RETRY_PERIOD_KEY, Constants.DEFAULT_REGISTRY_RETRY_PERIOD);</span><br /><span class="line"><span class="number">41</span>:     <span class="comment">// 创建失败重试定时器</span></span><br /><span class="line"><span class="number">42</span>:     <span class="keyword">this</span>.retryFuture = retryExecutor.scheduleWithFixedDelay(<span class="keyword">new</span> Runnable() {</span><br /><span class="line"><span class="number">43</span>:         <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>{</span><br /><span class="line"><span class="number">44</span>:             <span class="comment">// Check and connect to the registry</span></span><br /><span class="line"><span class="number">45</span>:             <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">46</span>:                 retry();</span><br /><span class="line"><span class="number">47</span>:             } <span class="keyword">catch</span> (Throwable t) { <span class="comment">// Defensive fault tolerance</span></span><br /><span class="line"><span class="number">48</span>:                 logger.error(<span class="string">"Unexpected error occur at failed retry, cause: "</span> + t.getMessage(), t);</span><br /><span class="line"><span class="number">49</span>:             }</span><br /><span class="line"><span class="number">50</span>:         }</span><br /><span class="line"><span class="number">51</span>:     }, retryPeriod, retryPeriod, TimeUnit.MILLISECONDS);</span><br /><span class="line"><span class="number">52</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>retryExecutor</code>&nbsp;属性，<em>见代码注释</em>。</li>
+<li><code>retryFuture</code>&nbsp;属性，<em>见代码注释</em>。
+<ul>
+<li>第 41 至 51 行，在构造方法中创建该定时器，在其&nbsp;<code>#run()</code>&nbsp;方法中，会调用&nbsp;<code>#retry()</code>&nbsp;方法，进行重试。</li>
+</ul>
+</li>
+<li><code>failedXXX</code>&nbsp;属性，<em>见代码注释</em>。
+<ul>
+<li>每种操作都有一个记录失败的集合。</li>
+</ul>
+</li>
+<li><code>destroyed</code>&nbsp;属性，<em>见代码注释</em>。</li>
+</ul>
+<h3 id="3-3-2-register-amp-amp-unregister">3.3.2 register &amp;&amp; unregister</h3>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/414a4799cef08f0b5263d838eeaf8d8f169f2cdc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/FailbackRegistry.java#L162-L199" target="_blank" rel="external nofollow noopener noreferrer"><code>#register(url)</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/414a4799cef08f0b5263d838eeaf8d8f169f2cdc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/FailbackRegistry.java#L201-L238" target="_blank" rel="external nofollow noopener noreferrer"><code>#unregister(url)</code></a></li>
+</ul>
+<blockquote>
+<p>代码比较易懂，点击链接查看。</p>
+</blockquote>
+<h3 id="3-3-3-subscribe-amp-amp-unsubscribe">3.3.3 subscribe &amp;&amp; unsubscribe</h3>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/414a4799cef08f0b5263d838eeaf8d8f169f2cdc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/FailbackRegistry.java#L240-L282" target="_blank" rel="external nofollow noopener noreferrer"><code>#subscribe(url, listener)</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/414a4799cef08f0b5263d838eeaf8d8f169f2cdc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/FailbackRegistry.java#L284-L324" target="_blank" rel="external nofollow noopener noreferrer"><code>#unsubscribe(url, listener)</code></a></li>
+</ul>
+<blockquote>
+<p>代码比较易懂，点击链接查看。</p>
+</blockquote>
+<h3 id="3-3-4-notify">3.3.4 notify</h3>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/414a4799cef08f0b5263d838eeaf8d8f169f2cdc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/FailbackRegistry.java#L326-L352" target="_blank" rel="external nofollow noopener noreferrer"><code>#notify(url, listener, url)</code></a></li>
+</ul>
+<blockquote>
+<p>代码比较易懂，点击链接查看。</p>
+</blockquote>
+<h3 id="3-3-5-recover">3.3.5 recover</h3>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/414a4799cef08f0b5263d838eeaf8d8f169f2cdc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/FailbackRegistry.java#L354-L379" target="_blank" rel="external nofollow noopener noreferrer"><code>#recover()</code></a>&nbsp;方法，<strong>完全覆盖父类方法</strong>( 即不像前面几个方法，会调用父类的方法 )，将需要注册和订阅的 URL 添加到&nbsp;<code>failedRegistered</code>&nbsp;<code>failedSubscribed</code>&nbsp;属性中。这样，在&nbsp;<code>#retry()</code>&nbsp;方法中，会重试进行连接。</li>
+</ul>
+<blockquote>
+<p>代码比较易懂，点击链接查看。</p>
+</blockquote>
+<h3 id="3-3-6-retry">3.3.6 retry</h3>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/414a4799cef08f0b5263d838eeaf8d8f169f2cdc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/FailbackRegistry.java#L381-L528" target="_blank" rel="external nofollow noopener noreferrer"><code>#retry()</code></a>&nbsp;方法，遍历五个&nbsp;<code>failedXXX</code>&nbsp;属性，重试对应的操作。</li>
+</ul>
+<blockquote>
+<p>代码比较易懂，点击链接查看。</p>
+</blockquote>
+<h3 id="3-3-7-destroy">3.3.7 destroy</h3>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/414a4799cef08f0b5263d838eeaf8d8f169f2cdc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/FailbackRegistry.java#L530-L541" target="_blank" rel="external nofollow noopener noreferrer"><code>#destroy()</code></a>&nbsp;方法，取消注册和订阅，并关闭定时器。</li>
+</ul>
+<blockquote>
+<p>代码比较易懂，点击链接查看。</p>
+</blockquote>
+<h1 id="4-NotifyListener">4. NotifyListener</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/da5ebc2737d560dc0fe308793780695c6afc5fda/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/NotifyListener.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.NotifyListener</code></a>&nbsp;，通知监听器。当收到服务变更通知时触发，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">NotifyListener</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 当收到服务变更通知时触发。</span></span><br /><span class="line"><span class="comment">     * &lt;p&gt;</span></span><br /><span class="line"><span class="comment">     * 通知需处理契约：&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 1. 总是以服务接口和数据类型为维度全量通知，即不会通知一个服务的同类型的部分数据，用户不需要对比上一次通知结果。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 2. 订阅时的第一次通知，必须是一个服务的所有类型数据的全量通知。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 3. 中途变更时，允许不同类型的数据分开通知，比如：providers, consumers, routers, overrides，允许只通知其中一种类型，但该类型的数据必须是全量的，不是增量的。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 4. 如果一种类型的数据为空，需通知一个empty协议并带category参数的标识性URL数据。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 5. 通知者(即注册中心实现)需保证通知的顺序，比如：单线程推送，队列串行化，带版本对比。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> urls 已注册信息列表，总不为空，含义同{<span class="doctag">@link</span> com.alibaba.dubbo.registry.RegistryService#lookup(URL)}的返回值。</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">notify</span><span class="params">(List&lt;URL&gt; urls)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>注意看方法上的注释，特别是<strong>全量</strong>、<strong>分类</strong>、<strong>为空</strong>、<strong>顺序</strong>。</li>
+</ul>
+<p>NotifyListener 的子类如下图：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_08_01/02.png" alt="类图" /></p>
+<h1 id="5-ProviderConsumerRegTable">5. ProviderConsumerRegTable</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/ProviderConsumerRegTable.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.support.ProviderConsumerRegTable</code></a>&nbsp;，服务提供者和消费者注册表，存储 JVM 进程内<strong>自己</strong>的服务提供者和消费者的 Invoker 。</p>
+<p>该信息用于&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/qos.html" target="_blank" rel="external nofollow noopener noreferrer">Dubbo QOS</a>&nbsp;使用，例如将 JVM 进程中，<strong>自己</strong>的服务提供者下线，又或者查询自己的服务提供者和消费者列表。</p>
+<ul>
+<li><a href="http://dubbo.apache.org/zh-cn/docs/user/references/qos.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 在线运维命令 - QOS》</a></li>
+<li>后续会有文章分享 QOS ，本文不多啰嗦。</li>
+</ul>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ProviderConsumerRegTable</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 服务提供者 Invoker 集合</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * key：服务提供者 URL 服务键</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> ConcurrentHashMap&lt;String, Set&lt;ProviderInvokerWrapper&gt;&gt; providerInvokers = <span class="keyword">new</span> ConcurrentHashMap&lt;String, Set&lt;ProviderInvokerWrapper&gt;&gt;();</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 服务消费者 Invoker 集合</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * key：服务消费者 URL 服务键</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> ConcurrentHashMap&lt;String, Set&lt;ConsumerInvokerWrapper&gt;&gt; consumerInvokers = <span class="keyword">new</span> ConcurrentHashMap&lt;String, Set&lt;ConsumerInvokerWrapper&gt;&gt;();</span><br />    <br /><span class="line">    <span class="comment">// .... 省略方法</span></span><br />    <br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>如下方法，已经添加代码注释，胖友点击查看。</li>
+<li>服务提供者
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/ProviderConsumerRegTable.java#L51-L70" target="_blank" rel="external nofollow noopener noreferrer"><code>#registerProvider(invoker, registryUrl, providerUrl)</code></a>&nbsp;静态方法，注册 Provider Invoker 。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/ProviderConsumerRegTable.java#L72-L84" target="_blank" rel="external nofollow noopener noreferrer"><code>#getProviderInvoker(serviceUniqueName)</code></a>&nbsp;静态静态，获得指定服务键的 Provider Invoker 集合。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/ProviderConsumerRegTable.java#L86-L112" target="_blank" rel="external nofollow noopener noreferrer"><code>#getProviderWrapper(invoker)</code></a>&nbsp;静态方法，获得服务提供者对应的 Invoker Wrapper 对象。</li>
+</ul>
+</li>
+<li>服务消费者
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/ProviderConsumerRegTable.java#L114-L134" target="_blank" rel="external nofollow noopener noreferrer"><code>#registerConsumer(invoker, registryUrl, consumerUrl, registryDirectory)</code></a>&nbsp;静态方法，注册 Consumer Invoker 。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/ProviderConsumerRegTable.java#L136-L148" target="_blank" rel="external nofollow noopener noreferrer"><code>#getConsumerInvoker(serviceUniqueName)</code></a>&nbsp;静态方法，获得指定服务键的 Consumer Invoker 集合。</li>
+</ul>
+</li>
+</ul>
+<h2 id="5-1-ProviderInvokerWrapper">5.1 ProviderInvokerWrapper</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/ProviderInvokerWrapper.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.support.ProviderInvokerWrapper</code></a>&nbsp;，实现 Invoker 接口，服务提供者 Invoker Wrapper ，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Invoker 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Invoker&lt;T&gt; invoker;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 原始 URL</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> URL originUrl;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 注册中心 URL</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> URL registryUrl;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 服务提供者 URL</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> URL providerUrl;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 是否注册</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">boolean</span> isReg;</span><br />    <br /><span class="line"><span class="comment">// ... 省略方法</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>相比纯粹的 Invoker 对象，又多了运维命令需要的属性。例如&nbsp;<code>isReg</code>&nbsp;<strong>状态</strong>属性，可以在使用<strong>下线服务命令</strong>后，标记为&nbsp;<code>false</code>&nbsp;。想提前深入了解的胖友，可以看下&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-plugin/dubbo-qos/src/main/java/com/alibaba/dubbo/qos/command/impl/Online.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.qos.command.impl.Offline</code></a>&nbsp;和&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-plugin/dubbo-qos/src/main/java/com/alibaba/dubbo/qos/command/impl/Online.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.qos.command.impl.Online</code></a>&nbsp;类。</li>
+</ul>
+<h2 id="5-2-ConsumerInvokerWrapper">5.2 ConsumerInvokerWrapper</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/support/ConsumerInvokerWrapper.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.support.ConsumerInvokerWrapper</code></a>&nbsp;，实现 Invoker 接口，服务消费者 Invoker Wrapper ，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Invoker 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Invoker&lt;T&gt; invoker;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 原始 URL</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> URL originUrl;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 注册中心 URL</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> URL registryUrl;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 消费者 URL</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> URL consumerUrl;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 注册中心 Directory</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> RegistryDirectory registryDirectory;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>相比纯粹的 Invoker 对象，又多了运维命令需要的属性。例如&nbsp;<code>registryDirectory</code>&nbsp;属性，可以在使用<strong>列出消费者和提供者命令</strong>后，输出可消费者<strong>可调用</strong>的服务提供者数量 。想提前深入了解的胖友，可以看下&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/703764e6e82a72ddca7401c9302781e69c453f8e/dubbo-plugin/dubbo-qos/src/main/java/com/alibaba/dubbo/qos/command/impl/Ls.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.qos.command.impl.Ls</code></a>&nbsp;类。</li>
+</ul>
+<h1 id="5-integration">5. integration</h1>
+<p>不同于上面我们看到的代码，<a href="https://github.com/YunaiV/dubbo/tree/414a4799cef08f0b5263d838eeaf8d8f169f2cdc/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/integration" target="_blank" rel="external nofollow noopener noreferrer"><code>integration</code></a>&nbsp;包下是对其他 Dubbo 模块的集成：</p>
+<ul>
+<li>RegistryProtocol ，对&nbsp;<code>dubbo-rpc-api</code>&nbsp;的依赖集成。</li>
+<li>RegistryDirectory ，对&nbsp;<code>dubbo-cluster</code>&nbsp;的依赖集成。</li>
+</ul>
+<p>考虑到超出了本文的范畴，后面涉及到时，单独分享。</p>
+</div>

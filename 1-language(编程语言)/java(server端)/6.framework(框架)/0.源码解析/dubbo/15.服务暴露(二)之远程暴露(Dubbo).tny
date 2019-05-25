@@ -1,0 +1,518 @@
+<header class="article-header">
+<h1 class="article-title">服务暴露（二）之远程暴露（Dubbo）</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务暴露（一）之本地暴露（Injvm）》</a>&nbsp;一文中，我们已经分享了<strong>本地暴露服务</strong>。在本文中，我们来分享<strong>远程暴露服务</strong>。在 Dubbo 中提供多种协议( Protocol ) 的实现，大体流程一致，本文以&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/dubbo.html" target="_blank" rel="external nofollow noopener noreferrer">Dubbo Protocol</a>&nbsp;为例子，这也是 Dubbo 的<strong>默认</strong>协议。</p>
+<p>如果不熟悉该协议的同学，可以先看看&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/dubbo.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 使用指南 &mdash;&mdash; dubbo://》</a>&nbsp;，简单了解即可。</p>
+<blockquote>
+<p><strong>特性</strong></p>
+<p>缺省协议，使用基于 mina&nbsp;<code>1.1.7</code>&nbsp;和 hessian&nbsp;<code>3.2.1</code>&nbsp;的 remoting 交互。</p>
+<ul>
+<li>连接个数：单连接</li>
+<li>连接方式：长连接</li>
+<li>传输协议：TCP</li>
+<li>传输方式：NIO 异步传输</li>
+<li>序列化：Hessian 二进制序列化</li>
+<li>适用范围：传入传出参数数据包较小（建议小于100K），消费者比提供者个数多，单一消费者无法压满提供者，尽量不要用 dubbo 协议传输大文件或超大字符串。</li>
+<li>适用场景：常规远程服务方法调用</li>
+</ul>
+</blockquote>
+<p>相比<strong>本地暴露</strong>，<strong>远程暴露</strong>会多做如下几件事情：</p>
+<ul>
+<li>启动通信服务器，绑定服务端口，提供远程调用。</li>
+<li>向注册中心注册服务提供者，提供服务消费者从注册中心发现服务。</li>
+</ul>
+<h1 id="2-远程暴露">2. 远程暴露</h1>
+<p>远程暴露服务的顺序图如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_10/02.png" alt="远程暴露顺序图" /></p>
+<p>在&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/c635dd1990a1803643194048f408db310f06175b/dubbo-config/dubbo-config-api/src/main/java/com/alibaba/dubbo/config/ServiceConfig.java#L621-L648" target="_blank" rel="external nofollow noopener noreferrer"><code>#doExportUrlsFor1Protocol(protocolConfig, registryURLs)</code></a>&nbsp;方法中，涉及<strong>远程暴露服务</strong>的代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">// 服务远程暴露</span></span><br /><span class="line"> <span class="number">2</span>: <span class="comment">// export to remote if the config is not local (export to local only when config is local)</span></span><br /><span class="line"> <span class="number">3</span>: <span class="keyword">if</span> (!Constants.SCOPE_LOCAL.toString().equalsIgnoreCase(scope)) {</span><br /><span class="line"> <span class="number">4</span>:     <span class="keyword">if</span> (logger.isInfoEnabled()) {</span><br /><span class="line"> <span class="number">5</span>:         logger.info(<span class="string">"Export dubbo service "</span> + interfaceClass.getName() + <span class="string">" to url "</span> + url);</span><br /><span class="line"> <span class="number">6</span>:     }</span><br /><span class="line"> <span class="number">7</span>:     <span class="keyword">if</span> (registryURLs != <span class="keyword">null</span> &amp;&amp; !registryURLs.isEmpty()) {</span><br /><span class="line"> <span class="number">8</span>:         <span class="keyword">for</span> (URL registryURL : registryURLs) {</span><br /><span class="line"> <span class="number">9</span>:             <span class="comment">// "dynamic" ：服务是否动态注册，如果设为false，注册后将显示后disable状态，需人工启用，并且服务提供者停止时，也不会自动取消册，需人工禁用。</span></span><br /><span class="line"><span class="number">10</span>:             url = url.addParameterIfAbsent(<span class="string">"dynamic"</span>, registryURL.getParameter(<span class="string">"dynamic"</span>));</span><br /><span class="line"><span class="number">11</span>:             <span class="comment">// 获得监控中心 URL</span></span><br /><span class="line"><span class="number">12</span>:             URL monitorUrl = loadMonitor(registryURL); <span class="comment">// TODO 芋艿，监控</span></span><br /><span class="line"><span class="number">13</span>:             <span class="keyword">if</span> (monitorUrl != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">14</span>:                 url = url.addParameterAndEncoded(Constants.MONITOR_KEY, monitorUrl.toFullString());</span><br /><span class="line"><span class="number">15</span>:             }</span><br /><span class="line"><span class="number">16</span>:             <span class="keyword">if</span> (logger.isInfoEnabled()) {</span><br /><span class="line"><span class="number">17</span>:                 logger.info(<span class="string">"Register dubbo service "</span> + interfaceClass.getName() + <span class="string">" url "</span> + url + <span class="string">" to registry "</span> + registryURL);</span><br /><span class="line"><span class="number">18</span>:             }</span><br /><span class="line"><span class="number">19</span>:             <span class="comment">// 使用 ProxyFactory 创建 Invoker 对象</span></span><br /><span class="line"><span class="number">20</span>:             Invoker&lt;?&gt; invoker = proxyFactory.getInvoker(ref, (Class) interfaceClass, registryURL.addParameterAndEncoded(Constants.EXPORT_KEY, url.toFullString()));</span><br /><span class="line"><span class="number">21</span>: </span><br /><span class="line"><span class="number">22</span>:             <span class="comment">// 创建 DelegateProviderMetaDataInvoker 对象</span></span><br /><span class="line"><span class="number">23</span>:             DelegateProviderMetaDataInvoker wrapperInvoker = <span class="keyword">new</span> DelegateProviderMetaDataInvoker(invoker, <span class="keyword">this</span>);</span><br /><span class="line"><span class="number">24</span>: </span><br /><span class="line"><span class="number">25</span>:             <span class="comment">// 使用 Protocol 暴露 Invoker 对象</span></span><br /><span class="line"><span class="number">26</span>:             Exporter&lt;?&gt; exporter = protocol.export(wrapperInvoker);</span><br /><span class="line"><span class="number">27</span>:             <span class="comment">// 添加到 `exporters`</span></span><br /><span class="line"><span class="number">28</span>:             exporters.add(exporter);</span><br /><span class="line"><span class="number">29</span>:         }</span><br /><span class="line"><span class="number">30</span>:     } <span class="keyword">else</span> { <span class="comment">// 用于被服务消费者直连服务提供者，参见文档 http://dubbo.apache.org/zh-cn/docs/user/demos/explicit-target.html 。主要用于开发测试环境使用。</span></span><br /><span class="line"><span class="number">31</span>:         <span class="comment">// 使用 ProxyFactory 创建 Invoker 对象</span></span><br /><span class="line"><span class="number">32</span>:         Invoker&lt;?&gt; invoker = proxyFactory.getInvoker(ref, (Class) interfaceClass, url);</span><br /><span class="line"><span class="number">33</span>: </span><br /><span class="line"><span class="number">34</span>:         <span class="comment">// 创建 DelegateProviderMetaDataInvoker 对象</span></span><br /><span class="line"><span class="number">35</span>:         DelegateProviderMetaDataInvoker wrapperInvoker = <span class="keyword">new</span> DelegateProviderMetaDataInvoker(invoker, <span class="keyword">this</span>);</span><br /><span class="line"><span class="number">36</span>: </span><br /><span class="line"><span class="number">37</span>:         <span class="comment">// 使用 Protocol 暴露 Invoker 对象</span></span><br /><span class="line"><span class="number">38</span>:         Exporter&lt;?&gt; exporter = protocol.export(wrapperInvoker);</span><br /><span class="line"><span class="number">39</span>:         <span class="comment">// 添加到 `exporters`</span></span><br /><span class="line"><span class="number">40</span>:         exporters.add(exporter);</span><br /><span class="line"><span class="number">41</span>:     }</span><br /><span class="line"><span class="number">42</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 30 至 41 行：<strong>大体和【第 7 至 29 行】逻辑相同</strong>。差别在于，当配置注册中心为&nbsp;<code>"N/A"</code>&nbsp;时，表示即使远程暴露服务，也不向注册中心注册。这种方式用于被服务消费者直连服务提供者，参见&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/explicit-target.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 直连提供者》</a>&nbsp;文档。</p>
+<blockquote>
+<p>在<strong>开发及测试环境下</strong>，经常需要绕过注册中心，只测试指定服务提供者，这时候可能需要点对点直连，点对点直联方式，将以服务接口为单位，忽略注册中心的提供者列表，A 接口配置点对点，不影响 B 接口从注册中心获取列表。</p>
+</blockquote>
+</li>
+<li>
+<p>第 8 行：循环祖册中心 URL 数组&nbsp;<code>registryURLs</code>&nbsp;。</p>
+</li>
+<li>第 10 行：<code>"dynamic"</code>&nbsp;配置项，服务是否动态注册。如果设为&nbsp;<strong>false</strong>&nbsp;，注册后将显示后&nbsp;<strong>disable</strong>&nbsp;状态，需人工启用，并且服务提供者停止时，也不会自动取消册，需人工禁用。</li>
+<li>第 12 行：调用&nbsp;<code>#loadMonitor(registryURL)</code>&nbsp;方法，获得监控中心 URL 。
+<ul>
+<li>🙂 在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-remote-dubbo/">「2.1 loadMonitor」</a>&nbsp;小节，详细解析。</li>
+</ul>
+</li>
+<li>第 13 至 15 行：调用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/c635dd1990a1803643194048f408db310f06175b/dubbo-common/src/main/java/com/alibaba/dubbo/common/URL.java#L891-L896" target="_blank" rel="external nofollow noopener noreferrer"><code>URL#addParameterAndEncoded(key, value)</code></a>&nbsp;方法，将监控中心的 URL 作为&nbsp;<code>"monitor"</code>&nbsp;参数添加到服务提供者的 URL 中，<strong>并且需要编码</strong>。通过这样的方式，服务提供者的 URL 中，<strong>包含了监控中心的配置</strong>。</li>
+<li>第 20 行：调用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/c635dd1990a1803643194048f408db310f06175b/dubbo-common/src/main/java/com/alibaba/dubbo/common/URL.java#L891-L896" target="_blank" rel="external nofollow noopener noreferrer"><code>URL#addParameterAndEncoded(key, value)</code></a>&nbsp;方法，将服务体用这的 URL 作为&nbsp;<code>"export"</code>&nbsp;参数添加到注册中心的 URL 中。通过这样的方式，注册中心的 URL 中，<strong>包含了服务提供者的配置</strong>。</li>
+<li>第 20 行：调用&nbsp;<code>ProxyFactory#getInvoker(proxy, type, url)</code>&nbsp;方法，创建 Invoker 对象。该 Invoker 对象，执行&nbsp;<code>#invoke(invocation)</code>&nbsp;方法时，内部会调用 Service 对象(&nbsp;<code>ref</code>&nbsp;)对应的调用方法。
+<ul>
+<li>🙂 详细的实现，后面单独写文章分享。</li>
+<li>😈 为什么传递的是<strong>注册中心的 URL</strong>&nbsp;呢？下文会详细解析。</li>
+</ul>
+</li>
+<li>第 23 行：创建&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/c635dd1990a1803643194048f408db310f06175b/dubbo-config/dubbo-config-api/src/main/java/com/alibaba/dubbo/config/invoker/DelegateProviderMetaDataInvoker.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.config.invoker.DelegateProviderMetaDataInvoker</code></a>&nbsp;对象。该对象在 Invoker 对象的基础上，增加了当前服务提供者 ServiceConfig 对象。</li>
+<li>
+<p>第 26 行：调用&nbsp;<code>Protocol#export(invoker)</code>&nbsp;方法，暴露服务。</p>
+<ul>
+<li>此处 Dubbo SPI&nbsp;<strong>自适应</strong>的特性的<strong>好处</strong>就出来了，可以<strong>自动</strong>根据 URL 参数，获得对应的拓展实现。例如，<code>invoker</code>传入后，根据&nbsp;<code>invoker.url</code>&nbsp;自动获得对应 Protocol 拓展实现为 DubboProtocol 。</li>
+<li>
+<p>实际上，Protocol 有两个 Wrapper 拓展实现类： ProtocolFilterWrapper、ProtocolListenerWrapper 。所以，<code>#export(...)</code>&nbsp;方法的调用顺序是：</p>
+<ul>
+<li><strong>Protocol$Adaptive =&gt; ProtocolFilterWrapper =&gt; ProtocolListenerWrapper =&gt; RegistryProtocol</strong></li>
+<li>=&gt;</li>
+<li><strong>Protocol$Adaptive =&gt; ProtocolFilterWrapper =&gt; ProtocolListenerWrapper =&gt; DubboProtocol</strong></li>
+<li>也就是说，<strong>这一条大的调用链，包含两条小的调用链</strong>。原因是：
+<ul>
+<li>首先，传入的是注册中心的 URL ，通过 Protocol$Adaptive 获取到的是 RegistryProtocol 对象。</li>
+<li>其次，RegistryProtocol 会在其&nbsp;<code>#export(...)</code>&nbsp;方法中，使用服务提供者的 URL ( 即注册中心的 URL 的&nbsp;<code>export</code>&nbsp;参数值)，再次调用 Protocol$Adaptive 获取到的是 DubboProtocol 对象，进行服务暴露。</li>
+</ul>
+</li>
+<li>
+<p><strong>为什么是这样的顺序</strong>？通过这样的顺序，可以实现类似&nbsp;<strong>AOP</strong>&nbsp;的效果，在本地服务器启动完成后，再向注册中心注册。伪代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">RegistryProtocol#export(...) {</span><br />    <br /><span class="line">    <span class="comment">// 1. 启动本地服务器</span></span><br /><span class="line">    DubboProtocol#export(...);</span><br />    <br /><span class="line">    <span class="comment">// 2. 向注册中心注册。 </span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>这也是为什么上文提到的 &ldquo;为什么传递的是<strong>注册中心的 URL</strong>&nbsp;呢？&rdquo; 的原因。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>🙂 如果无法理解，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-remote-dubbo/">「3. Protocol」</a>&nbsp;在解析代码，进一步理顺。</li>
+</ul>
+</li>
+<li>第 28 行：添加到&nbsp;<code>exporters</code>&nbsp;集合中。</li>
+</ul>
+<h2 id="2-1-loadMonitor">2.1 loadMonitor</h2>
+<blockquote>
+<p>友情提示，监控中心不是本文的重点，简单分享下该方法的逻辑。<br />可直接跳过。</p>
+</blockquote>
+<p><code>#loadMonitor(registryURL)</code>&nbsp;方法，加载监控中心&nbsp;<code>com.alibaba.dubbo.common.URL</code>&nbsp;数组。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 加载监控中心 URL</span></span><br /><span class="line"><span class="comment"> 3:  *</span></span><br /><span class="line"><span class="comment"> 4:  * <span class="doctag">@param</span> registryURL 注册中心 URL</span></span><br /><span class="line"><span class="comment"> 5:  * <span class="doctag">@return</span> 监控中心 URL</span></span><br /><span class="line"><span class="comment"> 6:  */</span></span><br /><span class="line"> <span class="number">7</span>: <span class="function"><span class="keyword">protected</span> URL <span class="title">loadMonitor</span><span class="params">(URL registryURL)</span> </span>{</span><br /><span class="line"> <span class="number">8</span>:     <span class="comment">// 从 属性配置 中加载配置到 MonitorConfig 对象。</span></span><br /><span class="line"> <span class="number">9</span>:     <span class="keyword">if</span> (monitor == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">10</span>:         String monitorAddress = ConfigUtils.getProperty(<span class="string">"dubbo.monitor.address"</span>);</span><br /><span class="line"><span class="number">11</span>:         String monitorProtocol = ConfigUtils.getProperty(<span class="string">"dubbo.monitor.protocol"</span>);</span><br /><span class="line"><span class="number">12</span>:         <span class="keyword">if</span> ((monitorAddress == <span class="keyword">null</span> || monitorAddress.length() == <span class="number">0</span>) &amp;&amp; (monitorProtocol == <span class="keyword">null</span> || monitorProtocol.length() == <span class="number">0</span>)) {</span><br /><span class="line"><span class="number">13</span>:             <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line"><span class="number">14</span>:         }</span><br /><span class="line"><span class="number">15</span>: </span><br /><span class="line"><span class="number">16</span>:         monitor = <span class="keyword">new</span> MonitorConfig();</span><br /><span class="line"><span class="number">17</span>:         <span class="keyword">if</span> (monitorAddress != <span class="keyword">null</span> &amp;&amp; monitorAddress.length() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">18</span>:             monitor.setAddress(monitorAddress);</span><br /><span class="line"><span class="number">19</span>:         }</span><br /><span class="line"><span class="number">20</span>:         <span class="keyword">if</span> (monitorProtocol != <span class="keyword">null</span> &amp;&amp; monitorProtocol.length() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">21</span>:             monitor.setProtocol(monitorProtocol);</span><br /><span class="line"><span class="number">22</span>:         }</span><br /><span class="line"><span class="number">23</span>:     }</span><br /><span class="line"><span class="number">24</span>:     appendProperties(monitor);</span><br /><span class="line"><span class="number">25</span>:     <span class="comment">// 添加 `interface` `dubbo` `timestamp` `pid` 到 `map` 集合中</span></span><br /><span class="line"><span class="number">26</span>:     Map&lt;String, String&gt; map = <span class="keyword">new</span> HashMap&lt;String, String&gt;();</span><br /><span class="line"><span class="number">27</span>:     map.put(Constants.INTERFACE_KEY, MonitorService.class.getName());</span><br /><span class="line"><span class="number">28</span>:     map.put(<span class="string">"dubbo"</span>, Version.getVersion());</span><br /><span class="line"><span class="number">29</span>:     map.put(Constants.TIMESTAMP_KEY, String.valueOf(System.currentTimeMillis()));</span><br /><span class="line"><span class="number">30</span>:     <span class="keyword">if</span> (ConfigUtils.getPid() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">31</span>:         map.put(Constants.PID_KEY, String.valueOf(ConfigUtils.getPid()));</span><br /><span class="line"><span class="number">32</span>:     }</span><br /><span class="line"><span class="number">33</span>:     <span class="comment">// 将 MonitorConfig ，添加到 `map` 集合中。</span></span><br /><span class="line"><span class="number">34</span>:     appendParameters(map, monitor);</span><br /><span class="line"><span class="number">35</span>:     <span class="comment">// 获得地址</span></span><br /><span class="line"><span class="number">36</span>:     String address = monitor.getAddress();</span><br /><span class="line"><span class="number">37</span>:     String sysaddress = System.getProperty(<span class="string">"dubbo.monitor.address"</span>);</span><br /><span class="line"><span class="number">38</span>:     <span class="keyword">if</span> (sysaddress != <span class="keyword">null</span> &amp;&amp; sysaddress.length() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">39</span>:         address = sysaddress;</span><br /><span class="line"><span class="number">40</span>:     }</span><br /><span class="line"><span class="number">41</span>:     <span class="comment">// 直连监控中心服务器地址</span></span><br /><span class="line"><span class="number">42</span>:     <span class="keyword">if</span> (ConfigUtils.isNotEmpty(address)) {</span><br /><span class="line"><span class="number">43</span>:         <span class="comment">// 若不存在 `protocol` 参数，默认 "dubbo" 添加到 `map` 集合中。</span></span><br /><span class="line"><span class="number">44</span>:         <span class="keyword">if</span> (!map.containsKey(Constants.PROTOCOL_KEY)) {</span><br /><span class="line"><span class="number">45</span>:             <span class="keyword">if</span> (ExtensionLoader.getExtensionLoader(MonitorFactory.class).hasExtension(<span class="string">"logstat"</span>)) {</span><br /><span class="line"><span class="number">46</span>:                 map.put(Constants.PROTOCOL_KEY, <span class="string">"logstat"</span>);</span><br /><span class="line"><span class="number">47</span>:             } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">48</span>:                 map.put(Constants.PROTOCOL_KEY, <span class="string">"dubbo"</span>);</span><br /><span class="line"><span class="number">49</span>:             }</span><br /><span class="line"><span class="number">50</span>:         }</span><br /><span class="line"><span class="number">51</span>:         <span class="comment">// 解析地址，创建 Dubbo URL 对象。</span></span><br /><span class="line"><span class="number">52</span>:         <span class="keyword">return</span> UrlUtils.parseURL(address, map);</span><br /><span class="line"><span class="number">53</span>:     <span class="comment">// 从注册中心发现监控中心地址</span></span><br /><span class="line"><span class="number">54</span>:     } <span class="keyword">else</span> <span class="keyword">if</span> (Constants.REGISTRY_PROTOCOL.equals(monitor.getProtocol()) &amp;&amp; registryURL != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">55</span>:         <span class="keyword">return</span> registryURL.setProtocol(<span class="string">"dubbo"</span>).addParameter(Constants.PROTOCOL_KEY, <span class="string">"registry"</span>).addParameterAndEncoded(Constants.REFER_KEY, StringUtils.toQueryString(map));</span><br /><span class="line"><span class="number">56</span>:     }</span><br /><span class="line"><span class="number">57</span>:     <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line"><span class="number">58</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 8 至 24 行：从<strong>属性配置</strong>中，加载配置到 MonitorConfig 对象。</li>
+<li>第 25 至 32 行：添加&nbsp;<code>interface</code>&nbsp;<code>dubbo</code>&nbsp;<code>timestamp</code>&nbsp;<code>pid</code>&nbsp;到&nbsp;<code>map</code>&nbsp;集合中。</li>
+<li>第 34 行：调用&nbsp;<code>#appendParameters(map, config)</code>&nbsp;方法，将 MonitorConfig ，添加到&nbsp;<code>map</code>&nbsp;集合中。</li>
+<li>第 35 至 40 行：获得<strong>监控中心</strong>的地址。</li>
+<li>第 42 行：当&nbsp;<code>address</code>&nbsp;非空时，<strong>直连监控中心服务器地址的情况</strong>。
+<ul>
+<li>第 43 至 50 行：若不存在&nbsp;<code>protocol</code>&nbsp;参数，缺省默认为 &ldquo;dubbo&rdquo; ，并添加到&nbsp;<code>map</code>&nbsp;集合中。
+<ul>
+<li>第 44 至 55 行：<strong>可以忽略</strong>。因为，<code>logstat</code>&nbsp;这个拓展实现已经不存在。</li>
+</ul>
+</li>
+<li>第 52 行：调用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-common/src/main/java/com/alibaba/dubbo/common/utils/UrlUtils.java#L30-L145" target="_blank" rel="external nofollow noopener noreferrer"><code>UrlUtils#parseURL(address, map)</code></a>&nbsp;方法，解析&nbsp;<code>address</code>&nbsp;，创建 Dubbo URL 对象。
+<ul>
+<li>🙂 已经添加了代码注释，胖友点击链接查看。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>第 54 至 56 行：当&nbsp;<code>protocol = registry</code>&nbsp;时，并且注册中心 URL 非空时，<strong>从注册中心发现监控中心地址</strong>。以&nbsp;<code>registryURL</code>&nbsp;为基础，创建 URL ：
+<ul>
+<li><code>protocol = dubbo</code></li>
+<li><code>parameters.protocol = registry</code></li>
+<li><code>parameters.refer = map</code></li>
+</ul>
+</li>
+<li>第 57 行：<strong>无注册中心</strong>，返回空。</li>
+<li>ps ：后续会有文章，详细分享。</li>
+</ul>
+<h1 id="3-Protocol">3. Protocol</h1>
+<p>本文涉及的 Protocol 类图如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_10/04.png" alt="Protocol 类图" /></p>
+<h2 id="3-1-ProtocolFilterWrapper">3.1 ProtocolFilterWrapper</h2>
+<p>接&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务暴露（一）之本地暴露（Injvm）》「 3.2 ProtocolFilterWrapper」</a>小节。</p>
+<p><code>#export(invoker)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="number">1</span>: <span class="keyword">public</span> &lt;T&gt; <span class="function">Exporter&lt;T&gt; <span class="title">export</span><span class="params">(Invoker&lt;T&gt; invoker)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"><span class="number">2</span>:     <span class="comment">// 注册中心</span></span><br /><span class="line"><span class="number">3</span>:     <span class="keyword">if</span> (Constants.REGISTRY_PROTOCOL.equals(invoker.getUrl().getProtocol())) {</span><br /><span class="line"><span class="number">4</span>:         <span class="keyword">return</span> protocol.export(invoker);</span><br /><span class="line"><span class="number">5</span>:     }</span><br /><span class="line"><span class="number">6</span>:     <span class="comment">// 建立带有 Filter 过滤链的 Invoker ，再暴露服务。</span></span><br /><span class="line"><span class="number">7</span>:     <span class="keyword">return</span> protocol.export(buildInvokerChain(invoker, Constants.SERVICE_FILTER_KEY, Constants.PROVIDER));</span><br /><span class="line"><span class="number">8</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 2 至 5 行：当&nbsp;<code>invoker.url.protocl = registry</code>&nbsp;，<strong>注册中心的 URL</strong>&nbsp;，无需创建 Filter 过滤链。</li>
+<li>第 7 行：调用&nbsp;<code>#buildInvokerChain(invoker, key, group)</code>&nbsp;方法，创建带有 Filter 过滤链的 Invoker 对象。</li>
+<li>第 7 行：调用&nbsp;<code>protocol#export(invoker)</code>&nbsp;方法，继续暴露服务。</li>
+<li>在 RegistryProtocol 中，会调用&nbsp;<code>DubboProtocol#export(...)</code>&nbsp;方法时，会走【<strong>第 7 行</strong>】的流程。</li>
+</ul>
+<h2 id="3-2-RegistryProtocol">3.2 RegistryProtocol</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/integration/RegistryProtocol.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.integration.RegistryProtocol</code></a>&nbsp;，实现 Protocol 接口，注册中心协议实现类。</p>
+<h3 id="3-2-1-属性">3.2.1 属性</h3>
+<p>属性相关，代码如下：</p>
+<blockquote>
+<p>友情提示，仅包含本文涉及的属性。</p>
+</blockquote>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ... 省略部分和本文无关的属性。</span></span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 单例。在 Dubbo SPI 中，被初始化，有且仅有一次。</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> RegistryProtocol INSTANCE;</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 绑定关系集合。</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key：服务 Dubbo URL</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="comment">// To solve the problem of RMI repeated exposure port conflicts, the services that have been exposed are no longer exposed.</span></span><br /><span class="line"><span class="comment">// 用于解决rmi重复暴露端口冲突的问题，已经暴露过的服务不再重新暴露</span></span><br /><span class="line"><span class="comment">// providerurl &lt;--&gt; exporter</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, ExporterChangeableWrapper&lt;?&gt;&gt; bounds = <span class="keyword">new</span> ConcurrentHashMap&lt;String, ExporterChangeableWrapper&lt;?&gt;&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Protocol 自适应拓展实现类，通过 Dubbo SPI 自动注入。</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Protocol protocol;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * RegistryFactory 自适应拓展实现类，通过 Dubbo SPI 自动注入。</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> RegistryFactory registryFactory;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">RegistryProtocol</span><span class="params">()</span> </span>{</span><br /><span class="line">    INSTANCE = <span class="keyword">this</span>;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> RegistryProtocol <span class="title">getRegistryProtocol</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (INSTANCE == <span class="keyword">null</span>) {</span><br /><span class="line">        ExtensionLoader.getExtensionLoader(Protocol.class).getExtension(Constants.REGISTRY_PROTOCOL); <span class="comment">// load</span></span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> INSTANCE;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>INSTANCE</code>&nbsp;<strong>静态</strong>属性，单例。通过 Dubbo SPI 加载创建，有且仅有一次。
+<ul>
+<li><code>#getRegistryProtocol()</code>&nbsp;<strong>静态</strong>方法，获得单例。</li>
+</ul>
+</li>
+<li><code>bounds</code>&nbsp;属性，绑定关系集合。其中，Key 为<strong>服务提供者 URL</strong>&nbsp;。</li>
+<li><code>protocol</code>&nbsp;属性，Protocol 自适应拓展实现类，通过 Dubbo SPI 自动注入。</li>
+<li><code>registryFactory</code>&nbsp;属性，自适应拓展实现类，通过 Dubbo SPI 自动注入。
+<ul>
+<li>用于创建注册中心 Registry 对象。</li>
+</ul>
+</li>
+</ul>
+<h3 id="3-2-2-export">3.2.2 export</h3>
+<p>本文涉及的&nbsp;<code>#export(invoker)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="keyword">public</span> &lt;T&gt; <span class="function">Exporter&lt;T&gt; <span class="title">export</span><span class="params">(<span class="keyword">final</span> Invoker&lt;T&gt; originInvoker)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="comment">// 暴露服务</span></span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// export invoker</span></span><br /><span class="line"> <span class="number">4</span>:     <span class="keyword">final</span> ExporterChangeableWrapper&lt;T&gt; exporter = doLocalExport(originInvoker);</span><br /><span class="line"> <span class="number">5</span>: </span><br /><span class="line"> <span class="number">6</span>:     <span class="comment">// 获得注册中心 URL</span></span><br /><span class="line"> <span class="number">7</span>:     URL registryUrl = getRegistryUrl(originInvoker);</span><br /><span class="line"> <span class="number">8</span>: </span><br /><span class="line"> <span class="number">9</span>:     <span class="comment">// 获得注册中心对象</span></span><br /><span class="line"><span class="number">10</span>:     <span class="comment">// registry provider</span></span><br /><span class="line"><span class="number">11</span>:     <span class="keyword">final</span> Registry registry = getRegistry(originInvoker);</span><br /><span class="line"><span class="number">12</span>: </span><br /><span class="line"><span class="number">13</span>:     <span class="comment">// 获得服务提供者 URL</span></span><br /><span class="line"><span class="number">14</span>:     <span class="keyword">final</span> URL registedProviderUrl = getRegistedProviderUrl(originInvoker);</span><br /><span class="line"><span class="number">15</span>: </span><br /><span class="line"><span class="number">16</span>:     <span class="comment">//to judge to delay publish whether or not</span></span><br /><span class="line"><span class="number">17</span>:     <span class="keyword">boolean</span> register = registedProviderUrl.getParameter(<span class="string">"register"</span>, <span class="keyword">true</span>);</span><br /><span class="line"><span class="number">18</span>: </span><br /><span class="line"><span class="number">19</span>:     <span class="comment">// 向本地注册表，注册服务提供者</span></span><br /><span class="line"><span class="number">20</span>:     ProviderConsumerRegTable.registerProvider(originInvoker, registryUrl, registedProviderUrl);</span><br /><span class="line"><span class="number">21</span>: </span><br /><span class="line"><span class="number">22</span>:     <span class="comment">// 向注册中心注册服务提供者（自己）</span></span><br /><span class="line"><span class="number">23</span>:     <span class="keyword">if</span> (register) {</span><br /><span class="line"><span class="number">24</span>:         register(registryUrl, registedProviderUrl);</span><br /><span class="line"><span class="number">25</span>:         ProviderConsumerRegTable.getProviderWrapper(originInvoker).setReg(<span class="keyword">true</span>); <span class="comment">// 标记向本地注册表的注册服务提供者，已经注册</span></span><br /><span class="line"><span class="number">26</span>:     } </span><br /><span class="line"><span class="number">27</span>: </span><br /><span class="line"><span class="number">28</span>:     <span class="comment">// 使用 OverrideListener 对象，订阅配置规则</span></span><br /><span class="line"><span class="number">29</span>:     <span class="comment">// Subscribe the override data</span></span><br /><span class="line"><span class="number">30</span>:     <span class="comment">// FIXME When the provider subscribes, it will affect the scene : a certain JVM exposes the service and call the same service. Because the subscribed is cached key with the name of the service, it causes the subscription information to cover.</span></span><br /><span class="line"><span class="number">31</span>:     <span class="keyword">final</span> URL overrideSubscribeUrl = getSubscribedOverrideUrl(registedProviderUrl);</span><br /><span class="line"><span class="number">32</span>:     <span class="keyword">final</span> OverrideListener overrideSubscribeListener = <span class="keyword">new</span> OverrideListener(overrideSubscribeUrl, originInvoker);</span><br /><span class="line"><span class="number">33</span>:     overrideListeners.put(overrideSubscribeUrl, overrideSubscribeListener);</span><br /><span class="line"><span class="number">34</span>:     registry.subscribe(overrideSubscribeUrl, overrideSubscribeListener);</span><br /><span class="line"><span class="number">35</span>:     <span class="comment">//Ensure that a new exporter instance is returned every time export</span></span><br /><span class="line"><span class="number">36</span>:     <span class="keyword">return</span> <span class="keyword">new</span> DestroyableExporter&lt;T&gt;(exporter, originInvoker, overrideSubscribeUrl, registedProviderUrl);</span><br /><span class="line"><span class="number">37</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 4 行：调用&nbsp;<code>#doLocalExport(invoker)</code>&nbsp;方法，暴露服务。</li>
+<li>
+<p>第 7 行：调用&nbsp;<code>#getRegistryUrl(originInvoker)</code>&nbsp;方法，获得注册中心 URL 。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 获得注册中心 URL</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> originInvoker 原始 Invoker</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> URL</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">private</span> URL <span class="title">getRegistryUrl</span><span class="params">(Invoker&lt;?&gt; originInvoker)</span> </span>{</span><br /><span class="line">    URL registryUrl = originInvoker.getUrl();</span><br /><span class="line">    <span class="keyword">if</span> (Constants.REGISTRY_PROTOCOL.equals(registryUrl.getProtocol())) { <span class="comment">// protocol</span></span><br /><span class="line">        String protocol = registryUrl.getParameter(Constants.REGISTRY_KEY, Constants.DEFAULT_DIRECTORY);</span><br /><span class="line">        registryUrl = registryUrl.setProtocol(protocol).removeParameter(Constants.REGISTRY_KEY);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> registryUrl;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>该过程是我们在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-remote-dubbo/">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务暴露（一）之本地暴露（Injvm）》「2.1 loadRegistries」</a>&nbsp;的那张图的反向流程，即<strong>红线部分</strong>&nbsp;：<img src="http://static2.iocoder.cn/images/Dubbo/2018_03_10/01.png" alt="getRegistryUrl" /></li>
+</ul>
+</li>
+<li>第 11 行：获得注册中心对象。</li>
+<li>
+<p>第 14 行：调用&nbsp;<code>#getRegistedProviderUrl(originInvoker)</code>&nbsp;方法，获得服务提供者 URL 。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> URL <span class="title">getRegistedProviderUrl</span><span class="params">(<span class="keyword">final</span> Invoker&lt;?&gt; originInvoker)</span> </span>{</span><br /><span class="line">    <span class="comment">// 从注册中心的 export 参数中，获得服务提供者的 URL</span></span><br /><span class="line">    URL providerUrl = getProviderUrl(originInvoker);</span><br /><span class="line">    <span class="comment">//The address you see at the registry</span></span><br /><span class="line">    <span class="keyword">return</span> providerUrl.removeParameters(getFilteredKeys(providerUrl)) <span class="comment">// 移除 .hide 为前缀的参数</span></span><br /><span class="line">            .removeParameter(Constants.MONITOR_KEY) <span class="comment">// monitor</span></span><br /><span class="line">            .removeParameter(Constants.BIND_IP_KEY) <span class="comment">// bind.ip</span></span><br /><span class="line">            .removeParameter(Constants.BIND_PORT_KEY) <span class="comment">// bind.port</span></span><br /><span class="line">            .removeParameter(QOS_ENABLE) <span class="comment">// qos.enable</span></span><br /><span class="line">            .removeParameter(QOS_PORT) <span class="comment">// qos.port</span></span><br /><span class="line">            .removeParameter(ACCEPT_FOREIGN_IP); <span class="comment">// qos.accept.foreign.ip</span></span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> URL <span class="title">getProviderUrl</span><span class="params">(<span class="keyword">final</span> Invoker&lt;?&gt; origininvoker)</span> </span>{</span><br /><span class="line">    String export = origininvoker.getUrl().getParameterAndDecoded(Constants.EXPORT_KEY); <span class="comment">// export</span></span><br /><span class="line">    <span class="keyword">if</span> (export == <span class="keyword">null</span> || export.length() == <span class="number">0</span>) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"The registry export url is null! registry: "</span> + origininvoker.getUrl());</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> URL.valueOf(export);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> String[] getFilteredKeys(URL url) {</span><br /><span class="line">    Map&lt;String, String&gt; params = url.getParameters();</span><br /><span class="line">    <span class="keyword">if</span> (params != <span class="keyword">null</span> &amp;&amp; !params.isEmpty()) {</span><br /><span class="line">        List&lt;String&gt; filteredKeys = <span class="keyword">new</span> ArrayList&lt;String&gt;();</span><br /><span class="line">        <span class="keyword">for</span> (Map.Entry&lt;String, String&gt; entry : params.entrySet()) {</span><br /><span class="line">            <span class="keyword">if</span> (entry != <span class="keyword">null</span> &amp;&amp; entry.getKey() != <span class="keyword">null</span> &amp;&amp; entry.getKey().startsWith(Constants.HIDE_KEY_PREFIX)) {</span><br /><span class="line">                filteredKeys.add(entry.getKey());</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">return</span> filteredKeys.toArray(<span class="keyword">new</span> String[filteredKeys.size()]);</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> String[]{};</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><strong>重点</strong>，从注册中心的 URL 中获得&nbsp;<code>export</code>&nbsp;参数对应的值，即服务提供者的 URL 。</li>
+<li>移除<strong>多余</strong>的参数。因为，这些参数注册到注册中心没有实际的用途。</li>
+</ul>
+</li>
+<li>第 17 行：配置项&nbsp;<code>register</code>&nbsp;，服务提供者是否注册到配置中心。</li>
+<li>第 20 行：调用&nbsp;<code>ProviderConsumerRegTable#registerProvider(invoker, registryUrl)</code>&nbsp;方法，向本地注册表，注册服务提供者。
+<ul>
+<li>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/registry-api/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 注册中心（一）之抽象 API》「5. ProviderConsumerRegTable」&nbsp;</a>，有详细解析。</li>
+</ul>
+</li>
+<li>
+<p>第 24 行：调用&nbsp;<code>#register(registryUrl, registedProviderUrl)</code>&nbsp;方法，向注册中心注册服务提供者（自己）。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">register</span><span class="params">(URL registryUrl, URL registedProviderUrl)</span> </span>{</span><br /><span class="line">    Registry registry = registryFactory.getRegistry(registryUrl);</span><br /><span class="line">    registry.register(registedProviderUrl);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>调用&nbsp;<code>RegistryService#register(url)</code>&nbsp;方法，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/registry-api/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 注册中心（一）之抽象 API》「3. RegistryService」&nbsp;</a>，有详细解析。</li>
+</ul>
+</li>
+<li>
+<p>第 25 行：标记向本地注册表的注册服务提供者，已经注册。</p>
+<ul>
+<li>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/registry-api/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 注册中心（一）之抽象 API》「5. ProviderConsumerRegTable」&nbsp;</a>，有详细解析。</li>
+</ul>
+</li>
+<li>
+<p>第 28 至 34 行：使用 OverrideListener 对象，订阅配置规则。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-6-impl-configurator?self">《精尽 Dubbo 源码解析 &mdash;&mdash; 集群容错（六）之 Configurator 实现》</a>&nbsp;中。</p>
+</li>
+<li>第 36 行：创建 DestroyableExporter 对象。</li>
+</ul>
+<h3 id="3-2-3-doLocalExport">3.2.3 doLocalExport</h3>
+<p><code>#doLocalExport()</code>&nbsp;方法，暴露服务。<strong>此处的 Local 指的是，本地启动服务，但是不包括向注册中心注册服务的意思</strong>。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 暴露服务。</span></span><br /><span class="line"><span class="comment"> 3:  *</span></span><br /><span class="line"><span class="comment"> 4:  * 此处的 Local 指的是，本地启动服务，但是不包括向注册中心注册服务的意思。</span></span><br /><span class="line"><span class="comment"> 5:  *</span></span><br /><span class="line"><span class="comment"> 6:  * <span class="doctag">@param</span> originInvoker 原始 Invoker</span></span><br /><span class="line"><span class="comment"> 7:  * <span class="doctag">@param</span> &lt;T&gt; 泛型</span></span><br /><span class="line"><span class="comment"> 8:  * <span class="doctag">@return</span> Exporter 对象</span></span><br /><span class="line"><span class="comment"> 9:  */</span></span><br /><span class="line"><span class="number">10</span>: <span class="meta">@SuppressWarnings</span>(<span class="string">"unchecked"</span>)</span><br /><span class="line"><span class="number">11</span>: <span class="keyword">private</span> &lt;T&gt; <span class="function">ExporterChangeableWrapper&lt;T&gt; <span class="title">doLocalExport</span><span class="params">(<span class="keyword">final</span> Invoker&lt;T&gt; originInvoker)</span> </span>{</span><br /><span class="line"><span class="number">12</span>:     <span class="comment">// 获得在 `bounds` 中的缓存 Key</span></span><br /><span class="line"><span class="number">13</span>:     String key = getCacheKey(originInvoker);</span><br /><span class="line"><span class="number">14</span>:     <span class="comment">// 从 `bounds` 获得，是不是已经暴露过服务</span></span><br /><span class="line"><span class="number">15</span>:     ExporterChangeableWrapper&lt;T&gt; exporter = (ExporterChangeableWrapper&lt;T&gt;) bounds.get(key);</span><br /><span class="line"><span class="number">16</span>:     <span class="keyword">if</span> (exporter == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">17</span>:         <span class="keyword">synchronized</span> (bounds) {</span><br /><span class="line"><span class="number">18</span>:             exporter = (ExporterChangeableWrapper&lt;T&gt;) bounds.get(key);</span><br /><span class="line"><span class="number">19</span>:             <span class="comment">// 未暴露过，进行暴露服务</span></span><br /><span class="line"><span class="number">20</span>:             <span class="keyword">if</span> (exporter == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">21</span>:                 <span class="comment">// 创建 Invoker Delegate 对象</span></span><br /><span class="line"><span class="number">22</span>:                 <span class="keyword">final</span> Invoker&lt;?&gt; invokerDelegete = <span class="keyword">new</span> InvokerDelegete&lt;T&gt;(originInvoker, getProviderUrl(originInvoker));</span><br /><span class="line"><span class="number">23</span>:                 <span class="comment">// 暴露服务，创建 Exporter 对象</span></span><br /><span class="line"><span class="number">24</span>:                 <span class="comment">// 使用 创建的Exporter对象 + originInvoker ，创建 ExporterChangeableWrapper 对象</span></span><br /><span class="line"><span class="number">25</span>:                 exporter = <span class="keyword">new</span> ExporterChangeableWrapper&lt;T&gt;((Exporter&lt;T&gt;) protocol.export(invokerDelegete), originInvoker);</span><br /><span class="line"><span class="number">26</span>:                 <span class="comment">// 添加到 `bounds`</span></span><br /><span class="line"><span class="number">27</span>:                 bounds.put(key, exporter);</span><br /><span class="line"><span class="number">28</span>:             }</span><br /><span class="line"><span class="number">29</span>:         }</span><br /><span class="line"><span class="number">30</span>:     }</span><br /><span class="line"><span class="number">31</span>:     <span class="keyword">return</span> exporter;</span><br /><span class="line"><span class="number">32</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 13 行：调用&nbsp;<code>#getCacheKey(originInvoker)</code>&nbsp;方法，获得在&nbsp;<code>bounds</code>&nbsp;中的缓存 Key 。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Get the key cached in bounds by invoker</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * 获 取invoker 在 bounds中 缓存的key</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> originInvoker 原始 Invoker</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> url 字符串</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">private</span> String <span class="title">getCacheKey</span><span class="params">(<span class="keyword">final</span> Invoker&lt;?&gt; originInvoker)</span> </span>{</span><br /><span class="line">    URL providerUrl = getProviderUrl(originInvoker);</span><br /><span class="line">    <span class="keyword">return</span> providerUrl.removeParameters(<span class="string">"dynamic"</span>, <span class="string">"enabled"</span>).toFullString();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 14 至 18 行：从&nbsp;<code>bounds</code>&nbsp;中，获得已经暴露过的 ExporterChangeableWrapper 对象。</p>
+</li>
+<li>第 20 至 28 行：未暴露过，进行暴露服务。
+<ul>
+<li>第 22 行：调用&nbsp;<code>#getProviderUrl(originInvoker)</code>&nbsp;方法，获得服务提供者的 URL 。</li>
+<li>第 22 行：创建&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/integration/RegistryProtocol.java#L320-L339" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.integration.RegistryProtocol.InvokerDelegete</code></a>对象。
+<ul>
+<li>InvokerDelegete 实现&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/protocol/InvokerWrapper.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol.InvokerWrapper</code></a>&nbsp;类，主要增加了&nbsp;<code>#getInvoker()</code>&nbsp;方法，获得真实的，非 InvokerDelegete 的 Invoker 对象。因为，可能会存在&nbsp;<code>InvokerDelegete.invoker</code>&nbsp;也是 InvokerDelegete 类型的情况。</li>
+</ul>
+</li>
+<li>第 25 行：调用&nbsp;<code>DubboProtocol#export(invoker)</code>&nbsp;方法，暴露服务，返回 Exporter 对象。
+<ul>
+<li>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-remote-dubbo/">「4.3 DubboProtocol」</a>&nbsp;中，详细分享。</li>
+<li>🙂 若此若是<strong>其他</strong>协议，若调用对应协议的&nbsp;<code>XXXProtocol#export(invoker)</code>&nbsp;方法。</li>
+</ul>
+</li>
+<li>第 25 行：使用【创建的 Exporter 对象】+【<code>originInvoker</code>】，创建 ExporterChangeableWrapper 对象。这样，<code>originInvoker</code>&nbsp;就和 Exporter 对象，形成了<strong>绑定</strong>的关系。
+<ul>
+<li>🙂 ExporterChangeableWrapper 在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-remote-dubbo/">「4.1 ExporterChangeableWrapper」</a>&nbsp;看详细代码。</li>
+</ul>
+</li>
+<li>第 27 行：添加到&nbsp;<code>bounds</code>&nbsp;。</li>
+</ul>
+</li>
+</ul>
+<h2 id="3-3-DubboProtocol">3.3 DubboProtocol</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-rpc/dubbo-rpc-default/src/main/java/com/alibaba/dubbo/rpc/protocol/dubbo/DubboProtocol.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol.dubbo.DubboProtocol</code></a>&nbsp;，实现 AbstractProtocol 抽象类，Dubbo 协议实现类。</p>
+<h3 id="3-3-1-属性">3.3.1 属性</h3>
+<p>属性相关，代码如下：</p>
+<blockquote>
+<p>友情提示，仅包含本文涉及的属性。</p>
+</blockquote>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ... 省略部分和本文无关的属性。</span></span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 通信服务器集合</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key: 服务器地址。格式为：host:port</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, ExchangeServer&gt; serverMap = <span class="keyword">new</span> ConcurrentHashMap&lt;String, ExchangeServer&gt;(); <span class="comment">// &lt;host:port,Exchanger&gt;</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>serverMap</code>&nbsp;属性，通信服务器集合。其中，Key 为<strong>服务器地址</strong>，格式为&nbsp;<code>host:port</code>。</li>
+</ul>
+<h3 id="3-3-2-export">3.3.2 export</h3>
+<p>本文涉及的&nbsp;<code>#export(invoker)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="keyword">public</span> &lt;T&gt; <span class="function">Exporter&lt;T&gt; <span class="title">export</span><span class="params">(Invoker&lt;T&gt; invoker)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">2</span>:     URL url = invoker.getUrl();</span><br /><span class="line"> <span class="number">3</span>: </span><br /><span class="line"> <span class="number">4</span>:     <span class="comment">// 创建 DubboExporter 对象，并添加到 `exporterMap` 。</span></span><br /><span class="line"> <span class="number">5</span>:     <span class="comment">// export service.</span></span><br /><span class="line"> <span class="number">6</span>:     String key = serviceKey(url);</span><br /><span class="line"> <span class="number">7</span>:     DubboExporter&lt;T&gt; exporter = <span class="keyword">new</span> DubboExporter&lt;T&gt;(invoker, key, exporterMap);</span><br /><span class="line"> <span class="number">8</span>:     exporterMap.put(key, exporter);</span><br /><span class="line"> <span class="number">9</span>: </span><br /><span class="line"><span class="number">10</span>:     <span class="comment">// TODO 【8033 参数回调】</span></span><br /><span class="line"><span class="number">11</span>:     <span class="comment">//export an stub service for dispatching event</span></span><br /><span class="line"><span class="number">12</span>:     Boolean isStubSupportEvent = url.getParameter(Constants.STUB_EVENT_KEY, Constants.DEFAULT_STUB_EVENT);</span><br /><span class="line"><span class="number">13</span>:     Boolean isCallbackservice = url.getParameter(Constants.IS_CALLBACK_SERVICE, <span class="keyword">false</span>);</span><br /><span class="line"><span class="number">14</span>:     <span class="keyword">if</span> (isStubSupportEvent &amp;&amp; !isCallbackservice) {</span><br /><span class="line"><span class="number">15</span>:         String stubServiceMethods = url.getParameter(Constants.STUB_EVENT_METHODS_KEY);</span><br /><span class="line"><span class="number">16</span>:         <span class="keyword">if</span> (stubServiceMethods == <span class="keyword">null</span> || stubServiceMethods.length() == <span class="number">0</span>) {</span><br /><span class="line"><span class="number">17</span>:             <span class="keyword">if</span> (logger.isWarnEnabled()) {</span><br /><span class="line"><span class="number">18</span>:                 logger.warn(<span class="keyword">new</span> IllegalStateException(<span class="string">"consumer ["</span> + url.getParameter(Constants.INTERFACE_KEY) +</span><br /><span class="line"><span class="number">19</span>:                         <span class="string">"], has set stubproxy support event ,but no stub methods founded."</span>));</span><br /><span class="line"><span class="number">20</span>:             }</span><br /><span class="line"><span class="number">21</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">22</span>:             stubServiceMethodsMap.put(url.getServiceKey(), stubServiceMethods);</span><br /><span class="line"><span class="number">23</span>:         }</span><br /><span class="line"><span class="number">24</span>:     }</span><br /><span class="line"><span class="number">25</span>: </span><br /><span class="line"><span class="number">26</span>:     <span class="comment">// 启动服务器</span></span><br /><span class="line"><span class="number">27</span>:     openServer(url);</span><br /><span class="line"><span class="number">28</span>: </span><br /><span class="line"><span class="number">29</span>:     <span class="comment">// 初始化序列化优化器</span></span><br /><span class="line"><span class="number">30</span>:     optimizeSerialization(url);</span><br /><span class="line"><span class="number">31</span>:     <span class="keyword">return</span> exporter;</span><br /><span class="line"><span class="number">32</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 6 行：调用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/protocol/AbstractProtocol.java#L45-L47" target="_blank" rel="external nofollow noopener noreferrer"><code>#serviceKey(url)</code></a>&nbsp;方法，获得服务键。该方法从父类继承而来。</li>
+<li>第 7 行：创建 DubboExporter 对象。
+<ul>
+<li>🙂 在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-remote-dubbo/">「4.3 DubboExporter」</a>&nbsp;详细解析。</li>
+</ul>
+</li>
+<li>第 8 行：添加到&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/protocol/AbstractProtocol.java#L40" target="_blank" rel="external nofollow noopener noreferrer"><code>exporterMap</code></a>&nbsp;中。该属性从父类继承而来。</li>
+<li>第 10 至 24 行：TODO 【8033 参数回调】</li>
+<li>第 27 行：调用&nbsp;<code>#openServer(url)</code>&nbsp;方法，启动服务器。</li>
+<li>第 30 行：调用&nbsp;<code>#optimizeSerialization(url)</code>&nbsp;方法，初始化序列化优化器。在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-1-all?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 序列化（一）之总体实现》</a>&nbsp;中，详细解析。</li>
+</ul>
+<h3 id="3-3-3-openServer">3.3.3 openServer</h3>
+<blockquote>
+<p>友情提示：本小节的内容，胖友先看过&nbsp;<a href="http://svip.iocoder.cn/Dubbo/remoting-api-interface/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; NIO 服务器》</a>&nbsp;所有的文章。</p>
+</blockquote>
+<p><code>#openServer(url)</code>&nbsp;方法，启动通信服务器。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 通信客户端集合</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key: 服务器地址。格式为：host:port</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, ReferenceCountExchangeClient&gt; referenceClientMap = <span class="keyword">new</span> ConcurrentHashMap&lt;String, ReferenceCountExchangeClient&gt;(); <span class="comment">// &lt;host:port,Exchanger&gt;</span></span><br /><br /><span class="line">  <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">  2:  * 启动服务器</span></span><br /><span class="line"><span class="comment">  3:  *</span></span><br /><span class="line"><span class="comment">  4:  * <span class="doctag">@param</span> url URL</span></span><br /><span class="line"><span class="comment">  5:  */</span></span><br /><span class="line">  <span class="number">6</span>: <span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">openServer</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">  <span class="number">7</span>:     <span class="comment">// find server.</span></span><br /><span class="line">  <span class="number">8</span>:     String key = url.getAddress();</span><br /><span class="line">  <span class="number">9</span>:     <span class="comment">//client can export a service which's only for server to invoke</span></span><br /><span class="line"> <span class="number">10</span>:     <span class="keyword">boolean</span> isServer = url.getParameter(Constants.IS_SERVER_KEY, <span class="keyword">true</span>); <span class="comment">// isserver</span></span><br /><span class="line"> <span class="number">11</span>:     <span class="keyword">if</span> (isServer) {</span><br /><span class="line"> <span class="number">12</span>:         ExchangeServer server = serverMap.get(key);</span><br /><span class="line"> <span class="number">13</span>:         <span class="keyword">if</span> (server == <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">14</span>:             serverMap.put(key, createServer(url));</span><br /><span class="line"> <span class="number">15</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">16</span>:             <span class="comment">// server supports reset, use together with override</span></span><br /><span class="line"> <span class="number">17</span>:             server.reset(url);</span><br /><span class="line"> <span class="number">18</span>:         }</span><br /><span class="line"> <span class="number">19</span>:     }</span><br /><span class="line"> <span class="number">20</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 8 行：获得服务器地址。</li>
+<li>第 10 行：配置项&nbsp;<code>isserver</code>&nbsp;，可以暴露一个仅当前 JVM 可调用的服务。目前该配置项已经不存在。</li>
+<li>第 12 行：从&nbsp;<code>serverMap</code>&nbsp;获得对应服务器地址已存在的通信服务器。即，<strong>不重复创建</strong>。</li>
+<li>第 13 至 14 行：通信服务器不存在，调用&nbsp;<code>#createServer(url)</code>&nbsp;方法，创建服务器。</li>
+<li>第 15 至 18 行：通信服务器已存在，调用&nbsp;<code>Server#reset(url)</code>&nbsp;方法，重置服务器的属性。
+<ul>
+<li>为什么<strong>会存在</strong>呢？因为键是&nbsp;<code>host:port</code>&nbsp;，那么例如，多个 Service 共用同一个 Protocol ，服务器是同一个对象。</li>
+</ul>
+</li>
+</ul>
+<h3 id="3-3-4-createServer">3.3.4 createServer</h3>
+<p><code>#createServer(url)</code>&nbsp;方法，创建并启动通信服务器。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">private</span> ExchangeServer <span class="title">createServer</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="comment">// 默认开启 server 关闭时发送 READ_ONLY 事件</span></span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// send readonly event when server closes, it's enabled by default</span></span><br /><span class="line"> <span class="number">4</span>:     url = url.addParameterIfAbsent(Constants.CHANNEL_READONLYEVENT_SENT_KEY, Boolean.TRUE.toString());</span><br /><span class="line"> <span class="number">5</span>:     <span class="comment">// 默认开启 heartbeat</span></span><br /><span class="line"> <span class="number">6</span>:     <span class="comment">// enable heartbeat by default</span></span><br /><span class="line"> <span class="number">7</span>:     url = url.addParameterIfAbsent(Constants.HEARTBEAT_KEY, String.valueOf(Constants.DEFAULT_HEARTBEAT));</span><br /><span class="line"> <span class="number">8</span>: </span><br /><span class="line"> <span class="number">9</span>:     <span class="comment">// 校验 Server 的 Dubbo SPI 拓展是否存在</span></span><br /><span class="line"><span class="number">10</span>:     String str = url.getParameter(Constants.SERVER_KEY, Constants.DEFAULT_REMOTING_SERVER);</span><br /><span class="line"><span class="number">11</span>:     <span class="keyword">if</span> (str != <span class="keyword">null</span> &amp;&amp; str.length() &gt; <span class="number">0</span> &amp;&amp; !ExtensionLoader.getExtensionLoader(Transporter.class).hasExtension(str)) {</span><br /><span class="line"><span class="number">12</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Unsupported server type: "</span> + str + <span class="string">", url: "</span> + url);</span><br /><span class="line"><span class="number">13</span>:     }</span><br /><span class="line"><span class="number">14</span>: </span><br /><span class="line"><span class="number">15</span>:     <span class="comment">// 设置编解码器为 `"Dubbo"` </span></span><br /><span class="line"><span class="number">16</span>:     url = url.addParameter(Constants.CODEC_KEY, DubboCodec.NAME);</span><br /><span class="line"><span class="number">17</span>: </span><br /><span class="line"><span class="number">18</span>:     <span class="comment">// 启动服务器</span></span><br /><span class="line"><span class="number">19</span>:     ExchangeServer server;</span><br /><span class="line"><span class="number">20</span>:     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">21</span>:         server = Exchangers.bind(url, requestHandler);</span><br /><span class="line"><span class="number">22</span>:     } <span class="keyword">catch</span> (RemotingException e) {</span><br /><span class="line"><span class="number">23</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Fail to start server(url: "</span> + url + <span class="string">") "</span> + e.getMessage(), e);</span><br /><span class="line"><span class="number">24</span>:     }</span><br /><span class="line"><span class="number">25</span>: </span><br /><span class="line"><span class="number">26</span>:     <span class="comment">// 校验 Client 的 Dubbo SPI 拓展是否存在</span></span><br /><span class="line"><span class="number">27</span>:     str = url.getParameter(Constants.CLIENT_KEY);</span><br /><span class="line"><span class="number">28</span>:     <span class="keyword">if</span> (str != <span class="keyword">null</span> &amp;&amp; str.length() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">29</span>:         Set&lt;String&gt; supportedTypes = ExtensionLoader.getExtensionLoader(Transporter.class).getSupportedExtensions();</span><br /><span class="line"><span class="number">30</span>:         <span class="keyword">if</span> (!supportedTypes.contains(str)) {</span><br /><span class="line"><span class="number">31</span>:             <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Unsupported client type: "</span> + str);</span><br /><span class="line"><span class="number">32</span>:         }</span><br /><span class="line"><span class="number">33</span>:     }</span><br /><span class="line"><span class="number">34</span>:     <span class="keyword">return</span> server;</span><br /><span class="line"><span class="number">35</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 4 行：默认开启 Server 关闭时，发送&nbsp;<strong>READ_ONLY</strong>&nbsp;事件。</li>
+<li>第 7 行：默认开启<strong>心跳</strong>功能。</li>
+<li>第 9 至 13 行：校验配置的 Server 的 Dubbo SPI 拓展是否存在。若不存在，抛出 RpcException 异常。</li>
+<li>第 16 行：设置编解码器为&nbsp;<code>"Dubbo"</code>&nbsp;协议，即 DubboCountCodec 。</li>
+<li>
+<p>第 18 至 24 行：调用&nbsp;<code>Exchangers#bind(url, handler)</code>&nbsp;方法，启动服务器。具体&nbsp;<code>requestHanlder</code>&nbsp;属性值的实现，我们放在 Dubbo 协议下的 RPC 的文章里分享。<code>requestHanlder</code>&nbsp;属性的简化代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> ExchangeHandler requestHandler = <span class="keyword">new</span> ExchangeHandlerAdapter() {</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">reply</span><span class="params">(ExchangeChannel channel, Object message)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">        <span class="comment">// .... 省略具体实现代码</span></span><br /><span class="line">        <span class="keyword">return</span> invoker.invoke(inv);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 26 至 33 行：校验配置的 Client 的 Dubbo SPI 拓展是否存在。若不存在，抛出 RpcException 异常。默认情况下，未配置，所以不会校验。</p>
+</li>
+<li>第 34 行：返回通信服务器。</li>
+</ul>
+<h1 id="4-Exporter">4. Exporter</h1>
+<p>本文涉及的 Exporter 类图如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_10/03.png" alt="Exporter 类图" /></p>
+<h2 id="4-1-ExporterChangeableWrapper">4.1 ExporterChangeableWrapper</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/integration/RegistryProtocol.java#L422-L454" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.integration.RegistryProtocol.ExporterChangeableWrapper</code></a>&nbsp;，实现 Exporter 接口，Exporter 可变的包装器。</p>
+<ul>
+<li>建立【返回的 Exporter】与【Protocol export 出的 Exporter】的对应关系。</li>
+<li>在 override 时可以进行关系修改。</li>
+</ul>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> <span class="class"><span class="keyword">class</span> <span class="title">ExporterChangeableWrapper</span>&lt;<span class="title">T</span>&gt; <span class="keyword">implements</span> <span class="title">Exporter</span>&lt;<span class="title">T</span>&gt; </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 原 Invoker 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Invoker&lt;T&gt; originInvoker;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 暴露的 Exporter 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> Exporter&lt;T&gt; exporter;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">ExporterChangeableWrapper</span><span class="params">(Exporter&lt;T&gt; exporter, Invoker&lt;T&gt; originInvoker)</span> </span>{</span><br /><span class="line">        <span class="keyword">this</span>.exporter = exporter;</span><br /><span class="line">        <span class="keyword">this</span>.originInvoker = originInvoker;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> Invoker&lt;T&gt; <span class="title">getOriginInvoker</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> originInvoker;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> Invoker&lt;T&gt; <span class="title">getInvoker</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> exporter.getInvoker();</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setExporter</span><span class="params">(Exporter&lt;T&gt; exporter)</span> </span>{</span><br /><span class="line">        <span class="keyword">this</span>.exporter = exporter;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">unexport</span><span class="params">()</span> </span>{</span><br /><span class="line">        String key = getCacheKey(<span class="keyword">this</span>.originInvoker);</span><br /><span class="line">        <span class="comment">// 移除出 `bounds`</span></span><br /><span class="line">        bounds.remove(key);</span><br /><span class="line">        <span class="comment">// 取消暴露</span></span><br /><span class="line">        exporter.unexport();</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="4-2-DestroyableExporter">4.2 DestroyableExporter</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-registry/dubbo-registry-api/src/main/java/com/alibaba/dubbo/registry/integration/RegistryProtocol.java#L456-L506" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.registry.integration.RegistryProtocol.DestroyableExporter</code></a>&nbsp;，实现 Exporter 接口，<strong>可销毁</strong>的 Exporter 实现类。</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> <span class="class"><span class="keyword">class</span> <span class="title">ExporterChangeableWrapper</span>&lt;<span class="title">T</span>&gt; <span class="keyword">implements</span> <span class="title">Exporter</span>&lt;<span class="title">T</span>&gt; </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 原 Invoker 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Invoker&lt;T&gt; originInvoker;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 暴露的 Exporter 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> Exporter&lt;T&gt; exporter;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">ExporterChangeableWrapper</span><span class="params">(Exporter&lt;T&gt; exporter, Invoker&lt;T&gt; originInvoker)</span> </span>{</span><br /><span class="line">        <span class="keyword">this</span>.exporter = exporter;</span><br /><span class="line">        <span class="keyword">this</span>.originInvoker = originInvoker;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> Invoker&lt;T&gt; <span class="title">getOriginInvoker</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> originInvoker;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Invoker&lt;T&gt; <span class="title">getInvoker</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> exporter.getInvoker();</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">// 可以重新设置 Exporter 对象</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setExporter</span><span class="params">(Exporter&lt;T&gt; exporter)</span> </span>{</span><br /><span class="line">        <span class="keyword">this</span>.exporter = exporter;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">unexport</span><span class="params">()</span> </span>{</span><br /><span class="line">        String key = getCacheKey(<span class="keyword">this</span>.originInvoker);</span><br /><span class="line">        <span class="comment">// 移除出 `bounds`</span></span><br /><span class="line">        bounds.remove(key);</span><br /><span class="line">        <span class="comment">// 取消暴露</span></span><br /><span class="line">        exporter.unexport();</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>Exporter&nbsp;<strong>代理</strong>，建立<strong>原始的</strong>&nbsp;Invoker 与&nbsp;<code>Protocol#export(Invoker&lt;T&gt; invoker)</code>&nbsp;方法返回的 Exporter 的<strong>对应关系</strong>。</li>
+<li>在配置规则发生变化时，可调用&nbsp;<code>#setExporter(Exporter&lt;T&gt;)</code>&nbsp;方法，修改<strong>对应关系</strong>。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-6-impl-configurator/?self">《精尽 Dubbo 源码解析 &mdash;&mdash; 集群容错（六）之 Configurator 实现》</a>&nbsp;。</li>
+</ul>
+<h2 id="4-3-DubboExporter">4.3 DubboExporter</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-rpc/dubbo-rpc-default/src/main/java/com/alibaba/dubbo/rpc/protocol/dubbo/DubboExporter.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol.dubbo.DubboExporter</code></a>&nbsp;，实现 AbstractExporter 抽象类，Dubbo Exporter 实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DubboExporter</span>&lt;<span class="title">T</span>&gt; <span class="keyword">extends</span> <span class="title">AbstractExporter</span>&lt;<span class="title">T</span>&gt; </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 服务键</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> String key;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Exporter 集合</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * key: 服务键</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 该值实际就是 {<span class="doctag">@link</span> com.alibaba.dubbo.rpc.protocol.AbstractProtocol#exporterMap}</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, Exporter&lt;?&gt;&gt; exporterMap;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">DubboExporter</span><span class="params">(Invoker&lt;T&gt; invoker, String key, Map&lt;String, Exporter&lt;?&gt;&gt; exporterMap)</span> </span>{</span><br /><span class="line">        <span class="keyword">super</span>(invoker);</span><br /><span class="line">        <span class="keyword">this</span>.key = key;</span><br /><span class="line">        <span class="keyword">this</span>.exporterMap = exporterMap;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">unexport</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="comment">// 取消暴露</span></span><br /><span class="line">        <span class="keyword">super</span>.unexport();</span><br /><span class="line">        <span class="comment">// 移除</span></span><br /><span class="line">        exporterMap.remove(key);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>key</code>&nbsp;属性，服务键。</li>
+<li><code>#exporterMap</code>&nbsp;属性，Exporter 集合。在上文&nbsp;<code>DubboProtocol#export(invoker)</code>&nbsp;方法中，我们可以看到，该属性就是&nbsp;<code>AbstractProtocol.exporterMap</code>&nbsp;属性。
+<ul>
+<li><strong>构造方法</strong>，<strong>发起</strong>暴露，将自己添加到&nbsp;<code>exporterMap</code>&nbsp;中。</li>
+<li><code>#unexport()</code>&nbsp;方法，<strong>取消</strong>暴露，将自己移除出&nbsp;<code>exporterMap</code>&nbsp;中。</li>
+</ul>
+</li>
+</ul>
+</div>

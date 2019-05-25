@@ -1,0 +1,517 @@
+<header class="article-header">
+<h1 class="article-title">核心流程一览</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文主要分享&nbsp;<strong>Dubbo 的核心流程</strong>。<br />希望通过本文能让胖友对 Dubbo 的核心流程有个简单的了解。</p>
+<p>另外，笔者会相对<strong>大量</strong>引用&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/design.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 框架设计》</a>&nbsp;和&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/implementation.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 实现细节》</a>&nbsp;，写的真的挺好的。🙂 或者说，本文是该文章的<strong>细化</strong>和<strong>解说</strong>。<br />ps：限于排版，部分地方引用会存在未标明的情况。</p>
+<h1 id="2-整体设计">2. 整体设计</h1>
+<blockquote>
+<p>😈 本小节，基本为引用 + 重新排版。</p>
+</blockquote>
+<p>下面我们先来看看整体设计图，相对比较<strong>复杂</strong>：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 框架设计》</a><br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/01.png" alt="整体设计" /></p>
+</blockquote>
+<h2 id="2-1-图例说明">2.1 图例说明</h2>
+<blockquote>
+<ul>
+<li>最顶上九个<strong>图标</strong>，代表本图中的对象与流程。</li>
+<li>图中左边&nbsp;<strong>淡蓝背景</strong>( Consumer ) 的为服务消费方使用的接口，右边&nbsp;<strong>淡绿色背景</strong>( Provider ) 的为服务提供方使用的接口，位于中轴线上的为双方都用到的接口。</li>
+<li>图中从下至上分为十层，各层均为<strong>单向</strong>依赖，右边的&nbsp;<strong>黑色箭头</strong>( Depend ) 代表层之间的依赖关系，每一层都可以剥离上层被复用。其中，Service 和 Config 层为 API，其它各层均为&nbsp;<a href="http://blog.csdn.net/top_code/article/details/51934459" target="_blank" rel="external nofollow noopener noreferrer">SPI</a>&nbsp;。</li>
+<li>图中&nbsp;<strong>绿色小块</strong>( Interface ) 的为扩展接口，<strong>蓝色小块</strong>( Class ) 为实现类，图中只显示用于关联各层的实现类。</li>
+<li>图中&nbsp;<strong>蓝色虚线</strong>( Init ) 为初始化过程，即启动时组装链。<strong>红色实线</strong>( Call )为方法调用过程，即运行时调时链。<strong>紫色三角箭头</strong>( Inherit )为继承，可以把子类看作父类的同一个节点，线上的文字为调用的方法。</li>
+</ul>
+</blockquote>
+<h2 id="2-2-各层说明">2.2 各层说明</h2>
+<blockquote>
+<p>友情提示：建议可以先阅读&nbsp;<a href="http://svip.iocoder.cn/Dubbo/intro/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 项目结构一览》</a>&nbsp;文章。</p>
+</blockquote>
+<ul>
+<li>==================== Business ====================</li>
+<li><strong>Service 业务层</strong>：业务代码的接口与实现。我们实际使用 Dubbo</li>
+<li>==================== RPC ====================</li>
+<li><strong>config 配置层</strong>：对外配置接口，以 ServiceConfig, ReferenceConfig 为中心，可以直接初始化配置类，也可以通过 Spring 解析配置生成配置类。
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-config" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-config</code></a>&nbsp;模块实现。</li>
+<li>这层的代码，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/implementation-intro/">《精尽 Dubbo 源码分析 &mdash;&mdash; API 配置》</a>&nbsp;、<a href="http://svip.iocoder.cn/Dubbo/configuration-xml/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; XML 配置》</a>&nbsp;等等文章，已经详细解析。</li>
+</ul>
+</li>
+<li><strong>proxy 服务代理层</strong>：服务接口透明代理，生成服务的客户端 Stub 和服务器端 Skeleton,&nbsp;<del>以 ServiceProxy 为中心</del>，扩展接口为 ProxyFactory 。
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-rpc-rpc</code></a>&nbsp;模块实现。</li>
+<li><a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/proxy" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.proxy</code></a>包 +&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/ProxyFactory.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.ProxyFactory</code></a>接口 。</li>
+<li>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/implementation-intro/">「4.5 ProxyFactory」</a>&nbsp;详细解析。</li>
+</ul>
+</li>
+<li><strong>registry</strong>&nbsp;注册中心层：封装服务地址的注册与发现，以服务 URL 为中心，扩展接口为 RegistryFactory, Registry, RegistryService 。
+<ul>
+<li><a href="https://github.com/alibaba/dubbo/tree/4bbc0ddddacc915ddc8ff292dd28745bbc0031fd/dubbo-registry" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-registry</code></a>&nbsp;模块实现。</li>
+</ul>
+</li>
+<li><strong>cluster 路由层</strong>：封装多个提供者的路由及负载均衡，并桥接注册中心，以 Invoker 为中心，扩展接口为 Cluster, Directory, Router, LoadBalance 。
+<ul>
+<li><a href="https://github.com/alibaba/dubbo/tree/4bbc0ddddacc915ddc8ff292dd28745bbc0031fd/dubbo-cluster" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-cluster</code></a>&nbsp;模块实现。</li>
+<li>这层的代码，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/intro/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 项目结构一览》「3.4 dubbo-cluster」</a>&nbsp;章节，有简单介绍。</li>
+</ul>
+</li>
+<li><strong>monitor 监控层</strong>：RPC 调用次数和调用时间监控，以 Statistics 为中心，扩展接口为 MonitorFactory, Monitor, MonitorService 。
+<ul>
+<li><a href="https://github.com/alibaba/dubbo/tree/4bbc0ddddacc915ddc8ff292dd28745bbc0031fd/dubbo-cluster" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-monitor</code></a>&nbsp;模块实现。</li>
+</ul>
+</li>
+<li>==================== Remoting ====================</li>
+<li><strong>protocol 远程调用层</strong>：封将 RPC 调用，以 Invocation, Result 为中心，扩展接口为 Protocol, Invoker, Exporter 。
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-rpc-rpc</code></a>&nbsp;模块实现。</li>
+<li><a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/protocol" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol</code></a>包 +&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/ProxyFactory.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.Protocol</code></a>接口 。</li>
+<li>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/implementation-intro/">「4.6 Protocol」</a>&nbsp;详细解析。</li>
+</ul>
+</li>
+<li><strong>exchange 信息交换层</strong>：封装请求响应模式，同步转异步，以 Request, Response 为中心，扩展接口为 Exchanger, ExchangeChannel, ExchangeClient, ExchangeServer 。
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-remoting/dubbo-remoting-api" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-remoting-api</code></a>&nbsp;模块定义接口。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/exchange/" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.exchange</code></a>包。</li>
+</ul>
+</li>
+<li><strong>transport 网络传输层</strong>：抽象 mina 和 netty 为统一接口，以 Message 为中心，扩展接口为 Channel, Transporter, Client, Server, Codec 。
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-remoting/dubbo-remoting-api" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-remoting-api</code></a>&nbsp;模块定义接口。</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.transport</code></a>包。</li>
+</ul>
+</li>
+<li><strong>serialize 数据序列化层</strong>：可复用的一些工具，扩展接口为 Serialization, ObjectInput, ObjectOutput, ThreadPool 。
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-common" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-common</code></a>&nbsp;模块实现。</li>
+<li><a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize</code></a>包。</li>
+</ul>
+</li>
+</ul>
+<h2 id="2-3-关系说明">2.3 关系说明</h2>
+<blockquote>
+<p>在 RPC 中，Protocol 是核心层，也就是只要有 Protocol + Invoker + Exporter 就可以完成非透明的 RPC 调用，然后在 Invoker 的主过程上 Filter 拦截点。</p>
+</blockquote>
+<ul>
+<li>解说：<a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-rpc-rpc</code></a>&nbsp;模块即可<strong>独立</strong>完成该功能。</li>
+</ul>
+<blockquote>
+<p><strong>图中的 Consumer 和 Provider 是抽象概念</strong>，只是想让看图者更直观的了解哪些类分属于客户端与服务器端，不用 Client 和 Server 的原因是 Dubbo 在很多场景下都使用 Provider, Consumer, Registry, Monitor 划分逻辑拓普节点，保持统一概念。</p>
+</blockquote>
+<ul>
+<li>x</li>
+</ul>
+<blockquote>
+<p>而 Cluster 是外围概念，所以 Cluster 的目的是将多个 Invoker 伪装成一个 Invoker，这样其它人只要关注 Protocol 层 Invoker 即可，加上 Cluster 或者去掉 Cluster 对其它层都不会造成影响，因为只有一个提供者时，是不需要 Cluster 的。</p>
+</blockquote>
+<ul>
+<li>解说：<a href="https://github.com/alibaba/dubbo/tree/4bbc0ddddacc915ddc8ff292dd28745bbc0031fd/dubbo-cluster" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-cluster</code></a>&nbsp;模块提供的是<strong>非必须</strong>的功能。移除该模块，RPC 亦可正常运行。</li>
+</ul>
+<blockquote>
+<p><strong>Proxy 层</strong>封装了所有接口的透明化代理，而在其它层都以 Invoker 为中心，只有到了暴露给用户使用时，才用 Proxy 将 Invoker 转成接口，或将接口实现转成 Invoker，也就是去掉 Proxy 层 RPC 是可以 Run 的，只是不那么透明，不那么看起来像调本地服务一样调远程服务。</p>
+</blockquote>
+<ul>
+<li>解说：简单粗暴的说，Proxy 会<strong>拦截</strong>&nbsp;<code>service.doSomething(args)</code>&nbsp;的调用，&ldquo;转发&rdquo;给该 Service 对应的 Invoker ，从而实现<strong>透明化</strong>的代理。</li>
+</ul>
+<blockquote>
+<p>而&nbsp;<strong>Remoting</strong>&nbsp;实现是 Dubbo 协议的实现，如果你选择 RMI 协议，整个 Remoting 都不会用上。Remoting 内部再划为 Transport 传输层和 Exchange 信息交换层，<strong>Transport 层</strong>只负责单向消息传输，是对 Mina, Netty, Grizzly 的抽象，它也可以扩展 UDP 传输；而&nbsp;<strong>Exchange 层</strong>是在传输层之上封装了 Request-Response 语义。</p>
+</blockquote>
+<ul>
+<li>x</li>
+</ul>
+<blockquote>
+<p><strong>Registry 和 Monitor</strong>&nbsp;实际上不算一层，而是一个独立的节点，只是为了全局概览，用层的方式画在一起。</p>
+</blockquote>
+<ul>
+<li>x</li>
+</ul>
+<h1 id="3-核心流程">3. 核心流程</h1>
+<h2 id="3-1-调用链">3.1 调用链</h2>
+<p>展开总设计图的<strong>红色调用链</strong>( Call )，如下：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 框架设计》</a><br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/02.png" alt="调用链" /></p>
+</blockquote>
+<ul>
+<li>垂直分层如下：
+<ul>
+<li>下方&nbsp;<strong>淡蓝背景</strong>( Consumer )：服务消费方使用的接口</li>
+<li>上方&nbsp;<strong>淡绿色背景</strong>( Provider )：服务提供方使用的接口</li>
+<li>中间&nbsp;<strong>粉色背景</strong>( Remoting )：通信部分的接口</li>
+</ul>
+</li>
+<li>自 LoadBalance 向上，每一行分成了<strong>多个</strong>相同的 Interface ，指的是<strong>负载均衡</strong>后，向 Provider 发起调用。</li>
+<li>左边&nbsp;<strong>括号</strong>&nbsp;部分，代表了垂直部分更<strong>细化</strong>的分层，依次是：Common、Remoting、RPC、Interface 。</li>
+<li>右边&nbsp;<strong>蓝色虚线</strong>( Init ) 为初始化过程，通过对应的组件进行初始化。例如，ProxyFactory 初始化出 Proxy 。</li>
+</ul>
+<h2 id="3-2-暴露服务">3.2 暴露服务</h2>
+<p>展开总设计图<strong>左边</strong>服务提供方暴露服务的<strong>蓝色初始化链</strong>( Init )，时序图如下：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 框架设计》</a><br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/09.jpeg" alt="暴露服务时序" /></p>
+</blockquote>
+<h2 id="3-3-引用服务">3.3 引用服务</h2>
+<p>展开总设计图<strong>右边</strong>服务消费方引用服务的<strong>蓝色初始化链</strong>( Init )，时序图如下：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 框架设计》</a><br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/10.jpeg" alt="引用服务时序" /></p>
+</blockquote>
+<h1 id="4-领域模型">4. 领域模型</h1>
+<p>本小节分享的，在&nbsp;<a href="https://github.com/YunaiV/dubbo/tree/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-rpc-api</code></a>&nbsp;目录中，如下图红框部分：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/03.png" alt="领域模型" /></p>
+<h2 id="4-1-Invoker">4.1 Invoker</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/Invoker.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.Invoker</code></a>&nbsp;。</p>
+<blockquote>
+<p>Invoker 是实体域，它是 Dubbo 的核心模型，其它模型都向它靠扰，或转换成它。<br />它代表一个可执行体，可向它发起 invoke 调用。<br />它有可能是一个本地的实现，也可能是一个远程的实现，也可能一个集群实现。</p>
+</blockquote>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Invoker</span>&lt;<span class="title">T</span>&gt; <span class="keyword">extends</span> <span class="title">Node</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get service interface.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> service interface.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Class&lt;T&gt; <span class="title">getInterface</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * invoke.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> invocation</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> result</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RpcException</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Result <span class="title">invoke</span><span class="params">(Invocation invocation)</span> <span class="keyword">throws</span> RpcException</span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>#getInterface()</code>&nbsp;方法，获得 Service 接口。</li>
+<li><code>#invoke(Invocation)</code>&nbsp;方法，调用方法。</li>
+</ul>
+<h3 id="4-1-1-满眼都是-Invoker">4.1.1 满眼都是 Invoker</h3>
+<p>下面，我们要引用&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/implementation.html#fn_5" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 实现细节》</a>&nbsp;的&nbsp;<a href="http://svip.iocoder.cn/Dubbo/implementation-intro/"><strong>满眼都是 Invoker</strong></a>&nbsp;小节的内容，来进一步理解 Invoker ：</p>
+<p>由于 Invoker 是 Dubbo 领域模型中非常重要的一个概念，很多设计思路都是向它靠拢。<br />这就使得 Invoker 渗透在整个实现代码里，对于刚开始接触 Dubbo 的人，确实容易给搞混了。</p>
+<p>下面我们用一个精简的图来说明最重要的两种 Invoker：服务提供 Invoker 和服务消费 Invoker：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/04.png" alt="满眼都是 Invoker" /></p>
+<p>为了更好的解释上面这张图，我们<strong>结合服务消费和提供者的代码示例</strong>来进行说明：</p>
+<ul>
+<li>
+<p>服务消费者代码：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DemoClientAction</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> DemoService demoService;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setDemoService</span><span class="params">(DemoService demoService)</span> </span>{</span><br /><span class="line">        <span class="keyword">this</span>.demoService = demoService;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">start</span><span class="params">()</span> </span>{</span><br /><span class="line">        String hello = demoService.sayHello(<span class="string">"world"</span> + i);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>上面代码中的 DemoService 就是上图中服务消费端的 Proxy，用户代码通过这个 Proxy 调用其对应的 Invoker，而该 Invoker 实现了真正的远程服务调用。</li>
+</ul>
+</li>
+<li>
+<p>服务提供者代码：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DemoServiceImpl</span> <span class="keyword">implements</span> <span class="title">DemoService</span> </span>{</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">sayHello</span><span class="params">(String name)</span> <span class="keyword">throws</span> RemoteException </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="string">"Hello "</span> + name;</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>上面这个类会被封装成为一个 AbstractProxyInvoker 实例，并新生成一个 Exporter 实例。这样当网络通讯层收到一个请求后，会找到对应的 Exporter 实例，并调用它所对应的 AbstractProxyInvoker 实例，从而真正调用了服务提供者的代码。</li>
+</ul>
+</li>
+</ul>
+<p><em>Dubbo 里还有一些其他的 Invoker 类，但上面两种是最重要的</em>。</p>
+<h3 id="4-1-2-类图">4.1.2 类图</h3>
+<p>正如上文所说，Invoker 渗透在 Dubbo 的代码中，Invoker 的实现类也非常非常非常多，如下图：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/05.png" alt="Invoker 子类" /></p>
+<p>后续我们会详细分析。</p>
+<h2 id="4-2-Invocation">4.2 Invocation</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/Invocation.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.Invocation</code></a>&nbsp;。</p>
+<blockquote>
+<p>Invocation 是会话域，它持有调用过程中的变量，比如方法名，参数等。</p>
+</blockquote>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Invocation</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get method name.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> method name.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@serial</span></span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">String <span class="title">getMethodName</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get parameter types.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> parameter types.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@serial</span></span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    Class&lt;?&gt;[] getParameterTypes();</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get arguments.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> arguments.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@serial</span></span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    Object[] getArguments();</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get attachments.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> attachments.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@serial</span></span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Map&lt;String, String&gt; <span class="title">getAttachments</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get attachment by key.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> attachment value.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@serial</span></span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">String <span class="title">getAttachment</span><span class="params">(String key)</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get attachment by key with default value.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> attachment value.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@serial</span></span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">String <span class="title">getAttachment</span><span class="params">(String key, String defaultValue)</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get the invoker in current context.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> invoker.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@transient</span></span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    Invoker&lt;?&gt; getInvoker();</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>#getMethodName()</code>&nbsp;方法，获得方法名。</li>
+<li><code>#getParameterTypes()</code>&nbsp;方法，获得方法参数<strong>类型</strong>数组。</li>
+<li><code>#getArguments()</code>&nbsp;方法，获得方法参数数组。</li>
+<li><code>#getAttachments()</code>&nbsp;等方法，获得隐式参数相关。
+<ul>
+<li>不了解的胖友，可以看看&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/attachment.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 隐式参数》</a>&nbsp;文档。</li>
+<li>和 HTTP Request&nbsp;<strong>Header</strong>&nbsp;有些相似。</li>
+</ul>
+</li>
+<li><code>#getInvoker()</code>&nbsp;方法，获得对应的 Invoker 对象。</li>
+</ul>
+<h3 id="4-2-1-类图">4.2.1 类图</h3>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/06.png" alt="Invocation 子类" /></p>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/RpcInvocation.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.RpcInvocation</code></a>
+<ul>
+<li>点击查看，比较容易理解。</li>
+</ul>
+</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-default/src/main/java/com/alibaba/dubbo/rpc/protocol/dubbo/DecodeableRpcInvocation.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol.dubbo.DecodeableRpcInvocation</code></a>
+<ul>
+<li>Dubbo 协议<strong>独有</strong>，后续文章分享。</li>
+</ul>
+</li>
+</ul>
+<h2 id="4-3-Result">4.3 Result</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/Result.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.Result</code></a>&nbsp;。</p>
+<p>Result 是会话域，它持有调用过程中返回值，异常等。</p>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Result</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Get invoke result.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> result. if no result return null.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Object <span class="title">getValue</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Get exception.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> exception. if no exception return null.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Throwable <span class="title">getException</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Has exception.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> has exception.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">hasException</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Recreate.</span></span><br /><span class="line"><span class="comment">     * &lt;p&gt;</span></span><br /><span class="line"><span class="comment">     * &lt;code&gt;</span></span><br /><span class="line"><span class="comment">     * if (hasException()) {</span></span><br /><span class="line"><span class="comment">     * throw getException();</span></span><br /><span class="line"><span class="comment">     * } else {</span></span><br /><span class="line"><span class="comment">     * return getValue();</span></span><br /><span class="line"><span class="comment">     * }</span></span><br /><span class="line"><span class="comment">     * &lt;/code&gt;</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> result.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> if has exception throw it.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Object <span class="title">recreate</span><span class="params">()</span> <span class="keyword">throws</span> Throwable</span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get attachments.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> attachments.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Map&lt;String, String&gt; <span class="title">getAttachments</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get attachment by key.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> attachment value.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">String <span class="title">getAttachment</span><span class="params">(String key)</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get attachment by key with default value.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> attachment value.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">String <span class="title">getAttachment</span><span class="params">(String key, String defaultValue)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>#getValue()</code>&nbsp;方法，获得返回值。</li>
+<li><code>#getException()</code>&nbsp;方法，获得返回的异常。
+<ul>
+<li><code>#hasException()</code>&nbsp;方法，是否有异常。</li>
+</ul>
+</li>
+<li>
+<p><code>#recreate()</code>&nbsp;方法，实现代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// RpcResult.java</span></span><br /><br /><span class="line"><span class="keyword">private</span> Object result;</span><br /><br /><span class="line"><span class="keyword">private</span> Throwable exception;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">recreate</span><span class="params">()</span> <span class="keyword">throws</span> Throwable </span>{</span><br /><span class="line">    <span class="keyword">if</span> (exception != <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">throw</span> exception;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> result;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p><code>#getAttachments()</code>&nbsp;等方法，获得<strong>返回</strong>的隐式参数相关。</p>
+<ul>
+<li>不了解的胖友，可以看看&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/attachment.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 隐式参数》</a>&nbsp;文档。</li>
+<li>和 HTTP Response&nbsp;<strong>Header</strong>&nbsp;有些相似。</li>
+</ul>
+</li>
+</ul>
+<h3 id="4-3-1-类图">4.3.1 类图</h3>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/07.png" alt="Invocation 子类" /></p>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/RpcResult.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.RpcResult</code></a>
+<ul>
+<li>点击查看，比较容易理解。</li>
+</ul>
+</li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-default/src/main/java/com/alibaba/dubbo/rpc/protocol/dubbo/DecodeableRpcResult.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol.dubbo.DecodeableRpcResult</code></a>
+<ul>
+<li>Dubbo 协议<strong>独有</strong>，后续文章分享。</li>
+</ul>
+</li>
+</ul>
+<h2 id="4-4-Filter">4.4 Filter</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/Filter.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.Filter</code></a>&nbsp;。</p>
+<p>过滤器接口，和我们平时理解的&nbsp;<a href="https://docs.oracle.com/javaee/5/api/javax/servlet/Filter.html" target="_blank" rel="external nofollow noopener noreferrer"><code>javax.servlet.Filter</code></a>&nbsp;基本一致。</p>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Filter</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * do invoke filter.</span></span><br /><span class="line"><span class="comment">     * &lt;p&gt;</span></span><br /><span class="line"><span class="comment">     * &lt;code&gt;</span></span><br /><span class="line"><span class="comment">     * // before filter</span></span><br /><span class="line"><span class="comment">     * Result result = invoker.invoke(invocation);</span></span><br /><span class="line"><span class="comment">     * // after filter</span></span><br /><span class="line"><span class="comment">     * return result;</span></span><br /><span class="line"><span class="comment">     * &lt;/code&gt;</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> invoker    service</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> invocation invocation.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> invoke result.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RpcException</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@see</span> com.alibaba.dubbo.rpc.Invoker#invoke(Invocation)</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation invocation)</span> <span class="keyword">throws</span> RpcException</span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><code>#invoke(...)</code>&nbsp;方法，执行 Invoker 的过滤逻辑。代码示例如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// 【自己实现】before filter</span></span><br /><br /><span class="line">Result result = invoker.invoke(invocation);</span><br /><br /><span class="line"><span class="comment">// 【自己实现】after filter</span></span><br /><br /><span class="line"><span class="keyword">return</span> result;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h3 id="4-4-1-类图">4.4.1 类图</h3>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/08.png" alt="Filter 子类" /></p>
+<h2 id="4-5-ProxyFactory">4.5 ProxyFactory</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/ProxyFactory.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.ProxyFactory</code></a>&nbsp;，代理工厂接口。</p>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span>(<span class="string">"javassist"</span>)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">ProxyFactory</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * create proxy.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 创建 Proxy ，在引用服务调用。</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> invoker</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> proxy</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span>({Constants.PROXY_KEY})</span><br /><span class="line">    &lt;T&gt; <span class="function">T <span class="title">getProxy</span><span class="params">(Invoker&lt;T&gt; invoker)</span> <span class="keyword">throws</span> RpcException</span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * create invoker.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 创建 Invoker ，在暴露服务时调用。</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> &lt;T&gt;</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> proxy</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> type</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> invoker</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span>({Constants.PROXY_KEY})</span><br /><span class="line">    &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">getInvoker</span><span class="params">(T proxy, Class&lt;T&gt; type, URL url)</span> <span class="keyword">throws</span> RpcException</span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><code>#getProxy(invoker)</code>&nbsp;方法，创建 Proxy ，在<strong>引用服务</strong>时调用。</p>
+<ul>
+<li>方法参数如下：
+<ul>
+<li><code>invoker</code>&nbsp;参数，Consumer 对 Provider 调用的 Invoker 。</li>
+</ul>
+</li>
+<li>
+<p>服务消费着引用服务的&nbsp;<strong>主过程</strong>&nbsp;如下图：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 实现细节》</a><br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/12.png" alt="服务消费着引用服务的主过程" /></p>
+</blockquote>
+<ul>
+<li>从图中我们可以看出，方法的&nbsp;<code>invoker</code>&nbsp;参数，通过 Protocol 将&nbsp;<strong>Service接口</strong>&nbsp;创建出 Invoker 。</li>
+<li>通过创建 Service 的 Proxy ，实现我们在业务代理调用 Service 的方法时，<strong>透明的内部转换成调用</strong>&nbsp;Invoker 的&nbsp;<code>#invoke(Invocation)</code>&nbsp;方法。🙂 如果还是比较模糊，木有关系，后面会有文章，专门详细代码的分享。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><code>#getInvoker(proxy, type, url)</code>&nbsp;方法，创建 Invoker ，在<strong>暴露服务</strong>时调用。</p>
+<ul>
+<li>方法参数如下：
+<ul>
+<li><code>proxy</code>&nbsp;参数，Service 对象。</li>
+<li><code>type</code>&nbsp;参数，Service 接口类型。</li>
+<li><code>url</code>&nbsp;参数，Service 对应的 Dubbo URL 。</li>
+</ul>
+</li>
+<li>
+<p>服务提供者暴露服务的&nbsp;<strong>主过程</strong>&nbsp;如下图：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 实现细节》</a><br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/11.png" alt="服务提供者暴露服务的主过程" /></p>
+</blockquote>
+<ul>
+<li>从图中我们可以看出，该方法创建的 Invoker ，下一步会提交给 Protocol ，从 Invoker 转换到 Exporter 。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="4-5-1-类图">4.5.1 类图</h3>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/13.png" alt="ProxyFactory 子类" /></p>
+<p>从图中，我们可以看出 Dubbo 支持 Javassist 和 JDK Proxy 两种方式生成代理。</p>
+<p>具体如何实现，请看后面的文章。</p>
+<h2 id="4-6-Protocol">4.6 Protocol</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/Protocol.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.Protocol</code></a>&nbsp;。</p>
+<blockquote>
+<p>Protocol 是服务域，它是 Invoker 暴露和引用的主功能入口。<br />它负责 Invoker 的生命周期管理。</p>
+</blockquote>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span>(<span class="string">"dubbo"</span>)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Protocol</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Get default port when user doesn't config the port.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> default port</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">int</span> <span class="title">getDefaultPort</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Export service for remote invocation: &lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 1. Protocol should record request source address after receive a request:</span></span><br /><span class="line"><span class="comment">     * RpcContext.getContext().setRemoteAddress();&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 2. export() must be idempotent, that is, there's no difference between invoking once and invoking twice when</span></span><br /><span class="line"><span class="comment">     * export the same URL&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 3. Invoker instance is passed in by the framework, protocol needs not to care &lt;br&gt;</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> &lt;T&gt;     Service type</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> invoker Service invoker</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> exporter reference for exported service, useful for unexport the service later</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RpcException thrown when error occurs during export the service, for example: port is occupied</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 暴露远程服务：&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 1. 协议在接收请求时，应记录请求来源方地址信息：RpcContext.getContext().setRemoteAddress();&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 2. export() 必须是幂等的，也就是暴露同一个 URL 的 Invoker 两次，和暴露一次没有区别。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 3. export() 传入的 Invoker 由框架实现并传入，协议不需要关心。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> &lt;T&gt;     服务的类型</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> invoker 服务的执行体</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> exporter 暴露服务的引用，用于取消暴露</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RpcException 当暴露服务出错时抛出，比如端口已占用</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span></span><br /><span class="line">    &lt;T&gt; <span class="function">Exporter&lt;T&gt; <span class="title">export</span><span class="params">(Invoker&lt;T&gt; invoker)</span> <span class="keyword">throws</span> RpcException</span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Refer a remote service: &lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 1. When user calls `invoke()` method of `Invoker` object which's returned from `refer()` call, the protocol</span></span><br /><span class="line"><span class="comment">     * needs to correspondingly execute `invoke()` method of `Invoker` object &lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 2. It's protocol's responsibility to implement `Invoker` which's returned from `refer()`. Generally speaking,</span></span><br /><span class="line"><span class="comment">     * protocol sends remote request in the `Invoker` implementation. &lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 3. When there's check=false set in URL, the implementation must not throw exception but try to recover when</span></span><br /><span class="line"><span class="comment">     * connection fails.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> &lt;T&gt;  Service type</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> type Service class</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url  URL address for the remote service</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> invoker service's local proxy</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RpcException when there's any error while connecting to the service provider</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 引用远程服务：&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 1. 当用户调用 refer() 所返回的 Invoker 对象的 invoke() 方法时，协议需相应执行同 URL 远端 export() 传入的 Invoker 对象的 invoke() 方法。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 2. refer() 返回的 Invoker 由协议实现，协议通常需要在此 Invoker 中发送远程请求。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 3. 当 url 中有设置 check=false 时，连接失败不能抛出异常，并内部自动恢复。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> &lt;T&gt;  服务的类型</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> type 服务的类型</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url  远程服务的URL地址</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> invoker 服务的本地代理</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RpcException 当连接服务提供方失败时抛出</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span></span><br /><span class="line">    &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">refer</span><span class="params">(Class&lt;T&gt; type, URL url)</span> <span class="keyword">throws</span> RpcException</span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Destroy protocol: &lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 1. Cancel all services this protocol exports and refers &lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 2. Release all occupied resources, for example: connection, port, etc. &lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 3. Protocol can continue to export and refer new service even after it's destroyed.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 释放协议：&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 1. 取消该协议所有已经暴露和引用的服务。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 2. 释放协议所占用的所有资源，比如连接和端口。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     * 3. 协议在释放后，依然能暴露和引用新的服务。&lt;br&gt;</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">destroy</span><span class="params">()</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>每个方法的说明，请<strong>细看</strong>方法的注释。</li>
+</ul>
+<blockquote>
+<p>Dubbo 处理<strong>服务暴露</strong>的关键就在 Invoker 转换到 Exporter 的过程。<br />下面我们以 Dubbo 和 RMI 这两种典型协议的实现来进行说明：</p>
+<ul>
+<li>
+<p><strong>Dubbo 的实现</strong><br />Dubbo 协议的 Invoker 转为 Exporter 发生在 DubboProtocol 类的 export 方法，它主要是打开 socket 侦听服务，并接收客户端发来的各种请求，通讯细节由 Dubbo 自己实现。</p>
+</li>
+<li>
+<p><strong>RMI 的实现</strong><br />RMI 协议的 Invoker 转为 Exporter 发生在 RmiProtocol 类的 export 方法，它通过 Spring 或 Dubbo 或 JDK 来实现 RMI 服务，通讯细节这一块由 JDK 底层来实现，这就省了不少工作量。</p>
+</li>
+</ul>
+</blockquote>
+<h3 id="4-6-1-类图">4.6.1 类图</h3>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/14.png" alt="Protocol 子类" /></p>
+<p>从图中，我们可以看出 Dubbo 支持多种协议的实现。</p>
+<p>具体如何实现，请看后面的文章。</p>
+<h2 id="4-7-Exporter">4.7 Exporter</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/Exporter.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.Exporter</code></a>&nbsp;。</p>
+<p>Exporter ，Invoker 暴露服务在 Protocol 上的对象。</p>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Exporter</span>&lt;<span class="title">T</span>&gt; </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get invoker.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> invoker</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Invoker&lt;T&gt; <span class="title">getInvoker</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * unexport.</span></span><br /><span class="line"><span class="comment">     * &lt;p&gt;</span></span><br /><span class="line"><span class="comment">     * &lt;code&gt;</span></span><br /><span class="line"><span class="comment">     * getInvoker().destroy();</span></span><br /><span class="line"><span class="comment">     * &lt;/code&gt;</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">unexport</span><span class="params">()</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>#getInvoker()</code>&nbsp;方法，获得对应的 Invoker 。</li>
+<li><code>#unexport()</code>&nbsp;方法，取消暴露。
+<ul>
+<li>Exporter 相比 Invoker 接口，多了&nbsp;<strong>这个方法</strong>。通过实现该方法，使<strong>相同</strong>的 Invoker 在<strong>不同</strong>的 Protocol 实现的取消暴露逻辑。</li>
+</ul>
+</li>
+</ul>
+<h3 id="4-7-1-类图">4.7.1 类图</h3>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/15.png" alt="Exporter 子类" /></p>
+<p>具体如何实现，请看后面的文章。</p>
+<h2 id="4-8-InvokerListener">4.8 InvokerListener</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/InvokerListener.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.InvokerListener</code></a>&nbsp;，Invoker 监听器。</p>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span></span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">InvokerListener</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * The invoker referred</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 当服务引用完成</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> invoker</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RpcException</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@see</span> com.alibaba.dubbo.rpc.Protocol#refer(Class, URL)</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">referred</span><span class="params">(Invoker&lt;?&gt; invoker)</span> <span class="keyword">throws</span> RpcException</span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * The invoker destroyed.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 当服务销毁引用完成</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> invoker</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@see</span> com.alibaba.dubbo.rpc.Invoker#destroy()</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">destroyed</span><span class="params">(Invoker&lt;?&gt; invoker)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h3 id="4-8-1-类图">4.8.1 类图</h3>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/16.png" alt="InvokerListener 子类" /></p>
+<h2 id="4-9-ExporterListener">4.9 ExporterListener</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/6de0a069fcc870894e64ffd54a24e334b19dcb36/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/ExporterListener.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.ExporterListener</code></a>&nbsp;，Exporter 监听器。</p>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span></span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">ExporterListener</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * The exporter exported.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 当服务暴露完成</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> exporter</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RpcException</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@see</span> com.alibaba.dubbo.rpc.Protocol#export(Invoker)</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">exported</span><span class="params">(Exporter&lt;?&gt; exporter)</span> <span class="keyword">throws</span> RpcException</span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * The exporter unexported.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 当服务取消暴露完成</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> exporter</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RpcException</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@see</span> com.alibaba.dubbo.rpc.Exporter#unexport()</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">unexported</span><span class="params">(Exporter&lt;?&gt; exporter)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h3 id="4-9-1-类图">4.9.1 类图</h3>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_03_01/17.png" alt="ExporterListener 子类" /></p>
+</div>

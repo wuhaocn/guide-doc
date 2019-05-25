@@ -1,0 +1,416 @@
+<header class="article-header">
+<h1 class="article-title">NIO 服务器（一）之抽象 API</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>从本小节开始，我们来分享 Dubbo&nbsp;<strong>自己</strong>实现的 NIO 服务器，使用在&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/dubbo.html" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo://</code></a>&nbsp;和&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/thrift.html" target="_blank" rel="external nofollow noopener noreferrer"><code>thrift://</code></a>&nbsp;协议上。</p>
+<p>在 NIO 框架的选型上，强大的 Java 社区里有 mina、netty、grizzly 等，甚至 netty 提供了 3.x 和 4.x 的版本。那么该咋办呢？</p>
+<p>Dubbo 开发团队的选择是：</p>
+<ul>
+<li>API 层：
+<ul>
+<li><code>dubbo-remoting-api</code></li>
+</ul>
+</li>
+<li>实现层：
+<ul>
+<li><code>dubbo-remoting-netty3</code></li>
+<li><code>dubbo-remoting-netty4</code></li>
+<li><code>dubbo-remoting-mina</code></li>
+<li><code>dubbo-remoting-grizzly</code></li>
+<li><code>dubbo-remoting-p2p</code></li>
+</ul>
+</li>
+</ul>
+<p>再配合上 Dubbo SPI 的机制，使用者可以自定义使用哪一种具体的实现。美滋滋。</p>
+<h1 id="2-一览">2. 一览</h1>
+<p>还是老样子，笔者习惯性对代码量进行下统计，<code>dubbo-remoting</code>&nbsp;的<strong>代码量</strong>如下图：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_01/01.png" alt="代码量" /></p>
+<p>WTF ！！！&nbsp;<code>dubbo-remoting-api</code>&nbsp;的代码量竟然近<strong>万行</strong>？</p>
+<p>{__/}<br />( &bull; - &bull;)<br />/つ淡定 @胖友</p>
+<p>我们来首先看一张图：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/design.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 框架设计》</a></p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_01/02.png" alt="整体设计" /></p>
+</blockquote>
+<p><strong>红框部分</strong>，Protocol =&gt; Exchange =&gt; Transport =&gt; Serialize 的调用顺序。</p>
+<blockquote>
+<ul>
+<li><strong>exchange</strong>&nbsp;信息交换层：封装请求响应模式，同步转异步，以 Request, Response 为中心，扩展接口为 Exchanger, ExchangeChannel, ExchangeClient, ExchangeServer。</li>
+<li><strong>transport</strong>&nbsp;网络传输层：抽象 mina 和 netty 为统一接口，以 Message 为中心，扩展接口为 Channel, Transporter, Client, Server, Codec</li>
+<li><strong>serialize</strong>&nbsp;数据序列化层：可复用的一些工具，扩展接口为 Serialization, ObjectInput, ObjectOutput, ThreadPool</li>
+</ul>
+</blockquote>
+<p>在笔者初看&nbsp;<code>dubbo-remoting-api</code>&nbsp;的代码时，对&nbsp;<strong>exchange</strong>&nbsp;和&nbsp;<strong>transport</strong>&nbsp;的理解是比较模糊的。简单来说，<strong>exchange</strong>&nbsp;在&nbsp;<strong>transport</strong>&nbsp;之上，构造了 Request，Response 模型，<strong>一个请求对应一个响应</strong>。这样的方式，才符合我们实际业务开发的需要。当然，即使是 Request，Response 也分成<strong>同步和异步</strong>返回，重要的是，能够<strong>一一映射</strong>。</p>
+<p>胖友如果有兴趣，可以看看：</p>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Request%E2%80%93response" target="_blank" rel="external nofollow noopener noreferrer">《Request&ndash;response》</a></li>
+<li><a href="https://en.wikipedia.org/wiki/Client%E2%80%93server_model" target="_blank" rel="external nofollow noopener noreferrer">《Client&ndash;server model》</a></li>
+</ul>
+<p>看完以上知识，我们在回过头看&nbsp;<code>dubbo-remoting-api</code>&nbsp;的项目结构就清晰了：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_01/03.png" alt="dubbo-remoting-api" /></p>
+<ul>
+<li>最外层：通用接口。</li>
+<li><code>buffer</code>&nbsp;包：缓冲区。</li>
+<li><code>exchange</code>&nbsp;包：信息交换层</li>
+<li><code>transporter</code>&nbsp;包：网络传输层</li>
+<li><code>telnet</code>&nbsp;包：<a href="http://dubbo.apache.org/zh-cn/docs/dev/impls/telnet-handler.html" target="_blank" rel="external nofollow noopener noreferrer">Telnet 命令</a></li>
+</ul>
+<p>如上的每一层/包，我们都会独立一篇文章，进行分享。<br />当然，<code>dubbo-remoting-api</code>&nbsp;模块，只负责 API 层抽象和部分实现，最终能够<strong>真正通信</strong>，需要&nbsp;<code>dubbo-remoting-netty</code>&nbsp;等等模块来实现。对应的每一个实现模块，我们也是独立一篇文章。</p>
+<p>🙂 是不是很清晰，美滋滋？</p>
+<h1 id="3-最外层：通用接口">3. 最外层：通用接口</h1>
+<p>胖友先看看&nbsp;<a href="https://blog.csdn.net/u013252773/article/details/21046697?self" target="_blank" rel="external nofollow noopener noreferrer">《Netty4.0学习笔记系列之一：Server与Client的通讯》</a>&nbsp;<strong>教程文章</strong>。在该文章中，我们可以看到使用 Netty 在四个类：</p>
+<blockquote>
+<ul>
+<li>1、HelloServer ：server类，启动Netty server</li>
+<li>2、HelloServerInHandler：server的handler，接收客户端消息，并向客户端发送消息</li>
+<li>3、HelloClient：client类，建立于Netty server的连接</li>
+<li>4、HelloClientIntHandler：client的handler，接收server端的消息，并向服务端发送消息</li>
+</ul>
+</blockquote>
+<p>恰好，和&nbsp;<code>dubbo-remoting-api</code>&nbsp;模块，定义的 Server、Client、ChannelHandler&nbsp;<strong>接口</strong>对应。我们以<code>dubbo-remoting-netty4</code>&nbsp;模块的，举例子。整理如下：</p>
+<table>
+<thead>
+<tr>
+<th>上文</th>
+<th><code>dubbo-remoting-api</code></th>
+<th><code>dubbo-remoting-netty4</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HelloServer</td>
+<td>Server 接口</td>
+<td><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-netty4/src/main/java/com/alibaba/dubbo/remoting/transport/netty4/NettyServer.java" target="_blank" rel="external nofollow noopener noreferrer">NettyServer</a>&nbsp;实现类</td>
+</tr>
+<tr>
+<td>HelloServerInHandler：server</td>
+<td>ChannelHandler 接口</td>
+<td><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-netty4/src/main/java/com/alibaba/dubbo/remoting/transport/netty4/NettyServerHandler.java" target="_blank" rel="external nofollow noopener noreferrer">NettyServerHandler</a>&nbsp;实现类</td>
+</tr>
+<tr>
+<td>HelloClient</td>
+<td>Client 接口</td>
+<td><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-netty4/src/main/java/com/alibaba/dubbo/remoting/transport/netty4/NettyClient.java" target="_blank" rel="external nofollow noopener noreferrer">NettyClient</a>&nbsp;实现类</td>
+</tr>
+<tr>
+<td>HelloServerInHandler</td>
+<td>ChannelHandler 接口</td>
+<td><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-netty4/src/main/java/com/alibaba/dubbo/remoting/transport/netty4/NettyClientHandler.java" target="_blank" rel="external nofollow noopener noreferrer">NettyClientHandler</a>&nbsp;实现类</td>
+</tr>
+</tbody>
+</table>
+<p>因为<strong>教程文章</strong>，以教程 Demo 为准，实际会有更多需要抽象的，例如：Codec 协议编解码，Dispatcher 消息等分发。胖友再来看看&nbsp;<code>dubbo://</code>&nbsp;的处理流程：</p>
+<blockquote>
+<p>FROM&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/dubbo.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; dubbo://》</a><br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_01/04.png" alt="dubbo:// " /></p>
+<ul>
+<li>Transporter: mina, netty, grizzy</li>
+<li>Serialization: dubbo, hessian2, java, json</li>
+<li>Dispatcher: all, direct, message, execution, connection</li>
+<li>ThreadPool: fixed, cached</li>
+</ul>
+</blockquote>
+<p>如果这个图读不懂，没关系，下面我们来看看每个接口。后面，胖友可以回过头来理解这个图。</p>
+<p><strong>本文涉及的类图如下</strong>：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_01/05.png" alt="类图" /></p>
+<h1 id="4-Endpoint">4. Endpoint</h1>
+<p><code>com.alibaba.dubbo.remoting.Endpoint</code>&nbsp;，<strong>端点</strong>接口。方法如下：</p>
+<ul>
+<li>
+<p>属性相关</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function">URL <span class="title">getUrl</span><span class="params">()</span></span>;</span><br /><br /><span class="line"><span class="function">InetSocketAddress <span class="title">getLocalAddress</span><span class="params">()</span></span>;</span><br /><br /><span class="line"><span class="function">ChannelHandler <span class="title">getChannelHandler</span><span class="params">()</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>发送消息</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">send</span><span class="params">(Object message)</span> <span class="keyword">throws</span> RemotingException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">send</span><span class="params">(Object message, <span class="keyword">boolean</span> sent)</span> <span class="keyword">throws</span> RemotingException</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>关系相关</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">close</span><span class="params">()</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">close</span><span class="params">(<span class="keyword">int</span> timeout)</span></span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">startClose</span><span class="params">()</span></span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">isClosed</span><span class="params">()</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<p>Endpoint ，从中文上解释来说是，&ldquo;<strong>端点</strong>&rdquo;。从字面上来看，不太容易理解。在&nbsp;<code>dubbo-remoting-api</code>&nbsp;中，一个 Client 或 Server ，都是一个 Endpoint 。🙂 不同系统的，Endpoint 代表的会略有差距，例如 SpringMVC 中，一个请求 Restful URL 也可以是一个 Endpoint ，胖友可以 Google 查询，理解更多。</p>
+<h2 id="4-1-Channel">4.1 Channel</h2>
+<p><code>com.alibaba.dubbo.remoting.Channel</code>&nbsp;，继承 Endpoint 接口，<strong>通道</strong>接口。方法如下：</p>
+<ul>
+<li>
+<p>连接相关</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function">InetSocketAddress <span class="title">getRemoteAddress</span><span class="params">()</span></span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">isConnected</span><span class="params">()</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>属性相关</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">hasAttribute</span><span class="params">(String key)</span></span>;</span><br /><span class="line"><span class="function">Object <span class="title">getAttribute</span><span class="params">(String key)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">setAttribute</span><span class="params">(String key, Object value)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">removeAttribute</span><span class="params">(String key)</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<p>和 Netty Channel 一致，<strong>通讯的载体</strong>。在后面的文章，我们会看到在&nbsp;<code>dubbo-remoting-netty4</code>&nbsp;项目中，<a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-netty4/src/main/java/com/alibaba/dubbo/remoting/transport/netty4/NettyChannel.java" target="_blank" rel="external nofollow noopener noreferrer">NettyChannel</a>&nbsp;是 Dubbo Channel 的实现，内部有<strong>真正的</strong>&nbsp;Netty Channel 属性，用于<strong>通讯</strong>。</p>
+<h2 id="4-2-Client">4.2 Client</h2>
+<p><code>com.alibaba.dubbo.remoting.Client</code>&nbsp;，实现 Endpoint 和 Channel 和 Resetable 接口，<strong>客户端</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// 重连</span></span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">reconnect</span><span class="params">()</span> <span class="keyword">throws</span> RemotingException</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="4-3-Server">4.3 Server</h2>
+<p><code>com.alibaba.dubbo.remoting.Server</code>&nbsp;，继承 Endpoint 和 Resetable 接口，<strong>服务器</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// 是否绑定本地端口，提供服务。即，是否启动成功，可连接，接收消息等。</span></span><br /><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">isBound</span><span class="params">()</span></span>;</span><br /><br /><span class="line"><span class="comment">// 获得连接上服务器的通道（客户端）们</span></span><br /><span class="line"><span class="function">Collection&lt;Channel&gt; <span class="title">getChannels</span><span class="params">()</span></span>;</span><br /><span class="line"><span class="function">Channel <span class="title">getChannel</span><span class="params">(InetSocketAddress remoteAddress)</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h3 id="4-3-1-Resetable">4.3.1 Resetable</h3>
+<p><code>com.alibaba.dubbo.common.Resetable</code>&nbsp;，<strong>可重置</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">reset</span><span class="params">(URL url)</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>Server 实现 Resetable 接口，在实现&nbsp;<code>#reset(url)</code>&nbsp;方法，用于根据新传入的&nbsp;<code>url</code>&nbsp;属性，重置自己内部的一些属性，例如&nbsp;<a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/AbstractServer.java#L80-L129" target="_blank" rel="external nofollow noopener noreferrer"><code>AbstractServer#reset(url)</code></a>&nbsp;方法。</p>
+<h1 id="5-ChannelHandler">5. ChannelHandler</h1>
+<p><code>com.alibaba.dubbo.remoting.ChannelHandler</code>&nbsp;，<strong>通道处理器</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">connected</span><span class="params">(Channel channel)</span> <span class="keyword">throws</span> RemotingException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">disconnected</span><span class="params">(Channel channel)</span> <span class="keyword">throws</span> RemotingException</span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">sent</span><span class="params">(Channel channel, Object message)</span> <span class="keyword">throws</span> RemotingException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">received</span><span class="params">(Channel channel, Object message)</span> <span class="keyword">throws</span> RemotingException</span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">caught</span><span class="params">(Channel channel, Throwable exception)</span> <span class="keyword">throws</span> RemotingException</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>和 Netty ChannelHandler 一致，<strong>负责 Channel 中的逻辑处理</strong>。在后面的文章，我们会看到在&nbsp;<code>dubbo-remoting-netty4</code>&nbsp;项目中，<a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-netty4/src/main/java/com/alibaba/dubbo/remoting/transport/netty4/NettyServerHandler.java" target="_blank" rel="external nofollow noopener noreferrer">NettyServerHandler</a>&nbsp;是 Netty ChannelHandler 的实现，内部调用 Netty ChannelHandler 的方法，进行逻辑处理。</p>
+<h1 id="6-Transporter">6. Transporter</h1>
+<p><code>com.alibaba.dubbo.remoting.Transporter</code>&nbsp;，<strong>网络传输</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span>(<span class="string">"netty"</span>)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Transporter</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Bind a server.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 绑定一个服务器</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url     server url</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> handler 通道处理器</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> server 服务器</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RemotingException 当绑定发生异常时</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@see</span> com.alibaba.dubbo.remoting.Transporters#bind(URL, Receiver, ChannelHandler)</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span>({Constants.SERVER_KEY, Constants.TRANSPORTER_KEY})</span><br /><span class="line">    <span class="function">Server <span class="title">bind</span><span class="params">(URL url, ChannelHandler handler)</span> <span class="keyword">throws</span> RemotingException</span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Connect to a server.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 连接一个服务器，即创建一个客户端</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url     server url 服务器地址</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> handler 通道处理器</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> client 客户端</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> RemotingException 当连接发生异常时</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@see</span> com.alibaba.dubbo.remoting.Transporters#connect(URL, Receiver, ChannelListener)</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span>({Constants.CLIENT_KEY, Constants.TRANSPORTER_KEY})</span><br /><span class="line">    <span class="function">Client <span class="title">connect</span><span class="params">(URL url, ChannelHandler handler)</span> <span class="keyword">throws</span> RemotingException</span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>@SPI("netty")</code>&nbsp;注解，Dubbo SPI&nbsp;<strong>拓展点</strong>，默认为&nbsp;<code>"netty"</code>&nbsp;。注意，此处的&nbsp;<code>netty</code>&nbsp;对应的是 netty3 ，因为 Dubbo 项目在开发时，netty4 并未发布。配置方式见&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/netty4.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; Netty4》</a>&nbsp;文档。</li>
+<li><code>@Adaptive({Constants.SERVER_KEY, Constants.TRANSPORTER_KEY})</code>&nbsp;注解，基于 Dubbo SPI Adaptive 机制，加载对应的 Server 实现，使用&nbsp;<code>URL.server</code>&nbsp;或&nbsp;<code>URL.transporter</code>&nbsp;属性。</li>
+<li><code>@Adaptive({Constants.CLIENT_KEY, Constants.TRANSPORTER_KEY})</code>&nbsp;注解，基于 Dubbo SPI Adaptive 机制，加载对应的 Client 实现，使用&nbsp;<code>URL.client</code>&nbsp;或&nbsp;<code>URL.transporter</code>&nbsp;属性。</li>
+</ul>
+<h2 id="6-1-Transporters">6.1 Transporters</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/7fad710c2dbf66356d5e7b7995e843b8f6225652/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/Transporters.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.Transporters</code></a>&nbsp;，Transporter 门面类。</p>
+<blockquote>
+<p>友情提示：Facade 设计模式，参见&nbsp;<a href="https://blog.csdn.net/hguisu/article/details/7533759" target="_blank" rel="external nofollow noopener noreferrer">《 设计模式（九）外观模式Facade（结构型）》</a>&nbsp;文章。</p>
+</blockquote>
+<p><code>#bind(String url, ChannelHandler... handler)</code>&nbsp;<strong>静态</strong>方法，绑定一个服务器。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Server <span class="title">bind</span><span class="params">(String url, ChannelHandler... handler)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="keyword">return</span> bind(URL.valueOf(url), handler);</span><br /><span class="line"> <span class="number">3</span>: }</span><br /><span class="line"> <span class="number">4</span>: </span><br /><span class="line"> <span class="number">5</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Server <span class="title">bind</span><span class="params">(URL url, ChannelHandler... handlers)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line"> <span class="number">6</span>:     <span class="keyword">if</span> (url == <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">7</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"url == null"</span>);</span><br /><span class="line"> <span class="number">8</span>:     }</span><br /><span class="line"> <span class="number">9</span>:     <span class="keyword">if</span> (handlers == <span class="keyword">null</span> || handlers.length == <span class="number">0</span>) {</span><br /><span class="line"><span class="number">10</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"handlers == null"</span>);</span><br /><span class="line"><span class="number">11</span>:     }</span><br /><span class="line"><span class="number">12</span>:     <span class="comment">// 创建 handler</span></span><br /><span class="line"><span class="number">13</span>:     ChannelHandler handler;</span><br /><span class="line"><span class="number">14</span>:     <span class="keyword">if</span> (handlers.length == <span class="number">1</span>) {</span><br /><span class="line"><span class="number">15</span>:         handler = handlers[<span class="number">0</span>];</span><br /><span class="line"><span class="number">16</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">17</span>:         handler = <span class="keyword">new</span> ChannelHandlerDispatcher(handlers);</span><br /><span class="line"><span class="number">18</span>:     }</span><br /><span class="line"><span class="number">19</span>:     <span class="comment">// 创建 Server 对象</span></span><br /><span class="line"><span class="number">20</span>:     <span class="keyword">return</span> getTransporter().bind(url, handler);</span><br /><span class="line"><span class="number">21</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>和&nbsp;<code>Transporter#bind(url, handler)</code>&nbsp;方法，对应。</li>
+<li>第 12 至 18 行：创建&nbsp;<code>handler</code>&nbsp;。若&nbsp;<code>handlers</code>&nbsp;是多个，使用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/7fad710c2dbf66356d5e7b7995e843b8f6225652/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/ChannelHandlerDispatcher.java" target="_blank" rel="external nofollow noopener noreferrer">ChannelHandlerDispatcher</a>&nbsp;进行封装。在 ChannelHandlerDispatcher 中，会循环调用&nbsp;<code>handlers</code>&nbsp;，对应的方法。</li>
+<li>
+<p>第 20 行：调用&nbsp;<code>#getTransporter()</code>&nbsp;方法，基于 Dubbo SPI 机制，获得 Transporter$Adaptive 对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Transporter <span class="title">getTransporter</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> ExtensionLoader.getExtensionLoader(Transporter.class).getAdaptiveExtension();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 20 行：调用&nbsp;<code>Transporter#bind(url, handler)</code>&nbsp;方法，在 Transporter$Adaptive 对象中，会根据&nbsp;<code>url</code>&nbsp;参数，获得对应的&nbsp;<strong>Transporter 实现对象</strong>（例如，&nbsp;<a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-netty4/src/main/java/com/alibaba/dubbo/remoting/transport/netty4/NettyTransporter.java" target="_blank" rel="external nofollow noopener noreferrer">NettyTransporter</a>），从而创建对应的 Server 对象（例如，&nbsp;<a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-netty4/src/main/java/com/alibaba/dubbo/remoting/transport/netty4/NettyServer.java" target="_blank" rel="external nofollow noopener noreferrer">NettyServer</a>）。</p>
+</li>
+</ul>
+<p>另外，还有一个&nbsp;<a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/Transporters.java#L59-L76" target="_blank" rel="external nofollow noopener noreferrer"><code>#connect(url, handler)</code></a>&nbsp;<strong>静态</strong>方法，连接一个服务器，即创建一个客户端。🙂 和上面方法类似，胖友自己看咯。</p>
+<h1 id="7-Codec2">7. Codec2</h1>
+<p><code>com.alibaba.dubbo.remoting.Codec2</code>&nbsp;，<strong>编解码器</strong>接口。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 编码</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> channel 通道</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> buffer Buffer</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> message 消息</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@throws</span> IOException 当编码发生异常时</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="meta">@Adaptive</span>({Constants.CODEC_KEY})</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">encode</span><span class="params">(Channel channel, ChannelBuffer buffer, Object message)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 解码</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> channel 通道</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> buffer Buffer</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> 消息</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@throws</span> IOException 当解码发生异常时</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="meta">@Adaptive</span>({Constants.CODEC_KEY})</span><br /><span class="line"><span class="function">Object <span class="title">decode</span><span class="params">(Channel channel, ChannelBuffer buffer)</span> <span class="keyword">throws</span> IOException</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>@SPI("netty")</code>&nbsp;注解，Dubbo SPI&nbsp;<strong>拓展点</strong>。</li>
+<li><code>@Adaptive({Constants.CODEC_KEY})</code>&nbsp;注解，基于 Dubbo SPI Adaptive 机制，加载对应的 Codec2 实现，使用&nbsp;<code>URL.codec</code>&nbsp;属性。</li>
+</ul>
+<p>另外，解码过程中，需要解决 TCP 拆包、粘包的场景，因此解码结果如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// Codec2.java</span></span><br /><span class="line"><span class="keyword">enum</span> DecodeResult {</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 需要更多输入</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    NEED_MORE_INPUT,</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 忽略一些输入</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    SKIP_SOME_INPUT</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>目前&nbsp;<code>SKIP_SOME_INPUT</code>&nbsp;，暂未使用。</li>
+<li>感兴趣的胖友，可以提前看下&nbsp;<a href="http://chen-tao.github.io/2015/10/03/nettytcp/" target="_blank" rel="external nofollow noopener noreferrer">《高性能网络框架Netty的TCP拆包、粘包解决方案》</a>&nbsp;文章。在后续的文章中，我们既会看到基于<strong>长度</strong>的方案，也会看到基于<strong>界定符</strong>的方案。</li>
+</ul>
+<h2 id="7-1-Codec">7.1 Codec</h2>
+<p><a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/Codec.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.Codec</code>&nbsp;</a>，<strong>老的</strong>编解码器接口，被 Codec2 取代。</p>
+<p>通过&nbsp;<a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/codec/CodecAdapter.java" target="_blank" rel="external nofollow noopener noreferrer">CodecAdapter</a>&nbsp;，将 Codec 适配成 Codec2 。</p>
+<h2 id="7-2-Decodeable">7.2 Decodeable</h2>
+<p><code>com.alibaba.dubbo.remoting.Decodeable</code>&nbsp;，<strong>可解码</strong>的接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// 解码</span></span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">decode</span><span class="params">()</span> <span class="keyword">throws</span> Exception</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="8-Dispatcher">8. Dispatcher</h1>
+<p><code>com.alibaba.dubbo.remoting.Dispatcher</code>&nbsp;，<strong>调度器</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span>(AllDispatcher.NAME)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Dispatcher</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Adaptive</span>({Constants.DISPATCHER_KEY, <span class="string">"dispather"</span>, <span class="string">"channel.handler"</span>})</span><br /><span class="line">    <span class="comment">// The last two parameters are reserved for compatibility with the old configuration</span></span><br /><span class="line">    <span class="function">ChannelHandler <span class="title">dispatch</span><span class="params">(ChannelHandler handler, URL url)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>@SPI(AllDispatcher.NAME)</code>&nbsp;注解，Dubbo SPI&nbsp;<strong>拓展点</strong>，默认为&nbsp;<code>"all"</code>&nbsp;。</li>
+<li><code>@Adaptive({Constants.DISPATCHER_KEY, "dispather", "channel.handler"})</code>&nbsp;注解，基于 Dubbo SPI Adaptive 机制，加载对应的 ChanelHander 实现，使用&nbsp;<code>URL.dispatcher</code>&nbsp;属性。</li>
+<li>为什么传入的&nbsp;<code>handler</code>&nbsp;参数，创建返回的还是 ChannelHandler 对象呢？感兴趣的胖友，可以提前看下&nbsp;<a href="https://github.com/apache/incubator-dubbo/blob/bb8884e04433677d6abc6f05c6ad9d39e3dcf236/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/transport/dispatcher/all/AllChannelHandler.java" target="_blank" rel="external nofollow noopener noreferrer">AllChannelHandler</a>&nbsp;和&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/thread-model.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 线程模型》</a>&nbsp;。🙂 文章，后面见。</li>
+</ul>
+<h1 id="9-RemotingException">9. RemotingException</h1>
+<p><code>com.alibaba.dubbo.remoting.RemotingException</code>&nbsp;，实现 Exception 类，<code>dubbo-remoting-api</code>&nbsp;的<strong>基础</strong>异常。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">RemotingException</span> <span class="keyword">extends</span> <span class="title">Exception</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 本地地址</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> InetSocketAddress localAddress;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 远程地址</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> InetSocketAddress remoteAddress;</span><br />    <br /><span class="line">    <span class="comment">// ... 省略方法</span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="9-1-ExecutionException">9.1 ExecutionException</h2>
+<p><code>com.alibaba.dubbo.remoting.ExecutionException</code>&nbsp;，实现 RemotingException 类，执行异常。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ExecutionException</span> <span class="keyword">extends</span> <span class="title">RemotingException</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 请求</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Object request;</span><br /><br /><span class="line">    <span class="comment">// ... 省略方法</span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="9-2-TimeoutException">9.2 TimeoutException</h2>
+<p><code>com.alibaba.dubbo.remoting.TimeoutException</code>&nbsp;，实现 RemotingException 类，超时异常。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TimeoutException</span> <span class="keyword">extends</span> <span class="title">RemotingException</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 客户端</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> CLIENT_SIDE = <span class="number">0</span>;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 服务端</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> SERVER_SIDE = <span class="number">1</span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 阶段</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> phase;</span><br />    <br /><span class="line">    <span class="comment">// ... 省略方法</span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</div>

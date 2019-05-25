@@ -1,0 +1,259 @@
+<header class="article-header">
+<h1 class="article-title">NIO 服务器（五）之 Buffer 层</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文接&nbsp;<a href="http://svip.iocoder.cn/Dubbo/remoting-api-exchange//?self">《精尽 Dubbo 源码分析 &mdash;&mdash; NIO 服务器（四）之 Exchange 层》</a>&nbsp;一文，分享&nbsp;<code>dubbo-remoting-api</code>&nbsp;模块，&nbsp;<code>buffer</code>&nbsp;包，<strong>Buffer 层</strong>。</p>
+<p>Buffer 在 NIO 框架中，扮演非常重要的角色，基本每个库都提供了自己的 Buffer 实现，例如：</p>
+<ul>
+<li>Java NIO 的&nbsp;<code>java.nio.ByteBuffer</code></li>
+<li>Mina 的&nbsp;<code>org.apache.mina.core.buffer.IoBuffer</code></li>
+<li>Netty4 的&nbsp;<code>io.netty.buffer.ByteBuf</code></li>
+</ul>
+<p>在&nbsp;<code>dubbo-remoting-api</code>&nbsp;的&nbsp;<code>buffer</code>&nbsp;包中，一方面定义了 ChannelBuffer 和 ChannelBufferFactory 的接口，同时提供了多种默认的实现。整体类图如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_13/01.png" alt="类图" /></p>
+<ul>
+<li>其中，红框部分，是 Netty3 和 Netty4 ，实现的自定义的 ChannelBuffer 和 ChannelBufferFactory 类。</li>
+</ul>
+<h1 id="2-ChannelBuffer">2. ChannelBuffer</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/buffer/ChannelBuffer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.buffer.ChannelBuffer</code></a>&nbsp;，实现 Comparable 接口，<strong>通道 Buffer</strong>&nbsp;接口。</p>
+<p>ChannelBuffer 在接口方法的定义上，主要参考了 Netty 的 ByteBuf 进行设计，所以接口和注释基本一致，本文就不一个一个细讲过去，胖友可以看：</p>
+<ul>
+<li>英文：<a href="https://netty.io/4.1/api/io/netty/buffer/ByteBuf.html" target="_blank" rel="external nofollow noopener noreferrer">《Netty4.1 ByteBuf API》</a></li>
+<li>中文：<a href="https://my.oschina.net/7001/blog/742236" target="_blank" rel="external nofollow noopener noreferrer">《深入研究Netty框架之ByteBuf功能原理及源码分析》</a></li>
+</ul>
+<p>独有的接口方法&nbsp;<code>#factory()</code>&nbsp;方法，用于逻辑中，需要创建 ChannelBuffer 的情况。</p>
+<ul>
+<li>
+<p>代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Returns the factory which creates a {<span class="doctag">@link</span> ChannelBuffer} whose type and</span></span><br /><span class="line"><span class="comment"> * default {<span class="doctag">@link</span> java.nio.ByteOrder} are same with this buffer.</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function">ChannelBufferFactory <span class="title">factory</span><span class="params">()</span></span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>调用方如下：<img src="http://static2.iocoder.cn/images/Dubbo/2018_12_13/02.png" alt="调用方" /></p>
+</li>
+</ul>
+<h2 id="2-1-AbstractChannelBuffer">2.1 AbstractChannelBuffer</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/buffer/AbstractChannelBuffer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.buffer.AbstractChannelBuffer</code></a>&nbsp;，实现 ChannelBuffer 接口，通道 Buffer&nbsp;<strong>抽象类</strong>。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 读取位置</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">int</span> readerIndex;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 写入位置</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">int</span> writerIndex;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 标记的读取位置</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">int</span> markedReaderIndex;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 标记的写入位置</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">int</span> markedWriterIndex;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<blockquote>
+<p>FROM&nbsp;<a href="https://blog.csdn.net/zhxdick/article/details/51187362" target="_blank" rel="external nofollow noopener noreferrer">《netty的ByteBuf》</a><br />writerIndex 和 readerIndex</p>
+<ul>
+<li>
+<p>初始状态：<br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_13/05.png" alt="" /></p>
+</li>
+<li>
+<p>当写入5个字节后：<br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_13/06.png" alt="" /></p>
+</li>
+</ul>
+<p>这时，writerIndex 为 5，这时如果开始读取，那么这个 writerIndex 可以作为上面ByteBuffer flip 之后的 limit。</p>
+<ul>
+<li>当读取3个字节后：<br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_12_13/07.png" alt="" /></li>
+</ul>
+</blockquote>
+<p><strong>实现方法</strong></p>
+<p>在 AbstractChannelBuffer 实现的方法，都是<strong>重载</strong>的方法，真正<strong>实质</strong>的方法，需要子类来实现。以&nbsp;<code>#getBytes(...)</code>&nbsp;方法，举例子：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">getBytes</span><span class="params">(<span class="keyword">int</span> index, ChannelBuffer dst, <span class="keyword">int</span> length)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (length &gt; dst.writableBytes()) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IndexOutOfBoundsException();</span><br /><span class="line">    }</span><br /><span class="line">    getBytes(index, dst, dst.writerIndex(), length);</span><br /><span class="line">    dst.writerIndex(dst.writerIndex() + length);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>方法中调用的&nbsp;<code>#getBytes(index, ds, dstIndex, length)</code>&nbsp;方法，并未实现。🙂&nbsp;<strong>为啥呢</strong>？<strong>实质</strong>的方法，涉及到字节数组的<strong>实现形式</strong>。</li>
+</ul>
+<p>如下是所有<strong>未实现</strong>的方法：<img src="http://static2.iocoder.cn/images/Dubbo/2018_12_13/03.png" alt="未实现方法" /></p>
+<h2 id="2-2-ByteBufferBackedChannelBuffer">2.2 ByteBufferBackedChannelBuffer</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/buffer/ByteBufferBackedChannelBuffer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.buffer.ByteBufferBackedChannelBuffer</code></a>&nbsp;，实现 AbstractChannelBuffer 抽象类，基于&nbsp;<strong>java.nio.ByteBuffer</strong>&nbsp;的 Buffer 实现类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * buffer</span></span><br /><span class="line"><span class="comment"> * java.nio.ByteBuffer</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> ByteBuffer buffer;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 容量</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> capacity;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">ByteBufferBackedChannelBuffer</span><span class="params">(ByteBuffer buffer)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (buffer == <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException(<span class="string">"buffer"</span>);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// buffer</span></span><br /><span class="line">    <span class="keyword">this</span>.buffer = buffer.slice();</span><br /><span class="line">    <span class="comment">// 容量</span></span><br /><span class="line">    capacity = buffer.remaining();</span><br /><span class="line">    <span class="comment">// 设置 `writerIndex`</span></span><br /><span class="line">    writerIndex(capacity);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">ByteBufferBackedChannelBuffer</span><span class="params">(ByteBufferBackedChannelBuffer buffer)</span> </span>{</span><br /><span class="line">    <span class="comment">// buffer</span></span><br /><span class="line">    <span class="keyword">this</span>.buffer = buffer.buffer;</span><br /><span class="line">    <span class="comment">// 容量</span></span><br /><span class="line">    capacity = buffer.capacity;</span><br /><span class="line">    <span class="comment">// 设置 `writerIndex` `readerIndex`</span></span><br /><span class="line">    setIndex(buffer.readerIndex(), buffer.writerIndex());</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>工厂</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> ChannelBufferFactory <span class="title">factory</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (buffer.isDirect()) {</span><br /><span class="line">        <span class="keyword">return</span> DirectChannelBufferFactory.getInstance();</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        <span class="keyword">return</span> HeapChannelBufferFactory.getInstance();</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>对应的工厂是 DirectChannelBufferFactory 或 HeapChannelBufferFactory 。</li>
+</ul>
+<p><strong>实现方法</strong></p>
+<p>胖友，自己查看。</p>
+<h2 id="2-3-HeapChannelBuffer">2.3 HeapChannelBuffer</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/buffer/HeapChannelBuffer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.buffer.HeapChannelBuffer</code></a>&nbsp;，实现 AbstractChannelBuffer 抽象类，基于<strong>字节数组</strong>的 Buffer 实现类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * The underlying heap byte array that this buffer is wrapping.</span></span><br /><span class="line"><span class="comment"> * 字节数组</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">protected</span> <span class="keyword">final</span> <span class="keyword">byte</span>[] array;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">HeapChannelBuffer</span><span class="params">(<span class="keyword">int</span> length)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>(<span class="keyword">new</span> <span class="keyword">byte</span>[length], <span class="number">0</span>, <span class="number">0</span>);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">HeapChannelBuffer</span><span class="params">(<span class="keyword">byte</span>[] array)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>(array, <span class="number">0</span>, array.length);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="title">HeapChannelBuffer</span><span class="params">(<span class="keyword">byte</span>[] array, <span class="keyword">int</span> readerIndex, <span class="keyword">int</span> writerIndex)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (array == <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException(<span class="string">"array"</span>);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">this</span>.array = array;</span><br /><span class="line">    setIndex(readerIndex, writerIndex);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>工厂</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> ChannelBufferFactory <span class="title">factory</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> HeapChannelBufferFactory.getInstance();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>对应的工厂是 HeapChannelBufferFactory 。</li>
+</ul>
+<p><strong>实现方法</strong></p>
+<p>胖友，自己查看。</p>
+<h2 id="2-4-DynamicChannelBuffer">2.4 DynamicChannelBuffer</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/buffer/DynamicChannelBuffer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.buffer.DynamicChannelBuffer</code></a>&nbsp;，实现 AbstractChannelBuffer 抽象类，基于<strong>动态</strong>的 Buffer 实现类。或者说，基于传入的 ChannelBufferFactory 的 Buffer 实现类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 工厂</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> ChannelBufferFactory factory;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Buffer</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> ChannelBuffer buffer;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">DynamicChannelBuffer</span><span class="params">(<span class="keyword">int</span> estimatedLength)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>(estimatedLength, HeapChannelBufferFactory.getInstance()); <span class="comment">// 默认 HeapChannelBufferFactory</span></span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">DynamicChannelBuffer</span><span class="params">(<span class="keyword">int</span> estimatedLength, ChannelBufferFactory factory)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (estimatedLength &lt; <span class="number">0</span>) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"estimatedLength: "</span> + estimatedLength);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">if</span> (factory == <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException(<span class="string">"factory"</span>);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 设置 `factory`</span></span><br /><span class="line">    <span class="keyword">this</span>.factory = factory;</span><br /><span class="line">    <span class="comment">// 创建 `buffer`</span></span><br /><span class="line">    buffer = factory.getBuffer(estimatedLength);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>工厂</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> ChannelBufferFactory <span class="title">factory</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> factory;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>实现方法</strong></p>
+<p>每个方法，直接调用&nbsp;<code>buffer</code>&nbsp;对应的方法。</p>
+<h1 id="3-ChannelBuffers">3. ChannelBuffers</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/buffer/ChannelBuffers.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.buffer.ChannelBuffers</code></a>&nbsp;，Buffer&nbsp;<strong>工具类</strong>，提供创建、比较 ChannelBuffer 等公用方法。如下图所示：<img src="http://static2.iocoder.cn/images/Dubbo/2018_12_13/04.png" alt="ChannelBuffers" /></p>
+<h1 id="4-ChannelBufferFactory">4. ChannelBufferFactory</h1>
+<p><code>com.alibaba.dubbo.remoting.buffer.ChannelBufferFactory</code>&nbsp;，<strong>通道 Buffer 工厂</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function">ChannelBuffer <span class="title">getBuffer</span><span class="params">(<span class="keyword">int</span> capacity)</span></span>;</span><br /><span class="line"><span class="function">ChannelBuffer <span class="title">getBuffer</span><span class="params">(<span class="keyword">byte</span>[] array, <span class="keyword">int</span> offset, <span class="keyword">int</span> length)</span></span>;</span><br /><span class="line"><span class="function">ChannelBuffer <span class="title">getBuffer</span><span class="params">(ByteBuffer nioBuffer)</span></span>; <span class="comment">// java.nio.ByteBuffer</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="4-1-DirectChannelBufferFactory">4.1 DirectChannelBufferFactory</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/buffer/DirectChannelBufferFactory.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.buffer.DirectChannelBufferFactory</code></a>&nbsp;，实现 ChannelBufferFactory 接口，创建 DirectChannelBuffer 的工厂。</p>
+<p>实现比较简单，代码已经加注释，胖友自己查看。</p>
+<h2 id="4-2-HeapChannelBufferFactory">4.2 HeapChannelBufferFactory</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/buffer/HeapChannelBufferFactory.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.buffer.HeapChannelBufferFactory</code></a>&nbsp;，实现 ChannelBufferFactory 接口，创建 HeapChannelBufferFactory 的工厂。</p>
+<p>实现比较简单，代码已经加注释，胖友自己查看。</p>
+<h1 id="5-IO">5. IO</h1>
+<p>实际 IO 操作，是基于 InputStream 和 OutputStream ，例如我们在前文看到的 Serialization 序列化和反序列化，方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ... 省略其他方法</span></span><br /><span class="line"><span class="function">ObjectOutput <span class="title">serialize</span><span class="params">(URL url, OutputStream output)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line"><span class="function">ObjectInput <span class="title">deserialize</span><span class="params">(URL url, InputStream input)</span> <span class="keyword">throws</span> IOException</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>所以，我们需要将 ChannelBuffer 进行装饰。</p>
+<hr />
+<p>另外，我们在回过头来看看 Codec 和 Codec2 接口，方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// Codec.java</span></span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">encode</span><span class="params">(Channel channel, OutputStream output, Object message)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="comment">// Codec2.java</span></span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">encode</span><span class="params">(Channel channel, ChannelBuffer buffer, Object message)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line"><span class="comment">// Codec.java</span></span><br /><span class="line"><span class="function">Object <span class="title">decode</span><span class="params">(Channel channel, InputStream input)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="comment">// Codec2.java</span></span><br /><span class="line"><span class="function">Object <span class="title">decode</span><span class="params">(Channel channel, ChannelBuffer buffer)</span> <span class="keyword">throws</span> IOException</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>一个变化点，就是将 OutputStream 和 InputStream ，替换成了 ChannelBuffer ，更好的以 ChannelBuffer 为核心，与其他框架整合。</p>
+<h2 id="5-1-ChannelBufferInputStream">5.1 ChannelBufferInputStream</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/buffer/ChannelBufferInputStream.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.buffer.ChannelBufferInputStream</code></a>&nbsp;，实现 InputStream 接口，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ChannelBufferInputStream</span> <span class="keyword">extends</span> <span class="title">InputStream</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ChannelBuffer buffer;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 开始位置</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> startIndex;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 结束位置</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> endIndex;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">ChannelBufferInputStream</span><span class="params">(ChannelBuffer buffer)</span> </span>{</span><br /><span class="line">        <span class="keyword">this</span>(buffer, buffer.readableBytes());</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">ChannelBufferInputStream</span><span class="params">(ChannelBuffer buffer, <span class="keyword">int</span> length)</span> </span>{</span><br /><span class="line">        <span class="keyword">if</span> (buffer == <span class="keyword">null</span>) {</span><br /><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException(<span class="string">"buffer"</span>);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">if</span> (length &lt; <span class="number">0</span>) {</span><br /><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"length: "</span> + length);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">if</span> (length &gt; buffer.readableBytes()) {</span><br /><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IndexOutOfBoundsException();</span><br /><span class="line">        }</span><br /><br /><span class="line">        <span class="keyword">this</span>.buffer = buffer;</span><br /><span class="line">        startIndex = buffer.readerIndex();</span><br /><span class="line">        endIndex = startIndex + length;</span><br /><span class="line">        buffer.markReaderIndex();</span><br /><span class="line">    }</span><br />    <br /><span class="line">    <span class="comment">// ... 省略从 buffer 读取的方法，胖友，自己查看。</span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="5-2-ChannelBufferOutputStream">5.2 ChannelBufferOutputStream</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/buffer/ChannelBufferOutputStream.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.buffer.ChannelBufferOutputStream</code></a>&nbsp;，实现 OutputStream 接口，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ChannelBufferOutputStream</span> <span class="keyword">extends</span> <span class="title">OutputStream</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ChannelBuffer buffer;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 开始位置</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> startIndex;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">ChannelBufferOutputStream</span><span class="params">(ChannelBuffer buffer)</span> </span>{</span><br /><span class="line">        <span class="keyword">if</span> (buffer == <span class="keyword">null</span>) {</span><br /><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException(<span class="string">"buffer"</span>);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">this</span>.buffer = buffer;</span><br /><span class="line">        startIndex = buffer.writerIndex();</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">// ... 省略向 buffer 写入的方法，胖友，自己查看。</span></span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</div>

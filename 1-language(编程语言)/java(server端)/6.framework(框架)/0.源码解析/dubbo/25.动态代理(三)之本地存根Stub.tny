@@ -1,0 +1,92 @@
+<header class="article-header">
+<h1 class="article-title">动态代理（三）之本地存根 Stub</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文接&nbsp;<a href="http://svip.iocoder.cn/Dubbo/proxy-jdk/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 动态代理（二）之 JDK》</a>&nbsp;一文，分享使用 Dubbo&nbsp;<strong>本地存根( Stub )</strong>的特性。😁 当然，从标题我们就可以看出，实现的原理是基于<strong>动态代理</strong>的机制。</p>
+<p>在&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/local-stub.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 本地存根》</a>&nbsp;中，已经非常详尽的分享了<strong>本地存根</strong>的概念和使用，本文就不重复介绍啦。😈 文档有一点点小小的错误，在 Spring 配置文件的配置方式应该是如下：</p>
+<figure class="highlight xml">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="tag">&lt;<span class="name">dubbo:reference</span> <span class="attr">interface</span>=<span class="string">"com.alibaba.dubbo.demo.DemoService"</span> <span class="attr">stub</span>=<span class="string">"com.alibaba.dubbo.demo.consumer.DemoServiceStub"</span>&gt;</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>是服务引用&nbsp;<code>&lt;dubbo:reference /&gt;</code>&nbsp;，而不是服务暴露&nbsp;<code>&lt;dubbo:service /&gt;</code></li>
+</ul>
+<h1 id="2-StubProxyFactoryWrapper">2. StubProxyFactoryWrapper</h1>
+<p><a href="http://svip.iocoder.cn/Dubbo/proxy-local-stub/TODO"><code>com.alibaba.dubbo.rpc.proxy.wrapper.StubProxyFactoryWrapper</code></a>&nbsp;，实现 ProxyFactory 接口，存根代理工厂<strong>包装器</strong>实现类。</p>
+<h2 id="2-1-构造方法">2.1 构造方法</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * ProxyFactory$Adaptive 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> ProxyFactory proxyFactory;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Protocol$Adaptive 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Protocol protocol;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">StubProxyFactoryWrapper</span><span class="params">(ProxyFactory proxyFactory)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.proxyFactory = proxyFactory;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setProtocol</span><span class="params">(Protocol protocol)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.protocol = protocol;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>proxyFactory</code>&nbsp;属性，ProxyFactory$Adaptive 对象。StubProxyFactoryWrapper 基于 Dubbo SPI Wrapper 机制，所以使用 ProxyFactory 创建代理的流程，实际变成如下：<img src="http://static2.iocoder.cn/images/Dubbo/2018_09_19/01.png" alt="流程" /></li>
+<li><code>protocol</code>&nbsp;属性，Protocol$Adaptive 对象。</li>
+</ul>
+<h2 id="2-2-getProxy">2.2 getProxy</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="meta">@SuppressWarnings</span>({<span class="string">"unchecked"</span>, <span class="string">"rawtypes"</span>})</span><br /><span class="line"> <span class="number">3</span>: <span class="keyword">public</span> &lt;T&gt; <span class="function">T <span class="title">getProxy</span><span class="params">(Invoker&lt;T&gt; invoker)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">4</span>:     <span class="comment">// 获得 Service Proxy 对象</span></span><br /><span class="line"> <span class="number">5</span>:     T proxy = proxyFactory.getProxy(invoker);</span><br /><span class="line"> <span class="number">6</span>:     <span class="keyword">if</span> (GenericService.class != invoker.getInterface()) { <span class="comment">// 非泛化引用</span></span><br /><span class="line"> <span class="number">7</span>:         <span class="comment">// 获得 `stub` 配置项</span></span><br /><span class="line"> <span class="number">8</span>:         String stub = invoker.getUrl().getParameter(Constants.STUB_KEY, invoker.getUrl().getParameter(Constants.LOCAL_KEY));</span><br /><span class="line"> <span class="number">9</span>:         <span class="keyword">if</span> (ConfigUtils.isNotEmpty(stub)) {</span><br /><span class="line"><span class="number">10</span>:             Class&lt;?&gt; serviceType = invoker.getInterface();</span><br /><span class="line"><span class="number">11</span>:             <span class="comment">// `stub = true` 的情况，使用接口 + `Stub` 字符串。</span></span><br /><span class="line"><span class="number">12</span>:             <span class="keyword">if</span> (ConfigUtils.isDefault(stub)) {</span><br /><span class="line"><span class="number">13</span>:                 <span class="keyword">if</span> (invoker.getUrl().hasParameter(Constants.STUB_KEY)) {</span><br /><span class="line"><span class="number">14</span>:                     stub = serviceType.getName() + <span class="string">"Stub"</span>;</span><br /><span class="line"><span class="number">15</span>:                 } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">16</span>:                     stub = serviceType.getName() + <span class="string">"Local"</span>;</span><br /><span class="line"><span class="number">17</span>:                 }</span><br /><span class="line"><span class="number">18</span>:             }</span><br /><span class="line"><span class="number">19</span>:             <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">20</span>:                 <span class="comment">// 加载 Stub 类</span></span><br /><span class="line"><span class="number">21</span>:                 Class&lt;?&gt; stubClass = ReflectUtils.forName(stub);</span><br /><span class="line"><span class="number">22</span>:                 <span class="keyword">if</span> (!serviceType.isAssignableFrom(stubClass)) {</span><br /><span class="line"><span class="number">23</span>:                     <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"The stub implementation class "</span> + stubClass.getName() + <span class="string">" not implement interface "</span> + serviceType.getName());</span><br /><span class="line"><span class="number">24</span>:                 }</span><br /><span class="line"><span class="number">25</span>:                 <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">26</span>:                     <span class="comment">// 创建 Stub 对象，使用带 Service Proxy 对象的构造方法</span></span><br /><span class="line"><span class="number">27</span>:                     Constructor&lt;?&gt; constructor = ReflectUtils.findConstructor(stubClass, serviceType);</span><br /><span class="line"><span class="number">28</span>:                     proxy = (T) constructor.newInstance(<span class="keyword">new</span> Object[]{proxy});</span><br /><span class="line"><span class="number">29</span>: </span><br /><span class="line"><span class="number">30</span>:                     <span class="comment">// 【TODO 8033】参数回调</span></span><br /><span class="line"><span class="number">31</span>:                     <span class="comment">//export stub service</span></span><br /><span class="line"><span class="number">32</span>:                     URL url = invoker.getUrl();</span><br /><span class="line"><span class="number">33</span>:                     <span class="keyword">if</span> (url.getParameter(Constants.STUB_EVENT_KEY, Constants.DEFAULT_STUB_EVENT)) {</span><br /><span class="line"><span class="number">34</span>:                         url = url.addParameter(Constants.STUB_EVENT_METHODS_KEY, StringUtils.join(Wrapper.getWrapper(proxy.getClass()).getDeclaredMethodNames(), <span class="string">","</span>));</span><br /><span class="line"><span class="number">35</span>:                         url = url.addParameter(Constants.IS_SERVER_KEY, Boolean.FALSE.toString());</span><br /><span class="line"><span class="number">36</span>:                         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">37</span>:                             export(proxy, (Class) invoker.getInterface(), url);</span><br /><span class="line"><span class="number">38</span>:                         } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line"><span class="number">39</span>:                             LOGGER.error(<span class="string">"export a stub service error."</span>, e);</span><br /><span class="line"><span class="number">40</span>:                         }</span><br /><span class="line"><span class="number">41</span>:                     }</span><br /><span class="line"><span class="number">42</span>:                 } <span class="keyword">catch</span> (NoSuchMethodException e) {</span><br /><span class="line"><span class="number">43</span>:                     <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"No such constructor \"public "</span> + stubClass.getSimpleName() + <span class="string">"("</span> + serviceType.getName() + <span class="string">")\" in stub implementation class "</span> + stubClass.getName(), e);</span><br /><span class="line"><span class="number">44</span>:                 }</span><br /><span class="line"><span class="number">45</span>:             } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line"><span class="number">46</span>:                 LOGGER.error(<span class="string">"Failed to create stub implementation class "</span> + stub + <span class="string">" in consumer "</span> + NetUtils.getLocalHost() + <span class="string">" use dubbo version "</span> + Version.getVersion() + <span class="string">", cause: "</span> + t.getMessage(), t);</span><br /><span class="line"><span class="number">47</span>:                 <span class="comment">// ignore</span></span><br /><span class="line"><span class="number">48</span>:             }</span><br /><span class="line"><span class="number">49</span>:         }</span><br /><span class="line"><span class="number">50</span>:     }</span><br /><span class="line"><span class="number">51</span>:     <span class="keyword">return</span> proxy;</span><br /><span class="line"><span class="number">52</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>【<strong>第一步</strong>】第 5 行：调用&nbsp;<code>proxyFactory#getProxy(invoker)</code>&nbsp;方法，获得 Service Proxy 对象。这个过程，就是我们在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/proxy-local-stub/">《精尽 Dubbo 源码解析 &mdash;&mdash; 动态代理》</a>&nbsp;前两篇看到的内容。</li>
+<li>第 6 行：若是泛化引用，不支持使用本地存根。</li>
+<li>第 8 至 18 行：获得&nbsp;<code>stub</code>&nbsp;配置项。<strong>注意</strong>，<code>local</code>&nbsp;配置项，和&nbsp;<code>stub</code>&nbsp;配置项是<strong>等价</strong>的，目前使用&nbsp;<code>stub</code>&nbsp;而不使用&nbsp;<code>local</code>&nbsp;。</li>
+<li>第 20 至 24 行：调用&nbsp;<code>ReflectUtils#forName(stub)</code>&nbsp;方法，加载 Stub 类。</li>
+<li>【<strong>第二步</strong>】第 26 至 28 行：创建 Stub 对象，<strong>使用带 Service Proxy 对象作为参数的构造方法</strong>。例如，<code>public DemoServiceStub(DemoService demoService)</code>&nbsp;。通过这样的方式，我们的 Stub 对象，就将 Proxy Service 对象，<strong>包装在内部</strong>，可以实现各种 OOXX 啦。</li>
+<li>第 30 至 41 行：【TODO 8033】参数回调。先无视。</li>
+<li>第 51 行：返回最终的&nbsp;<code>proxy</code>&nbsp;。</li>
+</ul>
+<h2 id="2-3-getInvoker">2.3 getInvoker</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="keyword">public</span> &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">getInvoker</span><span class="params">(T proxy, Class&lt;T&gt; type, URL url)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">    <span class="keyword">return</span> proxyFactory.getInvoker(proxy, type, url);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>服务实现的 Service ，不支持 Stub 存根。所以，虽然&nbsp;<code>&lt;dubbo:service /&gt;</code>&nbsp;有&nbsp;<code>stub</code>&nbsp;配置项，但是实际是没有效果的。</li>
+</ul>
+<h1 id="3-校验-Stub-配置">3. 校验 Stub 配置</h1>
+<p>在&nbsp;<code>#checkStubAndMock(interfaceClass)</code>&nbsp;方法中，有校验&nbsp;<code>stub</code>&nbsp;配置项的代码，如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// `local` 配置项的校验，和 `stub` 一样。</span></span><br /><span class="line"><span class="keyword">if</span> (ConfigUtils.isNotEmpty(local)) {</span><br /><span class="line">    Class&lt;?&gt; localClass = ConfigUtils.isDefault(local) ? ReflectUtils.forName(interfaceClass.getName() + <span class="string">"Local"</span>) : ReflectUtils.forName(local);</span><br /><span class="line">    <span class="keyword">if</span> (!interfaceClass.isAssignableFrom(localClass)) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"The local implementation class "</span> + localClass.getName() + <span class="string">" not implement interface "</span> + interfaceClass.getName());</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        ReflectUtils.findConstructor(localClass, interfaceClass);</span><br /><span class="line">    } <span class="keyword">catch</span> (NoSuchMethodException e) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"No such constructor \"public "</span> + localClass.getSimpleName() + <span class="string">"("</span> + interfaceClass.getName() + <span class="string">")\" in local implementation class "</span> + localClass.getName());</span><br /><span class="line">    }</span><br /><span class="line">}</span><br /><span class="line"><span class="comment">// `stub` 配置项的校验</span></span><br /><span class="line"><span class="keyword">if</span> (ConfigUtils.isNotEmpty(stub)) {</span><br /><span class="line">    <span class="comment">// `stub = true` 的情况，使用接口 + `Stub` 字符串。</span></span><br /><span class="line">    Class&lt;?&gt; localClass = ConfigUtils.isDefault(stub) ? ReflectUtils.forName(interfaceClass.getName() + <span class="string">"Stub"</span>) : ReflectUtils.forName(stub);</span><br /><span class="line">    <span class="comment">// Stub 类，必须实现服务接口</span></span><br /><span class="line">    <span class="keyword">if</span> (!interfaceClass.isAssignableFrom(localClass)) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"The local implementation class "</span> + localClass.getName() + <span class="string">" not implement interface "</span> + interfaceClass.getName());</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// Stub 类，必须带有服务接口的构造方法</span></span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        ReflectUtils.findConstructor(localClass, interfaceClass);</span><br /><span class="line">    } <span class="keyword">catch</span> (NoSuchMethodException e) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"No such constructor \"public "</span> + localClass.getSimpleName() + <span class="string">"("</span> + interfaceClass.getName() + <span class="string">")\" in local implementation class "</span> + localClass.getName());</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</div>

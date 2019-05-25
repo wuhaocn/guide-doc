@@ -1,0 +1,255 @@
+<header class="article-header">
+<h1 class="article-title">过滤器（十）之 CacheFilter</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享&nbsp;<code>dubbo-filter-cache</code>&nbsp;项目的 CacheFilter 过滤器，用于服务<strong>消费者</strong>和<strong>提供者</strong>中，提供&nbsp;<strong>结果缓存</strong>的功能。在&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/result-cache.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 结果缓存》</a>&nbsp;定义如下：</p>
+<blockquote>
+<p>结果缓存 ，用于加速热门数据的访问速度，Dubbo 提供声明式缓存，以减少用户加缓存的工作量。</p>
+</blockquote>
+<p>Dubbo 提供了<strong>三种</strong>实现：</p>
+<blockquote>
+<ul>
+<li><code>lru</code>&nbsp;：基于最近最少使用原则删除多余缓存，保持最热的数据被缓存。</li>
+<li><code>threadlocal</code>&nbsp;：当前线程缓存，比如一个页面渲染，用到很多 portal，每个 portal 都要去查用户信息，通过线程缓存，可以减少这种多余访问。</li>
+<li><code>jcache</code>&nbsp;：与&nbsp;<a href="https://jcp.org/en/jsr/detail?id=107" target="_blank" rel="external nofollow noopener noreferrer">JSR107</a>&nbsp;集成，可以桥接各种缓存实现。</li>
+</ul>
+</blockquote>
+<ul>
+<li>具体的配置方式，在&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/result-cache.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 结果缓存》</a>&nbsp;文档中，已经详细分享。</li>
+</ul>
+<p>本文涉及的类，如下图所示：<img src="http://static2.iocoder.cn/images/Dubbo/2018_11_21/01.png" alt="类图" /></p>
+<h1 id="2-CacheFilter">2. CacheFilter</h1>
+<p><code>com.alibaba.dubbo.cache.filter.CacheFilter</code>&nbsp;，实现 Filter 接口，缓存过滤器实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Activate</span>(group = {Constants.CONSUMER, Constants.PROVIDER}, value = Constants.CACHE_KEY)</span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CacheFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><span class="line"> <span class="number">3</span>: </span><br /><span class="line"> <span class="number">4</span>:     <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 5:      * CacheFactory$Adaptive 对象。</span></span><br /><span class="line"><span class="comment"> 6:      *</span></span><br /><span class="line"><span class="comment"> 7:      * 通过 Dubbo SPI 机制，调用 {<span class="doctag">@link</span> #setCacheFactory(CacheFactory)} 方法，进行注入</span></span><br /><span class="line"><span class="comment"> 8:      */</span></span><br /><span class="line"> <span class="number">9</span>:     <span class="keyword">private</span> CacheFactory cacheFactory;</span><br /><span class="line"><span class="number">10</span>: </span><br /><span class="line"><span class="number">11</span>:     <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setCacheFactory</span><span class="params">(CacheFactory cacheFactory)</span> </span>{</span><br /><span class="line"><span class="number">12</span>:         <span class="keyword">this</span>.cacheFactory = cacheFactory;</span><br /><span class="line"><span class="number">13</span>:     }</span><br /><span class="line"><span class="number">14</span>: </span><br /><span class="line"><span class="number">15</span>:     <span class="meta">@Override</span></span><br /><span class="line"><span class="number">16</span>:     <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"><span class="number">17</span>:         <span class="comment">// 方法开启 Cache 功能</span></span><br /><span class="line"><span class="number">18</span>:         <span class="keyword">if</span> (cacheFactory != <span class="keyword">null</span> &amp;&amp; ConfigUtils.isNotEmpty(invoker.getUrl().getMethodParameter(invocation.getMethodName(), Constants.CACHE_KEY))) {</span><br /><span class="line"><span class="number">19</span>:             <span class="comment">// 基于 URL + Method 为维度，获得 Cache 对象。</span></span><br /><span class="line"><span class="number">20</span>:             Cache cache = cacheFactory.getCache(invoker.getUrl().addParameter(Constants.METHOD_KEY, invocation.getMethodName())); <span class="comment">// 添加 `method` 属性，是因为 JCache 需要。</span></span><br /><span class="line"><span class="number">21</span>:             <span class="keyword">if</span> (cache != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">22</span>:                 <span class="comment">// 获得 Cache Key</span></span><br /><span class="line"><span class="number">23</span>:                 String key = StringUtils.toArgumentString(invocation.getArguments());</span><br /><span class="line"><span class="number">24</span>:                 <span class="comment">// 从缓存中获得结果。若存在，创建 RpcResult 对象。</span></span><br /><span class="line"><span class="number">25</span>:                 Object value = cache.get(key);</span><br /><span class="line"><span class="number">26</span>:                 <span class="keyword">if</span> (value != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">27</span>:                     <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(value);</span><br /><span class="line"><span class="number">28</span>:                 }</span><br /><span class="line"><span class="number">29</span>:                 <span class="comment">// 服务调用</span></span><br /><span class="line"><span class="number">30</span>:                 Result result = invoker.invoke(invocation);</span><br /><span class="line"><span class="number">31</span>:                 <span class="comment">// 若非异常结果，缓存结果</span></span><br /><span class="line"><span class="number">32</span>:                 <span class="keyword">if</span> (!result.hasException()) {</span><br /><span class="line"><span class="number">33</span>:                     cache.put(key, result.getValue());</span><br /><span class="line"><span class="number">34</span>:                 }</span><br /><span class="line"><span class="number">35</span>:                 <span class="keyword">return</span> result;</span><br /><span class="line"><span class="number">36</span>:             }</span><br /><span class="line"><span class="number">37</span>:         }</span><br /><span class="line"><span class="number">38</span>:         <span class="comment">// 服务调用</span></span><br /><span class="line"><span class="number">39</span>:         <span class="keyword">return</span> invoker.invoke(invocation);</span><br /><span class="line"><span class="number">40</span>:     }</span><br /><span class="line"><span class="number">41</span>: </span><br /><span class="line"><span class="number">42</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 18 行：判断方法<strong>开启</strong>&nbsp;Cache 功能。因为，一个服务里，可能只有<strong>部分</strong>方法开启了 Cache 功能。</li>
+<li>第 20 行：调用&nbsp;<code>CacheFactory$Adaptive#getCache(url)</code>&nbsp;方法，基于&nbsp;<strong>URL + Method</strong>&nbsp;为维度，获得 Cache 对象。</li>
+<li>
+<p>第 23 行：调用&nbsp;<code>StringUtils#toArgumentString(Object[] args)</code>&nbsp;方法，获得 Cache Key 。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 将参数数组，拼接成字符串。</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * 1. 使用逗号分隔</span></span><br /><span class="line"><span class="comment"> * 2. 使用 JSON 格式化对象</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> args 参数数组</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> 字符串</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> String <span class="title">toArgumentString</span><span class="params">(Object[] args)</span> </span>{</span><br /><span class="line">    StringBuilder buf = <span class="keyword">new</span> StringBuilder();</span><br /><span class="line">    <span class="keyword">for</span> (Object arg : args) {</span><br /><span class="line">        <span class="keyword">if</span> (buf.length() &gt; <span class="number">0</span>) {</span><br /><span class="line">            buf.append(Constants.COMMA_SEPARATOR); <span class="comment">// 分隔</span></span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// 拼接参数</span></span><br /><span class="line">        <span class="keyword">if</span> (arg == <span class="keyword">null</span> || ReflectUtils.isPrimitives(arg.getClass())) {</span><br /><span class="line">            buf.append(arg);</span><br /><span class="line">        } <span class="keyword">else</span> {</span><br /><span class="line">            <span class="keyword">try</span> {</span><br /><span class="line">                buf.append(JSON.toJSONString(arg)); <span class="comment">// 使用 JSON 格式化对象</span></span><br /><span class="line">            } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line">                logger.warn(e.getMessage(), e);</span><br /><span class="line">                buf.append(arg);</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> buf.toString();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 24 至 28 行：调用&nbsp;<code>Cache#get(key)</code>&nbsp;方法，从缓存中获得结果。若<strong>存在</strong>，创建 RpcResult 对象并返回。</p>
+</li>
+<li>第 30 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，服务调用。</li>
+<li>第 31 至 34 行：若<strong>非异常</strong>，调用&nbsp;<code>Cache#put(key, value)</code>&nbsp;方法，缓存<strong>正常的</strong>结果。</li>
+<li>第 35 行：返回调用结果。</li>
+<li>第 39 行：若<strong>不使用</strong>&nbsp;Cache 功能，<strong>直接</strong>调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，服务调用。</li>
+</ul>
+<h1 id="3-API-定义">3. API 定义</h1>
+<h2 id="3-1-Cache">3.1 Cache</h2>
+<p><code>com.alibaba.dubbo.cache.Cache</code>&nbsp;，缓存<strong>容器</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Cache</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 添加键值</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> key 键</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> value 值</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">put</span><span class="params">(Object key, Object value)</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 获得值</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> key 键</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> 值</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Object <span class="title">get</span><span class="params">(Object key)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>Cache 是个缓存<strong>容器</strong>，内部可以<strong>管理</strong>缓存的键值。</li>
+</ul>
+<h2 id="3-2-CacheFactory">3.2 CacheFactory</h2>
+<p><code>com.alibaba.dubbo.cache.CacheFactory</code>&nbsp;，Cache 工厂<strong>接口</strong>。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span>(<span class="string">"lru"</span>)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">CacheFactory</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 获得缓存对象</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url URL 对象</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> 缓存对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span>(<span class="string">"cache"</span>)</span><br /><span class="line">    <span class="function">Cache <span class="title">getCache</span><span class="params">(URL url)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>@SPI("lru")</code>&nbsp;注解，Dubbo SPI&nbsp;<strong>拓展点</strong>，默认为&nbsp;<code>"lru"</code>&nbsp;。</li>
+<li><code>@Adaptive("cache")</code>&nbsp;注解，基于 Dubbo SPI Adaptive 机制，加载对应的 Cache 实现，使用&nbsp;<code>URL.cache</code>&nbsp;属性。</li>
+</ul>
+<h3 id="3-2-1-AbstractCacheFactory">3.2.1 AbstractCacheFactory</h3>
+<p><code>com.alibaba.dubbo.cache.support.AbstractCacheFactory</code>&nbsp;，Cache 工厂<strong>抽象类</strong>。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">AbstractCacheFactory</span> <span class="keyword">implements</span> <span class="title">CacheFactory</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Cache 集合</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * key：URL</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, Cache&gt; caches = <span class="keyword">new</span> ConcurrentHashMap&lt;String, Cache&gt;();</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Cache <span class="title">getCache</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="comment">// 获得 Cache 对象</span></span><br /><span class="line">        String key = url.toFullString();</span><br /><span class="line">        Cache cache = caches.get(key);</span><br /><span class="line">        <span class="comment">// 不存在，创建 Cache 对象，并缓存</span></span><br /><span class="line">        <span class="keyword">if</span> (cache == <span class="keyword">null</span>) {</span><br /><span class="line">            caches.put(key, createCache(url));</span><br /><span class="line">            cache = caches.get(key);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">return</span> cache;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 创建 Cache 对象</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url URL</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> Cache 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> Cache <span class="title">createCache</span><span class="params">(URL url)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="4-LRU-实现">4. LRU 实现</h1>
+<p><code>lru</code>&nbsp;，基于最近最少使用原则删除多余缓存，保持最热的数据被缓存。</p>
+<h2 id="4-1-LruCache">4.1 LruCache</h2>
+<p><code>com.alibaba.dubbo.cache.support.lru.LruCache</code>&nbsp;，实现 Cache 接口，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">LruCache</span> <span class="keyword">implements</span> <span class="title">Cache</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 缓存集合</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Map&lt;Object, Object&gt; store;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">LruCache</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="comment">// `"cache.size"` 配置项，设置缓存大小</span></span><br /><span class="line">        <span class="keyword">final</span> <span class="keyword">int</span> max = url.getParameter(<span class="string">"cache.size"</span>, <span class="number">1000</span>);</span><br /><span class="line">        <span class="comment">// 创建 LRUCache 对象</span></span><br /><span class="line">        <span class="keyword">this</span>.store = <span class="keyword">new</span> LRUCache&lt;Object, Object&gt;(max);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">put</span><span class="params">(Object key, Object value)</span> </span>{</span><br /><span class="line">        store.put(key, value);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">get</span><span class="params">(Object key)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> store.get(key);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>"cache.size"</code>&nbsp;配置项，设置缓存<strong>大小</strong>。</li>
+<li>基于&nbsp;<code>com.alibaba.dubbo.common.utils.LRUCache</code>&nbsp;实现。</li>
+</ul>
+<h3 id="4-1-1-LRUCache">4.1.1 LRUCache</h3>
+<p><a href="https://github.com/YunaiV/dubbo/blob/26d2f1811c23096224fc9a973b3526f01aabeb28/dubbo-common/src/main/java/com/alibaba/dubbo/common/utils/LRUCache.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.utils.LRUCache</code></a>&nbsp;，实现 LinkedHashMap 类，LRU 缓存实现类。代码比较多，胖友点击链接查看。笔者说几个关键点：</p>
+<ul>
+<li>
+<p>构造方法，设置 LRUCache 为<strong>按访问顺序(调用get方法)</strong>的链表。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">LRUCache</span><span class="params">(<span class="keyword">int</span> maxCapacity)</span> </span>{</span><br /><span class="line">    <span class="keyword">super</span>(<span class="number">16</span>, DEFAULT_LOAD_FACTOR, <span class="keyword">true</span>); <span class="comment">// 最后一个参数，按访问顺序(调用get方法)的链表</span></span><br /><span class="line">    <span class="keyword">this</span>.maxCapacity = maxCapacity;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>重写 removeEldestEntry 方法返回 true 值，指定插入元素时移除最老的元素。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">boolean</span> <span class="title">removeEldestEntry</span><span class="params">(java.util.Map.Entry&lt;K, V&gt; eldest)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> size() &gt; maxCapacity;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>根据链表中元素的顺序可以分为：按插入顺序的链表，和按访问顺序(调用get方法)的链表。默认是按插入顺序排序，如果指定按访问顺序排序，那么调用get方法后，会将这次访问的元素移至链表尾部，不断访问可以形成按访问顺序排序的链表。</li>
+</ul>
+</li>
+<li>
+<p><code>lock</code>&nbsp;属性，锁。避免并发读写，导致死锁。参见&nbsp;<a href="https://coolshell.cn/articles/9606.html" target="_blank" rel="external nofollow noopener noreferrer">《疫苗：JAVA HashMap 的死循环》</a>&nbsp;。涉及该属性的方法示例：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> V <span class="title">put</span><span class="params">(K key, V value)</span> </span>{</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        lock.lock();</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">super</span>.put(key, value);</span><br /><span class="line">    } <span class="keyword">finally</span> {</span><br /><span class="line">        lock.unlock();</span><br /><span class="line">    }</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> V <span class="title">remove</span><span class="params">(Object key)</span> </span>{</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        lock.lock();</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">super</span>.remove(key);</span><br /><span class="line">    } <span class="keyword">finally</span> {</span><br /><span class="line">        lock.unlock();</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h2 id="4-2-LruCacheFactory">4.2 LruCacheFactory</h2>
+<p><code>com.alibaba.dubbo.cache.support.lru.LruCacheFactory</code>&nbsp;，实现 AbstractCacheFactory 抽象类，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">LruCacheFactory</span> <span class="keyword">extends</span> <span class="title">AbstractCacheFactory</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">protected</span> Cache <span class="title">createCache</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> LruCache(url);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="5-ThreadLocal-实现">5. ThreadLocal 实现</h1>
+<p>基于&nbsp;<strong>ThreadLocal</strong>&nbsp;，当前线程缓存，比如一个页面渲染，用到很多 portal，每个 portal 都要去查用户信息，通过线程缓存，可以减少这种多余访问。</p>
+<h2 id="5-1-ThreadLocalCache">5.1 ThreadLocalCache</h2>
+<p><code>com.alibaba.dubbo.cache.support.threadlocal.ThreadLocalCache</code>&nbsp;，实现 Cache 接口，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ThreadLocalCache</span> <span class="keyword">implements</span> <span class="title">Cache</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ThreadLocal&lt;Map&lt;Object, Object&gt;&gt; store; <span class="comment">// 线程变量</span></span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">ThreadLocalCache</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="keyword">this</span>.store = <span class="keyword">new</span> ThreadLocal&lt;Map&lt;Object, Object&gt;&gt;() {</span><br /><br /><span class="line">            <span class="meta">@Override</span></span><br /><span class="line">            <span class="function"><span class="keyword">protected</span> Map&lt;Object, Object&gt; <span class="title">initialValue</span><span class="params">()</span> </span>{</span><br /><span class="line">                <span class="keyword">return</span> <span class="keyword">new</span> HashMap&lt;Object, Object&gt;();</span><br /><span class="line">            }</span><br /><br /><span class="line">        };</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">put</span><span class="params">(Object key, Object value)</span> </span>{</span><br /><span class="line">        store.get().put(key, value);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">get</span><span class="params">(Object key)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> store.get().get(key);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>基于 ThreadLocal 实现，相当于一个线程，一个 ThreadLocalCache 对象。</li>
+<li>🙂 ThreadLocalCache 目前没有过期或清理机制，所以<strong>需要注意</strong>。</li>
+</ul>
+<h2 id="5-2-ThreadLocalCacheFactory">5.2 ThreadLocalCacheFactory</h2>
+<p><code>com.alibaba.dubbo.cache.support.threadlocal.ThreadLocalCacheFactory</code>&nbsp;，实现 AbstractCacheFactory 抽象类，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ThreadLocalCacheFactory</span> <span class="keyword">extends</span> <span class="title">AbstractCacheFactory</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">protected</span> Cache <span class="title">createCache</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> ThreadLocalCache(url);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="6-JCache-实现">6. JCache 实现</h1>
+<p>与&nbsp;<a href="https://jcp.org/en/jsr/detail?id=107" target="_blank" rel="external nofollow noopener noreferrer">JSR107</a>&nbsp;集成，可以桥接各种缓存实现。</p>
+<h2 id="6-1-JCache">6.1 JCache</h2>
+<p><code>com.alibaba.dubbo.cache.support.jcache.JCache</code>&nbsp;，实现 Cache 接口，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">JCache</span> <span class="keyword">implements</span> <span class="title">com</span>.<span class="title">alibaba</span>.<span class="title">dubbo</span>.<span class="title">cache</span>.<span class="title">Cache</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Cache&lt;Object, Object&gt; store;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">JCache</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="comment">// 获得 Cache Key</span></span><br /><span class="line">        String method = url.getParameter(Constants.METHOD_KEY, <span class="string">""</span>);</span><br /><span class="line">        String key = url.getAddress() + <span class="string">"."</span> + url.getServiceKey() + <span class="string">"."</span> + method;</span><br /><span class="line">        <span class="comment">// `"jcache"` 配置项，为 Java SPI 实现的全限定类名</span></span><br /><span class="line">        <span class="comment">// jcache parameter is the full-qualified class name of SPI implementation</span></span><br /><span class="line">        String type = url.getParameter(<span class="string">"jcache"</span>);</span><br /><br /><span class="line">        <span class="comment">// 基于类型，获得 javax.cache.CachingProvider 对象，</span></span><br /><span class="line">        CachingProvider provider = type == <span class="keyword">null</span> || type.length() == <span class="number">0</span> ? Caching.getCachingProvider() : Caching.getCachingProvider(type);</span><br /><span class="line">        <span class="comment">// 获得 javax.cache.CacheManager 对象</span></span><br /><span class="line">        CacheManager cacheManager = provider.getCacheManager();</span><br /><span class="line">        <span class="comment">// 获得 javax.cache.Cache 对象</span></span><br /><span class="line">        Cache&lt;Object, Object&gt; cache = cacheManager.getCache(key);</span><br /><span class="line">        <span class="comment">// 不存在，则进行创建</span></span><br /><span class="line">        <span class="keyword">if</span> (cache == <span class="keyword">null</span>) {</span><br /><span class="line">            <span class="keyword">try</span> {</span><br /><span class="line">                <span class="comment">// 设置 Cache 配置项</span></span><br /><span class="line">                <span class="comment">// configure the cache</span></span><br /><span class="line">                MutableConfiguration config =</span><br /><span class="line">                        <span class="keyword">new</span> MutableConfiguration&lt;Object, Object&gt;()</span><br /><span class="line">                                <span class="comment">// 类型</span></span><br /><span class="line">                                .setTypes(Object.class, Object.class)</span><br /><span class="line">                                <span class="comment">// 过期策略，按照写入时间过期。通过 `"cache.write.expire"` 配置项设置过期时间，默认为 1 分钟。</span></span><br /><span class="line">                                .setExpiryPolicyFactory(CreatedExpiryPolicy.factoryOf(<span class="keyword">new</span> Duration(TimeUnit.MILLISECONDS, url.getMethodParameter(method, <span class="string">"cache.write.expire"</span>, <span class="number">60</span> * <span class="number">1000</span>))))</span><br /><span class="line">                                .setStoreByValue(<span class="keyword">false</span>)</span><br /><span class="line">                                <span class="comment">// 设置 MBean</span></span><br /><span class="line">                                .setManagementEnabled(<span class="keyword">true</span>)</span><br /><span class="line">                                .setStatisticsEnabled(<span class="keyword">true</span>);</span><br /><span class="line">                <span class="comment">// 创建 javax.cache.Cache 对象</span></span><br /><span class="line">                cache = cacheManager.createCache(key, config);</span><br /><span class="line">            } <span class="keyword">catch</span> (CacheException e) {</span><br /><span class="line">                <span class="comment">// 初始化 cache 的并发情况</span></span><br /><span class="line">                <span class="comment">// concurrent cache initialization</span></span><br /><span class="line">                cache = cacheManager.getCache(key);</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><br /><span class="line">        <span class="keyword">this</span>.store = cache;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">put</span><span class="params">(Object key, Object value)</span> </span>{</span><br /><span class="line">        store.put(key, value);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">get</span><span class="params">(Object key)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> store.get(key);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>已经添加详细中文注释，胖友自己查看。</li>
+<li>笔者对 JCache 了解不多，推荐阅读&nbsp;<a href="https://blog.csdn.net/boonya/article/details/54632129" target="_blank" rel="external nofollow noopener noreferrer">《 Java Caching(缓存)-策略和JCache API》</a></li>
+</ul>
+<h2 id="6-2-JCacheFactory">6.2 JCacheFactory</h2>
+<p><code>com.alibaba.dubbo.cache.support.jcache.JCacheFactory</code>&nbsp;，实现 AbstractCacheFactory 抽象类，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">JCacheFactory</span> <span class="keyword">extends</span> <span class="title">AbstractCacheFactory</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">protected</span> Cache <span class="title">createCache</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> JCache(url);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</div>

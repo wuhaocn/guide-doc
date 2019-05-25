@@ -1,0 +1,231 @@
+<header class="article-header">
+<h1 class="article-title">过滤器（四）之 ActiveLimitFilter &amp;&amp; ExecuteLimitFilter</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享<strong>服务方法</strong>的<strong>最大可并行调用</strong>的<strong>限制</strong>过滤器，在服务<strong>消费者</strong>和<strong>提供者</strong>各有一个 LimitFilter ：</p>
+<ul>
+<li>
+<p>ActiveLimitFilter ，在服务<strong>消费者</strong>，通过&nbsp;<code>&lt;dubbo:reference /&gt;</code>&nbsp;的&nbsp;<code>"actives"</code>&nbsp;<strong>统一</strong>配置项开启：</p>
+<blockquote>
+<p>每服务消费者，<strong>每服务</strong>的<strong>每方法</strong>最大并发调用数。</p>
+</blockquote>
+</li>
+<li>
+<p>ExecuteLimitFilter ，在服务<strong>提供者</strong>，通过&nbsp;<code>&lt;dubbo:service /&gt;</code>&nbsp;的&nbsp;<code>"executes"</code>&nbsp;<strong>统一</strong>配置项开启：</p>
+<blockquote>
+<p>服务提供者，<strong>每服务</strong>的<strong>每方法</strong>最大可并行执行请求数。</p>
+</blockquote>
+</li>
+</ul>
+<p>另外，在&nbsp;<code>&lt;dubbo:method /&gt;</code>&nbsp;的&nbsp;<code>"actives"</code>&nbsp;和&nbsp;<code>"executes"</code>&nbsp;配置项，可以<strong>自定义</strong>每个方法的配置。</p>
+<h1 id="2-RpcStatus">2. RpcStatus</h1>
+<p><code>com.alibaba.dubbo.rpc.RpcStatus</code>&nbsp;，RPC 状态。可以计入如下维度统计：</p>
+<ul>
+<li>
+<ol>
+<li>基于服务 URL</li>
+</ol>
+</li>
+<li>
+<ol start="2">
+<li>基于服务 URL + 方法</li>
+</ol>
+</li>
+</ul>
+<p>用于 ActiveLimitFilter 和 ExecuteLimitFilter 中。🙂 当然，Dubbo 中，也有其他类，也会调用到 RpcStatus 。</p>
+<h2 id="2-1-构造方法">2.1 构造方法</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 基于服务 URL 为维度的 RpcStatus 集合</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key：URL</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ConcurrentMap&lt;String, RpcStatus&gt; SERVICE_STATISTICS = <span class="keyword">new</span> ConcurrentHashMap&lt;String, RpcStatus&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 基于服务 URL + 方法维度的 RpcStatus 集合</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key1：URL</span></span><br /><span class="line"><span class="comment"> * key2：方法名</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ConcurrentMap&lt;String, ConcurrentMap&lt;String, RpcStatus&gt;&gt; METHOD_STATISTICS = <span class="keyword">new</span> ConcurrentHashMap&lt;String, ConcurrentMap&lt;String, RpcStatus&gt;&gt;();</span><br /><br /><span class="line"><span class="comment">// 目前没有用到</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, Object&gt; values = <span class="keyword">new</span> ConcurrentHashMap&lt;String, Object&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 调用中的次数</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicInteger active = <span class="keyword">new</span> AtomicInteger();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 总调用次数</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicLong total = <span class="keyword">new</span> AtomicLong();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 总调用失败次数</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicInteger failed = <span class="keyword">new</span> AtomicInteger();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 总调用时长，单位：毫秒</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicLong totalElapsed = <span class="keyword">new</span> AtomicLong();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 总调用失败时长，单位：毫秒</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicLong failedElapsed = <span class="keyword">new</span> AtomicLong();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 最大调用时长，单位：毫秒</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicLong maxElapsed = <span class="keyword">new</span> AtomicLong();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 最大调用失败时长，单位：毫秒</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicLong failedMaxElapsed = <span class="keyword">new</span> AtomicLong();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 最大调用成功时长，单位：毫秒</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicLong succeededMaxElapsed = <span class="keyword">new</span> AtomicLong();</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Semaphore used to control concurrency limit set by `executes`</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * 服务执行信号量，在 {<span class="doctag">@link</span> com.alibaba.dubbo.rpc.filter.ExecuteLimitFilter} 中使用</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">volatile</span> Semaphore executesLimit;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 服务执行信号量大小</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">int</span> executesPermits;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>========== 静态属性 ==========</li>
+<li>
+<p><code>SERVICE_STATISTICS</code>&nbsp;属性，基于<strong>服务 URL</strong>&nbsp;为维度的&nbsp;<strong>RpcStatus</strong>&nbsp;集合。<code>#getStatus(url)</code>&nbsp;<strong>静态</strong>方法，获得 RpcStatus 对象，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> RpcStatus <span class="title">getStatus</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">    String uri = url.toIdentityString();</span><br /><span class="line">    <span class="comment">// 获得</span></span><br /><span class="line">    RpcStatus status = SERVICE_STATISTICS.get(uri);</span><br /><span class="line">    <span class="comment">// 不存在，则进行创建</span></span><br /><span class="line">    <span class="keyword">if</span> (status == <span class="keyword">null</span>) {</span><br /><span class="line">        SERVICE_STATISTICS.putIfAbsent(uri, <span class="keyword">new</span> RpcStatus());</span><br /><span class="line">        status = SERVICE_STATISTICS.get(uri);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> status;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p><code>METHOD_STATISTICS</code>&nbsp;属性，基于<strong>服务 URL</strong>&nbsp;+&nbsp;<strong>方法</strong>为维度的&nbsp;<strong>RpcStatus</strong>&nbsp;集合。<code>#getStatus(url, methodName)</code>&nbsp;<strong>静态</strong>方法，获得 RpcStatus 对象，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> RpcStatus <span class="title">getStatus</span><span class="params">(URL url, String methodName)</span> </span>{</span><br /><span class="line">    String uri = url.toIdentityString();</span><br /><span class="line">    <span class="comment">// 获得方法集合</span></span><br /><span class="line">    ConcurrentMap&lt;String, RpcStatus&gt; map = METHOD_STATISTICS.get(uri);</span><br /><span class="line">    <span class="comment">// 不存在，创建方法集合</span></span><br /><span class="line">    <span class="keyword">if</span> (map == <span class="keyword">null</span>) {</span><br /><span class="line">        METHOD_STATISTICS.putIfAbsent(uri, <span class="keyword">new</span> ConcurrentHashMap&lt;String, RpcStatus&gt;());</span><br /><span class="line">        map = METHOD_STATISTICS.get(uri);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">// 获得 RpcStatus 对象</span></span><br /><span class="line">    RpcStatus status = map.get(methodName);</span><br /><span class="line">    <span class="comment">// 不存在，创建 RpcStatus 对象</span></span><br /><span class="line">    <span class="keyword">if</span> (status == <span class="keyword">null</span>) {</span><br /><span class="line">        map.putIfAbsent(methodName, <span class="keyword">new</span> RpcStatus());</span><br /><span class="line">        status = map.get(methodName);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> status;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>========== 对象属性 ==========</p>
+</li>
+<li>次数相关
+<ul>
+<li><code>active</code>&nbsp;，<strong>调用中</strong>的次数。这个属性在 ActiveLimitFilter 中<strong>非常关键</strong>。</li>
+<li><code>total</code>&nbsp;<code>failed</code></li>
+</ul>
+</li>
+<li>时长相关
+<ul>
+<li><code>totalElapsed</code>&nbsp;<code>failedElapsed</code></li>
+<li><code>failedElapsed</code>&nbsp;<code>failedMaxElapsed</code>&nbsp;<code>succeededMaxElapsed</code></li>
+</ul>
+</li>
+<li>信号量相关
+<ul>
+<li><code>executesLimit</code>&nbsp;，服务执行信号量。这个属性在 ExecuteLimitFilter 中<strong>非常关键</strong>。</li>
+<li><code>executesPermits</code>&nbsp;，服务执行信号量大小。</li>
+</ul>
+</li>
+</ul>
+<h2 id="2-2-beginCount">2.2 beginCount</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 服务调用开始的计数</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> url URL 对象</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> methodName 方法名</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">beginCount</span><span class="params">(URL url, String methodName)</span> </span>{</span><br /><span class="line">    <span class="comment">// `SERVICE_STATISTICS` 的计数</span></span><br /><span class="line">    beginCount(getStatus(url));</span><br /><span class="line">    <span class="comment">// `METHOD_STATISTICS` 的计数</span></span><br /><span class="line">    beginCount(getStatus(url, methodName));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><strong>静态方法</strong>，在其内部，会调用两次&nbsp;<code>#beginCount(RpcStatus)</code>&nbsp;方法，分别计数。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">beginCount</span><span class="params">(RpcStatus status)</span> </span>{</span><br /><span class="line">    <span class="comment">// 调用中的次数</span></span><br /><span class="line">    status.active.incrementAndGet();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h2 id="2-3-endCount">2.3 endCount</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 服务调用结束的计数</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> url URL 对象</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> elapsed 时长，毫秒</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> succeeded 是否成功</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">endCount</span><span class="params">(URL url, String methodName, <span class="keyword">long</span> elapsed, <span class="keyword">boolean</span> succeeded)</span> </span>{</span><br /><span class="line">    <span class="comment">// `SERVICE_STATISTICS` 的计数</span></span><br /><span class="line">    endCount(getStatus(url), elapsed, succeeded);</span><br /><span class="line">    <span class="comment">// `METHOD_STATISTICS` 的计数</span></span><br /><span class="line">    endCount(getStatus(url, methodName), elapsed, succeeded);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><strong>静态方法</strong>，在其内部，会调用两次&nbsp;<code>#endCount(RpcStatus)</code>&nbsp;方法，分别计数。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">endCount</span><span class="params">(RpcStatus status, <span class="keyword">long</span> elapsed, <span class="keyword">boolean</span> succeeded)</span> </span>{</span><br /><span class="line">    <span class="comment">// 次数计数</span></span><br /><span class="line">    status.active.decrementAndGet();</span><br /><span class="line">    status.total.incrementAndGet();</span><br /><span class="line">    status.totalElapsed.addAndGet(elapsed);</span><br /><span class="line">    <span class="comment">// 时长计数</span></span><br /><span class="line">    <span class="keyword">if</span> (status.maxElapsed.get() &lt; elapsed) {</span><br /><span class="line">        status.maxElapsed.set(elapsed);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">if</span> (succeeded) {</span><br /><span class="line">        <span class="keyword">if</span> (status.succeededMaxElapsed.get() &lt; elapsed) {</span><br /><span class="line">            status.succeededMaxElapsed.set(elapsed);</span><br /><span class="line">        }</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        status.failed.incrementAndGet(); <span class="comment">// 失败次数</span></span><br /><span class="line">        status.failedElapsed.addAndGet(elapsed);</span><br /><span class="line">        <span class="keyword">if</span> (status.failedMaxElapsed.get() &lt; elapsed) {</span><br /><span class="line">            status.failedMaxElapsed.set(elapsed);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h2 id="2-4-getSemaphore">2.4 getSemaphore</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> Semaphore <span class="title">getSemaphore</span><span class="params">(<span class="keyword">int</span> maxThreadNum)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span>(maxThreadNum &lt;= <span class="number">0</span>) {</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 若信号量不存在，或者信号量大小改变，创建新的信号量</span></span><br /><span class="line">    <span class="keyword">if</span> (executesLimit == <span class="keyword">null</span> || executesPermits != maxThreadNum) {</span><br /><span class="line">        <span class="keyword">synchronized</span> (<span class="keyword">this</span>) {</span><br /><span class="line">            <span class="keyword">if</span> (executesLimit == <span class="keyword">null</span> || executesPermits != maxThreadNum) {</span><br /><span class="line">                executesLimit = <span class="keyword">new</span> Semaphore(maxThreadNum);</span><br /><span class="line">                executesPermits = maxThreadNum;</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 返回信号量</span></span><br /><span class="line">    <span class="keyword">return</span> executesLimit;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><strong>对象</strong>方法，获得信号量&nbsp;<code>executesPermits</code>&nbsp;属性。</li>
+<li>创建信号量的<strong>条件</strong>，信号量&nbsp;<code>executesPermits</code>&nbsp;不存在，或者信号量大小&nbsp;<code>executesLimit</code>&nbsp;发生改变。我们会发生比较&ldquo;神奇&rdquo;的是，这个方法是<strong>直接</strong>返回 Semaphore 对象。考虑到有信号量大小改变的需求，但是信号量不支持<strong>批量</strong>修改大小，那么剩余的一种合适的方式，创建<strong>新的</strong>信号量对象。因此，这个方法就选择了直接返回 Semaphore 对象。</li>
+<li>在&nbsp;<a href="http://manzhizhen.iteye.com/blog/2386408" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo源代码分析七：使用executes属性的一个问题》</a>&nbsp;中，分享的很不错。</li>
+</ul>
+<h1 id="3-ActiveLimitFilter">3. ActiveLimitFilter</h1>
+<p><code>com.alibaba.dubbo.rpc.filter.ActiveLimitFilter</code>&nbsp;，实现 Filter 接口，每服务消费者<strong>每服务</strong>、<strong>每方法</strong>的<strong>最大可并行</strong>调用数限制的过滤器实现类。</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Activate</span>(group = Constants.CONSUMER, value = Constants.ACTIVES_KEY)</span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ActiveLimitFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><span class="line"> <span class="number">3</span>: </span><br /><span class="line"> <span class="number">4</span>:     <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">5</span>:     <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">6</span>:         URL url = invoker.getUrl();</span><br /><span class="line"> <span class="number">7</span>:         String methodName = invocation.getMethodName();</span><br /><span class="line"> <span class="number">8</span>:         <span class="comment">// 获得服务提供者每服务每方法最大可并行执行请求数</span></span><br /><span class="line"> <span class="number">9</span>:         <span class="keyword">int</span> max = invoker.getUrl().getMethodParameter(methodName, Constants.ACTIVES_KEY, <span class="number">0</span>);</span><br /><span class="line"><span class="number">10</span>:         <span class="comment">// 获得 RpcStatus 对象，基于服务 URL + 方法维度</span></span><br /><span class="line"><span class="number">11</span>:         RpcStatus count = RpcStatus.getStatus(invoker.getUrl(), invocation.getMethodName());</span><br /><span class="line"><span class="number">12</span>:         <span class="keyword">if</span> (max &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">13</span>:             <span class="comment">// 获得超时值</span></span><br /><span class="line"><span class="number">14</span>:             <span class="keyword">long</span> timeout = invoker.getUrl().getMethodParameter(invocation.getMethodName(), Constants.TIMEOUT_KEY, <span class="number">0</span>);</span><br /><span class="line"><span class="number">15</span>:             <span class="keyword">long</span> start = System.currentTimeMillis();</span><br /><span class="line"><span class="number">16</span>:             <span class="keyword">long</span> remain = timeout; <span class="comment">// 剩余可等待时间</span></span><br /><span class="line"><span class="number">17</span>:             <span class="keyword">int</span> active = count.getActive();</span><br /><span class="line"><span class="number">18</span>:             <span class="comment">// 超过最大可并行执行请求数，等待</span></span><br /><span class="line"><span class="number">19</span>:             <span class="keyword">if</span> (active &gt;= max) {</span><br /><span class="line"><span class="number">20</span>:                 <span class="keyword">synchronized</span> (count) { <span class="comment">// 通过锁，有且仅有一个在等待。</span></span><br /><span class="line"><span class="number">21</span>:                     <span class="comment">// 循环，等待可并行执行请求数</span></span><br /><span class="line"><span class="number">22</span>:                     <span class="keyword">while</span> ((active = count.getActive()) &gt;= max) {</span><br /><span class="line"><span class="number">23</span>:                         <span class="comment">// 等待，直到超时，或者被唤醒</span></span><br /><span class="line"><span class="number">24</span>:                         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">25</span>:                             count.wait(remain);</span><br /><span class="line"><span class="number">26</span>:                         } <span class="keyword">catch</span> (InterruptedException e) {</span><br /><span class="line"><span class="number">27</span>:                         }</span><br /><span class="line"><span class="number">28</span>:                         <span class="comment">// 判断是否没有剩余时长了，抛出 RpcException 异常</span></span><br /><span class="line"><span class="number">29</span>:                         <span class="keyword">long</span> elapsed = System.currentTimeMillis() - start; <span class="comment">// 本地等待时长</span></span><br /><span class="line"><span class="number">30</span>:                         remain = timeout - elapsed;</span><br /><span class="line"><span class="number">31</span>:                         <span class="keyword">if</span> (remain &lt;= <span class="number">0</span>) {</span><br /><span class="line"><span class="number">32</span>:                             <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Waiting concurrent invoke timeout in client-side for service:  "</span></span><br /><span class="line"><span class="number">33</span>:                                     + invoker.getInterface().getName() + <span class="string">", method: "</span></span><br /><span class="line"><span class="number">34</span>:                                     + invocation.getMethodName() + <span class="string">", elapsed: "</span> + elapsed</span><br /><span class="line"><span class="number">35</span>:                                     + <span class="string">", timeout: "</span> + timeout + <span class="string">". concurrent invokes: "</span> + active</span><br /><span class="line"><span class="number">36</span>:                                     + <span class="string">". max concurrent invoke limit: "</span> + max);</span><br /><span class="line"><span class="number">37</span>:                         }</span><br /><span class="line"><span class="number">38</span>:                     }</span><br /><span class="line"><span class="number">39</span>:                 }</span><br /><span class="line"><span class="number">40</span>:             }</span><br /><span class="line"><span class="number">41</span>:         }</span><br /><span class="line"><span class="number">42</span>:         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">43</span>:             <span class="keyword">long</span> begin = System.currentTimeMillis();</span><br /><span class="line"><span class="number">44</span>:             <span class="comment">// 调用开始的计数</span></span><br /><span class="line"><span class="number">45</span>:             RpcStatus.beginCount(url, methodName);</span><br /><span class="line"><span class="number">46</span>:             <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">47</span>:                 <span class="comment">// 服务调用</span></span><br /><span class="line"><span class="number">48</span>:                 Result result = invoker.invoke(invocation);</span><br /><span class="line"><span class="number">49</span>:                 <span class="comment">// 调用结束的计数（成功）</span></span><br /><span class="line"><span class="number">50</span>:                 RpcStatus.endCount(url, methodName, System.currentTimeMillis() - begin, <span class="keyword">true</span>);</span><br /><span class="line"><span class="number">51</span>:                 <span class="keyword">return</span> result;</span><br /><span class="line"><span class="number">52</span>:             } <span class="keyword">catch</span> (RuntimeException t) {</span><br /><span class="line"><span class="number">53</span>:                 <span class="comment">// 调用结束的计数（失败）</span></span><br /><span class="line"><span class="number">54</span>:                 RpcStatus.endCount(url, methodName, System.currentTimeMillis() - begin, <span class="keyword">false</span>);</span><br /><span class="line"><span class="number">55</span>:                 <span class="keyword">throw</span> t;</span><br /><span class="line"><span class="number">56</span>:             }</span><br /><span class="line"><span class="number">57</span>:         } <span class="keyword">finally</span> {</span><br /><span class="line"><span class="number">58</span>:             <span class="comment">// 唤醒等待的相同服务的相同方法的请求</span></span><br /><span class="line"><span class="number">59</span>:             <span class="keyword">if</span> (max &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">60</span>:                 <span class="keyword">synchronized</span> (count) {</span><br /><span class="line"><span class="number">61</span>:                     count.notify();</span><br /><span class="line"><span class="number">62</span>:                 }</span><br /><span class="line"><span class="number">63</span>:             }</span><br /><span class="line"><span class="number">64</span>:         }</span><br /><span class="line"><span class="number">65</span>:     }</span><br /><span class="line"><span class="number">66</span>: </span><br /><span class="line"><span class="number">67</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>ActiveLimitFilter 基于&nbsp;<code>RpcStatus.active</code>&nbsp;属性，判断当前<strong>正在调用中</strong>的服务的方法的次数来判断。因为，需要有<strong>等待超时</strong>的特性，所以不使用&nbsp;<code>RpcStatus.semaphore</code>&nbsp;<strong>信号量</strong>的方式来实现。</li>
+<li>第 9 行：调用&nbsp;<code>URL#getMethodParameter(methodName, key, defaultValue)</code>&nbsp;方法，获得服务提供者每服务每方法最大可并行执行请求数。优先&nbsp;<code>&lt;dubbo: method /&gt;</code>&nbsp;，其次&nbsp;<code>&lt;dubbo:reference /&gt;</code>&nbsp;。</li>
+<li>第 11 行：调用&nbsp;<code>RpcStatus#getStatus(url, methodName)</code>&nbsp;方法，获得 RpcStatus 对象，基于<strong>服务 URL + 方法</strong>为维度。</li>
+<li>第 14 行：获得<strong>超时值</strong>。这里有一点需要注意，此处产生的<strong>等待</strong>时长，<strong>不</strong>占用调用服务的<strong>超时</strong>时长。所以，<strong>极端情况</strong>下的服务超时，约等于 2 *&nbsp;<code>timeout</code>&nbsp;。</li>
+<li>第 19 行：超过最大可并行执行请求数，<strong>需要等待</strong>。</li>
+<li>第 20 行：通过<strong>锁定</strong>&nbsp;<code>synchronized</code>&nbsp;，<strong>有且仅有</strong>一个在等待。同时，也保证先调用的可以先执行。</li>
+<li>第 22 行：<strong>循环</strong>，等待可并行执行请求数。为什么需要循环呢？极端情况下，恰好有一个<strong>新的</strong>调用，在【第 61 行】执行的一瞬间，走到了【第 19 行】，&ldquo;<strong>抢</strong>&rdquo;走了正在锁定等待的请求机会。</li>
+<li>第 23 至 27 行：等待，直到超时，或者被唤醒【第 61 行】。</li>
+<li>第 28 至 37 行：判断若没有剩余时长了，抛出 RpcException 异常。</li>
+<li>第 45 行：调用&nbsp;<code>RpcStaus#beginCount(url, methodName)</code>&nbsp;方法，调用开始的计数。</li>
+<li>第 48 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，服务调用。</li>
+<li>第 50 行：调用&nbsp;<code>RpcStaus#endCount(url, methodName, true)</code>&nbsp;方法，调用开始的计数（成功）。</li>
+<li>第 54 行：调用&nbsp;<code>RpcStaus#endCount(url, methodName, false)</code>&nbsp;方法，调用开始的计数（失败）。</li>
+<li>第 59 至 63 行：唤醒等待的相同服务的相同方法的请求【第 25 行】。</li>
+</ul>
+<h1 id="4-ExecuteLimitFilter">4. ExecuteLimitFilter</h1>
+<p><code>com.alibaba.dubbo.rpc.filter.ExecuteLimitFilter</code>&nbsp;，实现 Filter 接口，服务提供者<strong>每服务</strong>、<strong>每方法</strong>的<strong>最大可并行</strong>执行请求数的过滤器实现类。</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Activate</span>(group = Constants.PROVIDER, value = Constants.EXECUTES_KEY)</span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ExecuteLimitFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><span class="line"> <span class="number">3</span>: </span><br /><span class="line"> <span class="number">4</span>:     <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">5</span>:     <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">6</span>:         URL url = invoker.getUrl();</span><br /><span class="line"> <span class="number">7</span>:         String methodName = invocation.getMethodName();</span><br /><span class="line"> <span class="number">8</span>:         Semaphore executesLimit = <span class="keyword">null</span>; <span class="comment">// 信号量</span></span><br /><span class="line"> <span class="number">9</span>:         <span class="keyword">boolean</span> acquireResult = <span class="keyword">false</span>; <span class="comment">// 是否获得信号量</span></span><br /><span class="line"><span class="number">10</span>:         <span class="comment">// 获得服务提供者每服务每方法最大可并行执行请求数</span></span><br /><span class="line"><span class="number">11</span>:         <span class="keyword">int</span> max = url.getMethodParameter(methodName, Constants.EXECUTES_KEY, <span class="number">0</span>);</span><br /><span class="line"><span class="number">12</span>:         <span class="keyword">if</span> (max &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">13</span>:             <span class="comment">// 获得 RpcStatus 对象，基于服务 URL + 方法维度</span></span><br /><span class="line"><span class="number">14</span>:             RpcStatus count = RpcStatus.getStatus(url, invocation.getMethodName());</span><br /><span class="line"><span class="number">15</span>:             <span class="comment">// 获得信号量。若获得不到，抛出异常。</span></span><br /><span class="line"><span class="number">16</span>: <span class="comment">//            if (count.getActive() &gt;= max) {</span></span><br /><span class="line"><span class="number">17</span>:             <span class="comment">/**</span></span><br /><span class="line"><span class="comment">18:              * http://manzhizhen.iteye.com/blog/2386408</span></span><br /><span class="line"><span class="comment">19:              * use semaphore for concurrency control (to limit thread number)</span></span><br /><span class="line"><span class="comment">20:              */</span></span><br /><span class="line"><span class="number">21</span>:             executesLimit = count.getSemaphore(max);</span><br /><span class="line"><span class="number">22</span>:             <span class="keyword">if</span> (executesLimit != <span class="keyword">null</span> &amp;&amp; !(acquireResult = executesLimit.tryAcquire())) {</span><br /><span class="line"><span class="number">23</span>:                 <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Failed to invoke method "</span> + invocation.getMethodName() + <span class="string">" in provider "</span> + url + <span class="string">", cause: The service using threads greater than &lt;dubbo:service executes=\""</span> + max + <span class="string">"\" /&gt; limited."</span>);</span><br /><span class="line"><span class="number">24</span>:             }</span><br /><span class="line"><span class="number">25</span>:         }</span><br /><span class="line"><span class="number">26</span>:         <span class="keyword">long</span> begin = System.currentTimeMillis();</span><br /><span class="line"><span class="number">27</span>:         <span class="keyword">boolean</span> isSuccess = <span class="keyword">true</span>;</span><br /><span class="line"><span class="number">28</span>:         <span class="comment">// 调用开始的计数</span></span><br /><span class="line"><span class="number">29</span>:         RpcStatus.beginCount(url, methodName);</span><br /><span class="line"><span class="number">30</span>:         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">31</span>:             <span class="comment">// 服务调用</span></span><br /><span class="line"><span class="number">32</span>:             <span class="keyword">return</span> invoker.invoke(invocation);</span><br /><span class="line"><span class="number">33</span>:         } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line"><span class="number">34</span>:             isSuccess = <span class="keyword">false</span>; <span class="comment">// 标记失败</span></span><br /><span class="line"><span class="number">35</span>:             <span class="keyword">if</span> (t <span class="keyword">instanceof</span> RuntimeException) {</span><br /><span class="line"><span class="number">36</span>:                 <span class="keyword">throw</span> (RuntimeException) t;</span><br /><span class="line"><span class="number">37</span>:             } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">38</span>:                 <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"unexpected exception when ExecuteLimitFilter"</span>, t);</span><br /><span class="line"><span class="number">39</span>:             }</span><br /><span class="line"><span class="number">40</span>:         } <span class="keyword">finally</span> {</span><br /><span class="line"><span class="number">41</span>:             <span class="comment">// 调用结束的计数（成功）（失败）</span></span><br /><span class="line"><span class="number">42</span>:             RpcStatus.endCount(url, methodName, System.currentTimeMillis() - begin, isSuccess);</span><br /><span class="line"><span class="number">43</span>:             <span class="comment">// 释放信号量</span></span><br /><span class="line"><span class="number">44</span>:             <span class="keyword">if</span> (acquireResult) {</span><br /><span class="line"><span class="number">45</span>:                 executesLimit.release();</span><br /><span class="line"><span class="number">46</span>:             }</span><br /><span class="line"><span class="number">47</span>:         }</span><br /><span class="line"><span class="number">48</span>:     }</span><br /><span class="line"><span class="number">49</span>: </span><br /><span class="line"><span class="number">50</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>ActiveLimitFilter 基于&nbsp;<code>RpcStatus.semaphore</code>&nbsp;<strong>信号量</strong>属性，判断若超过最大可并行，抛出 RpcException 异常。</li>
+<li>第 11 行：调用&nbsp;<code>URL#getMethodParameter(methodName, key, defaultValue)</code>&nbsp;方法，获得服务提供者每服务每方法最大可并行执行请求数。优先&nbsp;<code>&lt;dubbo: method /&gt;</code>&nbsp;，其次&nbsp;<code>&lt;dubbo:service /&gt;</code>&nbsp;。</li>
+<li>第 13 行：调用&nbsp;<code>RpcStatus#getStatus(url, methodName)</code>&nbsp;方法，获得 RpcStatus 对象，基于<strong>服务 URL + 方法</strong>为维度。</li>
+<li>第 21 至 21 行：调用&nbsp;<code>RpcStatus#getSemaphore(max)</code>&nbsp;方法，获得 Semaphore 对象。</li>
+<li>第 22 至 24 行：调用&nbsp;<code>Semaphore#tryAcquire()</code>&nbsp;方法，若获得不到信号量，抛出 RpcException 异常。</li>
+<li>第 29 行：调用&nbsp;<code>RpcStaus#beginCount(url, methodName)</code>&nbsp;方法，调用开始的计数。</li>
+<li>第 32 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，服务调用。</li>
+<li>第 34 行：若发生异常，标记&nbsp;<code>isSuccess = false</code>&nbsp;，表示调用失败。</li>
+<li>第 42 行：调用&nbsp;<code>RpcStaus#endCount(url, methodName, success)</code>&nbsp;方法，调用开始的计数（成功）（失败）。</li>
+<li>第 43 至 46 行：调用&nbsp;<code>Semaphore#release()</code>&nbsp;方法，释放信号量。</li>
+</ul>
+</div>

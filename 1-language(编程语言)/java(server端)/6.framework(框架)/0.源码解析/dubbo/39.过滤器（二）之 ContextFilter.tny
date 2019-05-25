@@ -1,0 +1,174 @@
+<header class="article-header">
+<h1 class="article-title">过滤器（二）之 ContextFilter</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享 RpcContext 相关过滤器，包括两个：</p>
+<ul>
+<li>ConsumerContextFilter ：在服务<strong>消费者</strong>中使用，负责<strong>发起</strong>调用时，初始化 RpcContext 。</li>
+<li>ContextFilter ：在服务<strong>提供者</strong>中使用，负责<strong>被</strong>调用时，初始化 RpcContext 。</li>
+</ul>
+<h1 id="2-RpcContext">2. RpcContext</h1>
+<p>RpcContext，上下文信息。在&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/context.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 上下文信息》</a>&nbsp;，定义如下：</p>
+<blockquote>
+<p>上下文中存放的是当前调用过程中所需的环境信息。所有配置信息都将转换为 URL 的参数，参见&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/xml/introduction.html" target="_blank" rel="external nofollow noopener noreferrer">schema 配置参考手册</a>&nbsp;中的对应URL参数一列。</p>
+<p>RpcContext 是一个 ThreadLocal 的临时状态记录器，当接收到 RPC 请求，或发起 RPC 请求时，RpcContext 的状态都会变化。比如：A 调 B，B 再调 C，则 B 机器上，</p>
+<ul>
+<li>在 B 调 C 之前，RpcContext 记录的是 A 调 B 的信息，</li>
+<li>在 B 调 C 之后，RpcContext 记录的是 B 调 C 的信息。</li>
+</ul>
+</blockquote>
+<ul>
+<li>RpcContext 在调用时的状态变化，有点绕，下面我们看具体的 Filter 实现，就相对容易明白列。</li>
+</ul>
+<p><a href="http://svip.iocoder.cn/Dubbo/filter-context-filter/TODO"><code>com.alibaba.dubbo.rpc.RpcContext</code></a>&nbsp;，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * RpcContext 线程变量</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ThreadLocal&lt;RpcContext&gt; LOCAL = <span class="keyword">new</span> ThreadLocal&lt;RpcContext&gt;() {</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">protected</span> RpcContext <span class="title">initialValue</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> RpcContext();</span><br /><span class="line">    }</span><br /><br /><span class="line">};</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 隐式参数集合</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, String&gt; attachments = <span class="keyword">new</span> HashMap&lt;String, String&gt;();</span><br /><span class="line"><span class="comment">// 实际未使用</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, Object&gt; values = <span class="keyword">new</span> HashMap&lt;String, Object&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 异步调用 Future</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Future&lt;?&gt; future;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 可调用服务的 URL 对象集合</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> List&lt;URL&gt; urls;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 调用服务的 URL 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> URL url;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 方法名</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> String methodName;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 参数类型数组</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Class&lt;?&gt;[] parameterTypes;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 参数值数组</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Object[] arguments;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 服务消费者地址</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> InetSocketAddress localAddress;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 服务提供者地址</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> InetSocketAddress remoteAddress;</span><br /><br /><span class="line"><span class="meta">@Deprecated</span> <span class="comment">// DUBBO-325 废弃的，使用 urls 属性替代</span></span><br /><span class="line"><span class="keyword">private</span> List&lt;Invoker&lt;?&gt;&gt; invokers;</span><br /><span class="line"><span class="meta">@Deprecated</span> <span class="comment">// DUBBO-325 废弃的，使用 url 属性替代</span></span><br /><span class="line"><span class="keyword">private</span> Invoker&lt;?&gt; invoker;</span><br /><span class="line"><span class="meta">@Deprecated</span> <span class="comment">// DUBBO-325 废弃的，使用 methodName、parameterTypes、arguments 属性替代</span></span><br /><span class="line"><span class="keyword">private</span> Invocation invocation;</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 请求</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * 例如，在 RestProtocol</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Object request;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 响应</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * 例如，在 RestProtocol</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Object response;</span><br /> <br /><span class="line"> <span class="comment">// ... 省略一些</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>LOCAL</code>&nbsp;<strong>静态</strong>属性，RpcContext 线程变量。初始获得时，返回新的 RpcContext 对象。</li>
+<li><code>attachments</code>&nbsp;属性，隐式参数集合。
+<ul>
+<li>例如，我们在 PRC 调用前，可在业务代码里添加一些想要传递给服务的参数到该属性</li>
+<li>又例如，在分布式链路追踪时，添加链路追踪<strong>编号</strong>到该属性种。</li>
+<li><a href="http://dubbo.apache.org/zh-cn/docs/user/demos/attachment.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 隐式参数》</a></li>
+</ul>
+</li>
+<li><code>future</code>&nbsp;属性，异步调用 Future 对象，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/rpc-dubbo-3-async/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务调用（三）之远程调用（Dubbo）【3】异步调用》</a>&nbsp;有详细使用的代码分享。</li>
+<li>【替代&nbsp;<code>invokers</code>&nbsp;属性】
+<ul>
+<li><code>urls</code>&nbsp;属性，<strong>可调用</strong>的服务的 URL 对象集合，在集群容错模块实现。</li>
+</ul>
+</li>
+<li>【替代&nbsp;<code>invoker</code>&nbsp;属性】
+<ul>
+<li><code>url</code>&nbsp;属性，<strong>调用</strong>的服务的 URL 对象。</li>
+</ul>
+</li>
+<li>【替代&nbsp;<code>invocation</code>&nbsp;属性】
+<ul>
+<li><code>methodName</code>&nbsp;属性，<strong>调用</strong>的方法名。</li>
+<li><code>parameterTypes</code>&nbsp;属性，<strong>调用</strong>的参数类型数组。</li>
+<li><code>arguments</code>&nbsp;属性，<strong>调用</strong>的参数值数组。</li>
+</ul>
+</li>
+<li>地址
+<ul>
+<li><code>localAddress</code>&nbsp;属性， 服务消费者地址。</li>
+<li><code>remoteAddress</code>&nbsp;属性，服务提供者地址。</li>
+</ul>
+</li>
+<li><code>request</code>&nbsp;<code>response</code>&nbsp;属性，请求和响应。例如，在 RestProtocol 中使用，代表 HTTP Request 和 Response 对象，在 RpcContextFilter 中设置，如下图所示：<img src="http://static2.iocoder.cn/images/Dubbo/2018_11_13/01.png" alt="RpcContextFilter" />
+<ul>
+<li>我们可以看到&nbsp;<code>request</code>&nbsp;<code>response</code>&nbsp;的类型是 Object 类。通过这种形式，可以不仅仅适用于 HTTP 的场景。</li>
+</ul>
+</li>
+</ul>
+<p>RpcContext 中，有很多方法，比较易懂，胖友自己查看噢。</p>
+<h1 id="3-ConsumerContextFilter">3. ConsumerContextFilter</h1>
+<p><code>com.alibaba.dubbo.rpc.filter.ConsumerContextFilter</code>&nbsp;，实现 Filter 接口，<strong>服务消费者</strong>的 ContextFilter 实现类。</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Activate</span>(group = Constants.CONSUMER, order = -<span class="number">10000</span>)</span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ConsumerContextFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><span class="line"> <span class="number">3</span>: </span><br /><span class="line"> <span class="number">4</span>:     <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">5</span>:     <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">6</span>:         <span class="comment">// 设置 RpcContext 对象</span></span><br /><span class="line"> <span class="number">7</span>:         RpcContext.getContext()</span><br /><span class="line"> <span class="number">8</span>:                 .setInvoker(invoker)</span><br /><span class="line"> <span class="number">9</span>:                 .setInvocation(invocation)</span><br /><span class="line"><span class="number">10</span>:                 .setLocalAddress(NetUtils.getLocalHost(), <span class="number">0</span>) <span class="comment">// 本地地址</span></span><br /><span class="line"><span class="number">11</span>:                 .setRemoteAddress(invoker.getUrl().getHost(), invoker.getUrl().getPort()); <span class="comment">// 远程地址</span></span><br /><span class="line"><span class="number">12</span>:         <span class="comment">// 设置 RpcInvocation 对象的 `invoker` 属性</span></span><br /><span class="line"><span class="number">13</span>:         <span class="keyword">if</span> (invocation <span class="keyword">instanceof</span> RpcInvocation) {</span><br /><span class="line"><span class="number">14</span>:             ((RpcInvocation) invocation).setInvoker(invoker);</span><br /><span class="line"><span class="number">15</span>:         }</span><br /><span class="line"><span class="number">16</span>:         <span class="comment">// 服务调用</span></span><br /><span class="line"><span class="number">17</span>:         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">18</span>:             <span class="keyword">return</span> invoker.invoke(invocation);</span><br /><span class="line"><span class="number">19</span>:         } <span class="keyword">finally</span> {</span><br /><span class="line"><span class="number">20</span>:             <span class="comment">// 清理隐式参数集合</span></span><br /><span class="line"><span class="number">21</span>:             RpcContext.getContext().clearAttachments();</span><br /><span class="line"><span class="number">22</span>:         }</span><br /><span class="line"><span class="number">23</span>:     }</span><br /><span class="line"><span class="number">24</span>: </span><br /><span class="line"><span class="number">25</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 6 至 11 行：设置 RpcContext 对象。</li>
+<li>第 12 至 15 行：设置 RpcInvocation 对象的&nbsp;<code>invoker</code>&nbsp;属性。该属性，目前使用在如下图的场景：<img src="http://static2.iocoder.cn/images/Dubbo/2018_11_13/02.png" alt="RpcInvocation" /></li>
+<li>第 18 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，服务调用。</li>
+<li>
+<p>第 19 至 22 行：调用&nbsp;<code>RpcContext#clearAttachments()</code>&nbsp;方法，清理隐式参数集合。所以，<strong>每次</strong>（注意，每次！！！）服务调用完成，RpcContext 设置的隐式参数<strong>都会被清理</strong>！代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">clearAttachments</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.attachments.clear();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<p>😈 看到此处，<code>RpcContext.attachments</code>&nbsp;属性，是如何传递给被调用的服务的呢？答案在下图：<img src="http://static2.iocoder.cn/images/Dubbo/2018_11_13/03.png" alt="透传" /></p>
+<h1 id="4-ContextFilter">4. ContextFilter</h1>
+<p><code>com.alibaba.dubbo.rpc.filter.ContextFilter</code>&nbsp;，实现 Filter 接口，<strong>服务提供者</strong>的 ContextFilter 实现类。</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Activate</span>(group = Constants.PROVIDER, order = -<span class="number">10000</span>)</span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ContextFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><span class="line"> <span class="number">3</span>: </span><br /><span class="line"> <span class="number">4</span>:     <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">5</span>:     <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">6</span>:         <span class="comment">// 创建新的 `attachments` 集合，清理公用的隐式参数</span></span><br /><span class="line"> <span class="number">7</span>:         Map&lt;String, String&gt; attachments = invocation.getAttachments();</span><br /><span class="line"> <span class="number">8</span>:         <span class="keyword">if</span> (attachments != <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">9</span>:             attachments = <span class="keyword">new</span> HashMap&lt;String, String&gt;(attachments);</span><br /><span class="line"><span class="number">10</span>:             attachments.remove(Constants.PATH_KEY);</span><br /><span class="line"><span class="number">11</span>:             attachments.remove(Constants.GROUP_KEY);</span><br /><span class="line"><span class="number">12</span>:             attachments.remove(Constants.VERSION_KEY);</span><br /><span class="line"><span class="number">13</span>:             attachments.remove(Constants.DUBBO_VERSION_KEY);</span><br /><span class="line"><span class="number">14</span>:             attachments.remove(Constants.TOKEN_KEY);</span><br /><span class="line"><span class="number">15</span>:             attachments.remove(Constants.TIMEOUT_KEY);</span><br /><span class="line"><span class="number">16</span>:             attachments.remove(Constants.ASYNC_KEY); <span class="comment">// Remove async property to avoid being passed to the following invoke chain.</span></span><br /><span class="line"><span class="number">17</span>:                                                      <span class="comment">// 清空消费端的异步参数</span></span><br /><span class="line"><span class="number">18</span>:         }</span><br /><span class="line"><span class="number">19</span>:         <span class="comment">// 设置 RpcContext 对象</span></span><br /><span class="line"><span class="number">20</span>:         RpcContext.getContext()</span><br /><span class="line"><span class="number">21</span>:                 .setInvoker(invoker)</span><br /><span class="line"><span class="number">22</span>:                 .setInvocation(invocation)</span><br /><span class="line"><span class="number">23</span>: <span class="comment">//                .setAttachments(attachments)  // merged from dubbox</span></span><br /><span class="line"><span class="number">24</span>:                 .setLocalAddress(invoker.getUrl().getHost(), invoker.getUrl().getPort());</span><br /><span class="line"><span class="number">25</span>:         <span class="comment">// mreged from dubbox</span></span><br /><span class="line"><span class="number">26</span>:         <span class="comment">// we may already added some attachments into RpcContext before this filter (e.g. in rest protocol)</span></span><br /><span class="line"><span class="number">27</span>:         <span class="comment">// 在此过滤器(例如rest协议)之前，我们可能已经在RpcContext中添加了一些附件。</span></span><br /><span class="line"><span class="number">28</span>:         <span class="keyword">if</span> (attachments != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">29</span>:             <span class="keyword">if</span> (RpcContext.getContext().getAttachments() != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">30</span>:                 RpcContext.getContext().getAttachments().putAll(attachments);</span><br /><span class="line"><span class="number">31</span>:             } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">32</span>:                 RpcContext.getContext().setAttachments(attachments);</span><br /><span class="line"><span class="number">33</span>:             }</span><br /><span class="line"><span class="number">34</span>:         }</span><br /><span class="line"><span class="number">35</span>:         <span class="comment">// 设置 RpcInvocation 对象的 `invoker` 属性</span></span><br /><span class="line"><span class="number">36</span>:         <span class="keyword">if</span> (invocation <span class="keyword">instanceof</span> RpcInvocation) {</span><br /><span class="line"><span class="number">37</span>:             ((RpcInvocation) invocation).setInvoker(invoker);</span><br /><span class="line"><span class="number">38</span>:         }</span><br /><span class="line"><span class="number">39</span>:         <span class="comment">// 服务调用</span></span><br /><span class="line"><span class="number">40</span>:         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">41</span>:             <span class="keyword">return</span> invoker.invoke(invocation);</span><br /><span class="line"><span class="number">42</span>:         } <span class="keyword">finally</span> {</span><br /><span class="line"><span class="number">43</span>:             <span class="comment">// 移除上下文</span></span><br /><span class="line"><span class="number">44</span>:             RpcContext.removeContext();</span><br /><span class="line"><span class="number">45</span>:         }</span><br /><span class="line"><span class="number">46</span>:     }</span><br /><span class="line"><span class="number">47</span>: </span><br /><span class="line"><span class="number">48</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 6 至 18 行：创建新的&nbsp;<code>attachments</code>&nbsp;集合，因为要清理<strong>公用</strong>的隐式参数。该<strong>公用</strong>的隐式参数，设置的地方，如下图所示：<img src="http://static2.iocoder.cn/images/Dubbo/2018_11_13/04.png" alt="RpcInvocation" /></li>
+<li>第 19 至 24 行：设置 RpcContext 对象。</li>
+<li>第 25 至 34 行：在此过滤器( 例如 RestProtocol 的 RpcContextFilter )之前，我们可能已经在 RpcContext 中添加了一些隐式参数。</li>
+<li>第 35 至 38 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，服务调用。</li>
+<li>第 41 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，服务调用。</li>
+<li>
+<p>第 42 至 45 行：调用&nbsp;<code>RpcContext#removeContext()</code>&nbsp;方法，移除上下文。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">removeContext</span><span class="params">()</span> </span>{</span><br /><span class="line">    LOCAL.remove();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h1 id="5-RpcContext-values">5. RpcContext.values</h1>
+<p>我们在回过头来看&nbsp;<code>RpcContext.values</code>&nbsp;属性。目前 Dubbo 中，<strong>并未使用它</strong>。</p>
+<p>从代码看下来，如果我们希望有<strong>多次</strong>&nbsp;Dubbo 调用，共享参数，并且不被 ConsumerContextFilter 清理隐式参数，笔者觉得可以使用该&nbsp;<code>values</code>&nbsp;属性。</p>
+<p>和&nbsp;<code>value</code>&nbsp;属性相关的方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> Map&lt;String, Object&gt; <span class="title">get</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> values;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> RpcContext <span class="title">set</span><span class="params">(String key, Object value)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (value == <span class="keyword">null</span>) {</span><br /><span class="line">        values.remove(key);</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        values.put(key, value);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> <span class="keyword">this</span>;</span><br /><span class="line">}   </span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> RpcContext <span class="title">remove</span><span class="params">(String key)</span> </span>{</span><br /><span class="line">    values.remove(key);</span><br /><span class="line">    <span class="keyword">return</span> <span class="keyword">this</span>;</span><br /><span class="line">} </span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">get</span><span class="params">(String key)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> values.get(key);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>当然，如果同时我们希望一些<strong>通用</strong>的&nbsp;<code>values</code>&nbsp;传递给被调用的服务，可以实现一个 Filter ，简化代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">RpcContext.getContext().setAttachment(<span class="string">"key1"</span>, RpcContext.getContext().get(<span class="string">"key2"</span>).toString());</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>恩，还是当然，在业务代码里，也可以这么调用。🙂</p>
+</div>

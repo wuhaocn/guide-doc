@@ -1,0 +1,113 @@
+<header class="article-header">
+<h1 class="article-title">过滤器（九）之 TpsLimitFilter</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享 TpsLimitFilter 过滤器，用于服务<strong>提供者</strong>中，提供&nbsp;<strong>限流</strong>&nbsp;的功能。</p>
+<p><strong>配置方式</strong></p>
+<p>① 通过&nbsp;<code>&lt;dubbo:parameter key="tps" value="" /&gt;</code>&nbsp;配置项，添加到&nbsp;<code>&lt;dubbo:service /&gt;</code>&nbsp;或&nbsp;<code>&lt;dubbo:provider /&gt;</code>&nbsp;或&nbsp;<code>&lt;dubbo:protocol /&gt;</code>&nbsp;中开启，例如：</p>
+<figure class="highlight">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">&lt;dubbo:service <span class="class"><span class="keyword">interface</span></span>=<span class="string">"com.alibaba.dubbo.demo.DemoService"</span> ref=<span class="string">"demoServiceImpl"</span> protocol=<span class="string">"injvm"</span> &gt;</span><br /><span class="line">    &lt;dubbo:parameter key=<span class="string">"tps"</span> value=<span class="string">"100"</span> /&gt;</span><br /><span class="line">&lt;/dubbo:service&gt;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>② 通过&nbsp;<code>&lt;dubbo:parameter key="tps.interval" value="" /&gt;</code>&nbsp;配置项，设置 TPS&nbsp;<strong>周期</strong>。</p>
+<p><strong>注意</strong></p>
+<p>笔者阅读的 Dubbo 版本，目前暂未配置 TpsLimitFilter 到 Dubbo SPI 文件里，所以我们需要添加到&nbsp;<code>com.alibaba.dubbo.rpc.Filter</code>&nbsp;中，例如：</p>
+<figure class="highlight plain">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">tps=com.alibaba.dubbo.rpc.filter.TpsLimitFilter</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="2-TpsLimitFilter">2. TpsLimitFilter</h1>
+<p><code>com.alibaba.dubbo.rpc.filter.TpsLimitFilter</code>&nbsp;，实现 Filter 接口，TPS 限流过滤器实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Activate</span>(group = Constants.PROVIDER, value = Constants.TPS_LIMIT_RATE_KEY)</span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TpsLimitFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><span class="line"> <span class="number">3</span>: </span><br /><span class="line"> <span class="number">4</span>:     <span class="keyword">private</span> <span class="keyword">final</span> TPSLimiter tpsLimiter = <span class="keyword">new</span> DefaultTPSLimiter();</span><br /><span class="line"> <span class="number">5</span>: </span><br /><span class="line"> <span class="number">6</span>:     <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">7</span>:     <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">8</span>:         <span class="keyword">if</span> (!tpsLimiter.isAllowable(invoker.getUrl(), invocation)) {</span><br /><span class="line"> <span class="number">9</span>:             <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(</span><br /><span class="line"><span class="number">10</span>:                     <span class="keyword">new</span> StringBuilder(<span class="number">64</span>)</span><br /><span class="line"><span class="number">11</span>:                             .append(<span class="string">"Failed to invoke service "</span>)</span><br /><span class="line"><span class="number">12</span>:                             .append(invoker.getInterface().getName())</span><br /><span class="line"><span class="number">13</span>:                             .append(<span class="string">"."</span>)</span><br /><span class="line"><span class="number">14</span>:                             .append(invocation.getMethodName())</span><br /><span class="line"><span class="number">15</span>:                             .append(<span class="string">" because exceed max service tps."</span>)</span><br /><span class="line"><span class="number">16</span>:                             .toString());</span><br /><span class="line"><span class="number">17</span>:         }</span><br /><span class="line"><span class="number">18</span>:         <span class="comment">// 服务调用</span></span><br /><span class="line"><span class="number">19</span>:         <span class="keyword">return</span> invoker.invoke(invocation);</span><br /><span class="line"><span class="number">20</span>:     }</span><br /><span class="line"><span class="number">21</span>: </span><br /><span class="line"><span class="number">22</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 8 至 17 行：调用&nbsp;<code>TPSLimiter#isAllowable(url, invocation)</code>&nbsp;方法，根据 tps 限流规则判断是否限制此次调用。若是，抛出 RpcException 异常。目前使用 TPSLimiter 作为限流器的实现类。</li>
+<li>第 19 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，服务调用。</li>
+</ul>
+<h1 id="3-TPSLimiter">3. TPSLimiter</h1>
+<p><code>com.alibaba.dubbo.rpc.filter.tps.TPSLimiter</code>&nbsp;，TPS 限制器接口。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">TPSLimiter</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * judge if the current invocation is allowed by TPS rule</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 根据 tps 限流规则判断是否限制此次调用.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url        url</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> invocation invocation</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> true allow the current invocation, otherwise, return false</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">isAllowable</span><span class="params">(URL url, Invocation invocation)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="3-1-DefaultTPSLimiter">3.1 DefaultTPSLimiter</h2>
+<p><code>com.alibaba.dubbo.rpc.filter.tps.DefaultTPSLimiter</code>&nbsp;，实现 TPSLimiter 接口，<strong>默认</strong>&nbsp;TPS 限制器实现类，<strong>以服务为维度</strong>。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DefaultTPSLimiter</span> <span class="keyword">implements</span> <span class="title">TPSLimiter</span> </span>{</span><br /><span class="line"> <span class="number">2</span>: </span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 4:      * StatItem 集合</span></span><br /><span class="line"><span class="comment"> 5:      *</span></span><br /><span class="line"><span class="comment"> 6:      * key：服务名</span></span><br /><span class="line"><span class="comment"> 7:      */</span></span><br /><span class="line"> <span class="number">8</span>:     <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, StatItem&gt; stats = <span class="keyword">new</span> ConcurrentHashMap&lt;String, StatItem&gt;();</span><br /><span class="line"> <span class="number">9</span>: </span><br /><span class="line"><span class="number">10</span>:     <span class="meta">@Override</span></span><br /><span class="line"><span class="number">11</span>:     <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">isAllowable</span><span class="params">(URL url, Invocation invocation)</span> </span>{</span><br /><span class="line"><span class="number">12</span>:         <span class="comment">// 获得 TPS 大小配置项</span></span><br /><span class="line"><span class="number">13</span>:         <span class="keyword">int</span> rate = url.getParameter(Constants.TPS_LIMIT_RATE_KEY, -<span class="number">1</span>);</span><br /><span class="line"><span class="number">14</span>:         <span class="comment">// 获得 TPS 周期配置项，默认 60 秒</span></span><br /><span class="line"><span class="number">15</span>:         <span class="keyword">long</span> interval = url.getParameter(Constants.TPS_LIMIT_INTERVAL_KEY, Constants.DEFAULT_TPS_LIMIT_INTERVAL);</span><br /><span class="line"><span class="number">16</span>:         String serviceKey = url.getServiceKey();</span><br /><span class="line"><span class="number">17</span>:         <span class="comment">// 要限流</span></span><br /><span class="line"><span class="number">18</span>:         <span class="keyword">if</span> (rate &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">19</span>:             <span class="comment">// 获得 StatItem 对象</span></span><br /><span class="line"><span class="number">20</span>:             StatItem statItem = stats.get(serviceKey);</span><br /><span class="line"><span class="number">21</span>:             <span class="comment">// 不存在，则进行创建</span></span><br /><span class="line"><span class="number">22</span>:             <span class="keyword">if</span> (statItem == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">23</span>:                 stats.putIfAbsent(serviceKey, <span class="keyword">new</span> StatItem(serviceKey, rate, interval));</span><br /><span class="line"><span class="number">24</span>:                 statItem = stats.get(serviceKey);</span><br /><span class="line"><span class="number">25</span>:             }</span><br /><span class="line"><span class="number">26</span>:             <span class="comment">// 根据 TPS 限流规则判断是否限制此次调用.</span></span><br /><span class="line"><span class="number">27</span>:             <span class="keyword">return</span> statItem.isAllowable(url, invocation);</span><br /><span class="line"><span class="number">28</span>:         <span class="comment">// 不限流</span></span><br /><span class="line"><span class="number">29</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">30</span>:             <span class="comment">// 移除 StatItem</span></span><br /><span class="line"><span class="number">31</span>:             StatItem statItem = stats.get(serviceKey);</span><br /><span class="line"><span class="number">32</span>:             <span class="keyword">if</span> (statItem != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">33</span>:                 stats.remove(serviceKey);</span><br /><span class="line"><span class="number">34</span>:             }</span><br /><span class="line"><span class="number">35</span>:             <span class="comment">// 返回通过</span></span><br /><span class="line"><span class="number">36</span>:             <span class="keyword">return</span> <span class="keyword">true</span>;</span><br /><span class="line"><span class="number">37</span>:         }</span><br /><span class="line"><span class="number">38</span>:     }</span><br /><span class="line"><span class="number">39</span>: </span><br /><span class="line"><span class="number">40</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>stats</code>&nbsp;属性，StatItem 集合，Key 为 服务名，<strong>即以服务为维度</strong>。</li>
+<li>第 13 行：获得 TPS 大小配置项&nbsp;<code>"tps"</code>。</li>
+<li>第 15 行：获得 TPS 周期配置项&nbsp;<code>"tps.interval"</code>，默认 60 * 1000 毫秒。</li>
+<li>第 17 至 27 行：若要限流，调用&nbsp;<code>StatItem#isAllowable(url, invocation)</code>&nbsp;方法，根据 TPS 限流规则判断是否限制此次调用。</li>
+<li>第 28 至 37 行：若不限流，移除 StatItem 对象。</li>
+</ul>
+<h2 id="3-2-StatItem">3.2 StatItem</h2>
+<p><code>com.alibaba.dubbo.rpc.filter.tps.StatItem</code>&nbsp;，统计项。</p>
+<h3 id="3-2-1-构造方法">3.2.1 构造方法</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 统计名，目前使用服务名</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> String name;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 周期</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">long</span> interval;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 限制大小</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">int</span> rate;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 最后重置时间</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">long</span> lastResetTime;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 当前周期，剩余种子数</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> AtomicInteger token;</span><br /><br /><span class="line">StatItem(String name, <span class="keyword">int</span> rate, <span class="keyword">long</span> interval) {</span><br /><span class="line">    <span class="keyword">this</span>.name = name;</span><br /><span class="line">    <span class="keyword">this</span>.rate = rate;</span><br /><span class="line">    <span class="keyword">this</span>.interval = interval;</span><br /><span class="line">    <span class="keyword">this</span>.lastResetTime = System.currentTimeMillis();</span><br /><span class="line">    <span class="keyword">this</span>.token = <span class="keyword">new</span> AtomicInteger(rate);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h3 id="3-2-2-isAllowable">3.2.2 isAllowable</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">isAllowable</span><span class="params">(URL url, Invocation invocation)</span> </span>{</span><br /><span class="line">    <span class="comment">// 若到达下一个周期，恢复可用种子数，设置最后重置时间。</span></span><br /><span class="line">    <span class="keyword">long</span> now = System.currentTimeMillis();</span><br /><span class="line">    <span class="keyword">if</span> (now &gt; lastResetTime + interval) {</span><br /><span class="line">        token.set(rate); <span class="comment">// 回复可用种子数</span></span><br /><span class="line">        lastResetTime = now; <span class="comment">// 最后重置时间</span></span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">// CAS ，直到或得到一个种子，或者没有足够种子</span></span><br /><span class="line">    <span class="keyword">int</span> value = token.get();</span><br /><span class="line">    <span class="keyword">boolean</span> flag = <span class="keyword">false</span>;</span><br /><span class="line">    <span class="keyword">while</span> (value &gt; <span class="number">0</span> &amp;&amp; !flag) {</span><br /><span class="line">        flag = token.compareAndSet(value, value - <span class="number">1</span>);</span><br /><span class="line">        value = token.get();</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">// 是否成功</span></span><br /><span class="line">    <span class="keyword">return</span> flag;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</div>

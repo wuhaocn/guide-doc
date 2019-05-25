@@ -1,0 +1,445 @@
+<header class="article-header">
+<h1 class="article-title">日志适配</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享 Dubbo 的<strong>日志适配</strong>，对应文档为：</p>
+<ul>
+<li><a href="http://dubbo.apache.org/zh-cn/docs/user/demos/logger-strategy.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 日志适配》</a></li>
+<li><a href="http://dubbo.apache.org/zh-cn/docs/dev/impls/logger-adapter.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 日志适配拓展》</a></li>
+</ul>
+<blockquote>
+<p>自&nbsp;<code>2.2.1</code>&nbsp;开始，dubbo 开始内置 log4j、slf4j、jcl、jdk 这些日志框架的适配&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/logger-strategy.html#fn_1" target="_blank" rel="external nofollow noopener noreferrer">1</a></p>
+</blockquote>
+<p>整体类图如下：<img src="http://static2.iocoder.cn/images/Dubbo/2019_06_05/01.png" alt="类图" /></p>
+<h1 id="2-LoggerFactory">2. LoggerFactory</h1>
+<p><code>com.alibaba.dubbo.common.logger.LoggerFactory</code>&nbsp;，是&nbsp;<code>com.alibaba.dubbo.common.logger.Logger</code>&nbsp;的工厂类。</p>
+<h2 id="2-1-构造方法">2.1 构造方法</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 已创建的 Logger 对应的映射</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key：类名</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ConcurrentMap&lt;String, FailsafeLogger&gt; LOGGERS = <span class="keyword">new</span> ConcurrentHashMap&lt;String, FailsafeLogger&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 当前使用的 LoggerAdapter 日志适配器</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">volatile</span> LoggerAdapter LOGGER_ADAPTER;</span><br />    <br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="title">LoggerFactory</span><span class="params">()</span> </span>{}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>通过<strong>设置</strong>的&nbsp;<code>LOGGER_ADAPTER</code>&nbsp;，创建对应的&nbsp;<code>com.alibaba.dubbo.common.logger.Logger</code>&nbsp;实现类，添加到&nbsp;<code>LOGGERS</code>&nbsp;中。下文，我们会详细解析。</li>
+</ul>
+<h2 id="2-2-setLoggerAdapter">2.2 setLoggerAdapter</h2>
+<p><code>#setLoggerAdapter(String loggerAdapter)</code>&nbsp;<strong>静态</strong>方法，设置 LoggerAdapter ，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">setLoggerAdapter</span><span class="params">(String loggerAdapter)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (loggerAdapter != <span class="keyword">null</span> &amp;&amp; loggerAdapter.length() &gt; <span class="number">0</span>) {</span><br /><span class="line">        setLoggerAdapter(ExtensionLoader.getExtensionLoader(LoggerAdapter.class).getExtension(loggerAdapter));</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>根据<strong>拓展名</strong>( 注意，不是类名 )，获得<strong>对应的</strong>&nbsp;LoggerAdapter 实现类。并调用&nbsp;<code>#setLoggerAdapter(LoggerAdapter)</code>&nbsp;方法，设置 LoggerAdapter 对象。代码如下：</li>
+</ul>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">setLoggerAdapter</span><span class="params">(LoggerAdapter loggerAdapter)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="keyword">if</span> (loggerAdapter != <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">3</span>:         <span class="comment">// 获得 Logger 对象，并打印日志，提示设置后的 LoggerAdapter 实现类</span></span><br /><span class="line"> <span class="number">4</span>:         Logger logger = loggerAdapter.getLogger(LoggerFactory.class.getName());</span><br /><span class="line"> <span class="number">5</span>:         logger.info(<span class="string">"using logger: "</span> + loggerAdapter.getClass().getName());</span><br /><span class="line"> <span class="number">6</span>:         <span class="comment">// 设置 LOGGER_ADAPTER 属性</span></span><br /><span class="line"> <span class="number">7</span>:         LoggerFactory.LOGGER_ADAPTER = loggerAdapter;</span><br /><span class="line"> <span class="number">8</span>:         <span class="comment">// 循环，将原有已经生成的 LOGGER 缓存对象，全部重新生成替换</span></span><br /><span class="line"> <span class="number">9</span>:         <span class="keyword">for</span> (Map.Entry&lt;String, FailsafeLogger&gt; entry : LOGGERS.entrySet()) {</span><br /><span class="line"><span class="number">10</span>:             entry.getValue().setLogger(LOGGER_ADAPTER.getLogger(entry.getKey()));</span><br /><span class="line"><span class="number">11</span>:         }</span><br /><span class="line"><span class="number">12</span>:     }</span><br /><span class="line"><span class="number">13</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 至 5 行：调用&nbsp;<code>LoggerAdapter#getLogger(String key)</code>&nbsp;方法，获得 LoggerFactory 的&nbsp;<strong>对应</strong>&nbsp;Logger 实现对象。然后，打印日志，提示<strong>设置后</strong>的 LoggerAdapter 实现类名。LoggerAdapter 相关，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/logger-adaptive/">「3. LoggerAdapter」</a>&nbsp;详细解析。</li>
+<li>第 7 行：设置&nbsp;<code>LOGGER_ADAPTER</code>&nbsp;属性。</li>
+<li>第 8 至 11 行：<strong>循环</strong>&nbsp;<code>LOGGERS</code>，调用&nbsp;<code>LoggerAdapter#getLogger(String key)</code>&nbsp;方法，重新生成 LOGGER ，进行替换。</li>
+</ul>
+<h3 id="2-2-1-静态代码块">2.2.1 静态代码块</h3>
+<p>在 LoggerFactory 的<strong>静态</strong>代码块，会根据&nbsp;<code>"logger"</code>&nbsp;配置项，调用&nbsp;<code>#setLoggerAdapter(LoggerAdapter)</code>&nbsp;方法，进行设置&nbsp;<code>LOGGER_ADAPTER</code>&nbsp;属性。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">static</span> {</span><br /><span class="line">    <span class="comment">// 获得 "logger" 配置项</span></span><br /><span class="line">    String logger = System.getProperty(<span class="string">"dubbo.application.logger"</span>);</span><br /><span class="line">    <span class="comment">// 根据配置项，进行对应的 LoggerAdapter 对象</span></span><br /><span class="line">    <span class="keyword">if</span> (<span class="string">"slf4j"</span>.equals(logger)) {</span><br /><span class="line">        setLoggerAdapter(<span class="keyword">new</span> Slf4jLoggerAdapter());</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"jcl"</span>.equals(logger)) {</span><br /><span class="line">        setLoggerAdapter(<span class="keyword">new</span> JclLoggerAdapter());</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"log4j"</span>.equals(logger)) {</span><br /><span class="line">        setLoggerAdapter(<span class="keyword">new</span> Log4jLoggerAdapter());</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"jdk"</span>.equals(logger)) {</span><br /><span class="line">        setLoggerAdapter(<span class="keyword">new</span> JdkLoggerAdapter());</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        <span class="comment">// 未配置，按照 log4j &gt; slf4j &gt; apache common logger &gt; jdk logger</span></span><br /><span class="line">        <span class="keyword">try</span> {</span><br /><span class="line">            setLoggerAdapter(<span class="keyword">new</span> Log4jLoggerAdapter());</span><br /><span class="line">        } <span class="keyword">catch</span> (Throwable e1) {</span><br /><span class="line">            <span class="keyword">try</span> {</span><br /><span class="line">                setLoggerAdapter(<span class="keyword">new</span> Slf4jLoggerAdapter());</span><br /><span class="line">            } <span class="keyword">catch</span> (Throwable e2) {</span><br /><span class="line">                <span class="keyword">try</span> {</span><br /><span class="line">                    setLoggerAdapter(<span class="keyword">new</span> JclLoggerAdapter());</span><br /><span class="line">                } <span class="keyword">catch</span> (Throwable e3) {</span><br /><span class="line">                    setLoggerAdapter(<span class="keyword">new</span> JdkLoggerAdapter());</span><br /><span class="line">                }</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>🙂 代码易懂，看注释。</li>
+<li>该方法适用于 LoggerFactory 未加载时，调用&nbsp;<code>System#setProperty("dubbo.application.logger", logger)</code>&nbsp;的初始化。</li>
+</ul>
+<h3 id="2-2-2-ApplicationConfig">2.2.2 ApplicationConfig</h3>
+<p>ApplicationConfig 里，有&nbsp;<code>#setLogger(String logger)</code>&nbsp;方法，调用&nbsp;<code>#setLoggerAdapter(LoggerAdapter)</code>&nbsp;方法，进行设置&nbsp;<code>LOGGER_ADAPTER</code>&nbsp;属性。 代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> String logger;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setLogger</span><span class="params">(String logger)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.logger = logger;</span><br /><span class="line">    <span class="comment">// 设置 LoggerAdapter</span></span><br /><span class="line">    LoggerFactory.setLoggerAdapter(logger);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>通过如下方式配置时，都会调用该方法：</li>
+</ul>
+<ol>
+<li>
+<p>命令行</p>
+<figure class="highlight xml">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">java -Ddubbo.application.logger=log4j</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>在&nbsp;<code>dubbo.properties</code>&nbsp;中指定</p>
+<figure class="highlight xml">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">dubbo.application.logger=log4j</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>在&nbsp;<code>dubbo.xml</code>&nbsp;中配置</p>
+<figure class="highlight xml">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="tag">&lt;<span class="name">dubbo:application</span> <span class="attr">logger</span>=<span class="string">"log4j"</span> /&gt;</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ol>
+<h2 id="2-3-getLogger">2.3 getLogger</h2>
+<p><code>#getLogger(...)</code>&nbsp;方法，优先从&nbsp;<code>LOGGERS</code>&nbsp;中，获得对应的 Logger 对象。若不存在，则进行创建，并进行缓存到&nbsp;<code>LOGGERS</code>&nbsp;中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Logger <span class="title">getLogger</span><span class="params">(Class&lt;?&gt; key)</span> </span>{</span><br /><span class="line">    <span class="comment">// 从缓存中，获得 Logger 对象</span></span><br /><span class="line">    FailsafeLogger logger = LOGGERS.get(key.getName());</span><br /><span class="line">    <span class="comment">// 不存在，则进行创建，并进行缓存</span></span><br /><span class="line">    <span class="keyword">if</span> (logger == <span class="keyword">null</span>) {</span><br /><span class="line">        LOGGERS.putIfAbsent(key.getName(), <span class="keyword">new</span> FailsafeLogger(LOGGER_ADAPTER.getLogger(key)));</span><br /><span class="line">        logger = LOGGERS.get(key.getName());</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> logger;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Logger <span class="title">getLogger</span><span class="params">(String key)</span> </span>{</span><br /><span class="line">    <span class="comment">// 从缓存中，获得 Logger 对象</span></span><br /><span class="line">    FailsafeLogger logger = LOGGERS.get(key);</span><br /><span class="line">    <span class="comment">// 不存在，则进行创建，并进行缓存</span></span><br /><span class="line">    <span class="keyword">if</span> (logger == <span class="keyword">null</span>) {</span><br /><span class="line">        LOGGERS.putIfAbsent(key, <span class="keyword">new</span> FailsafeLogger(LOGGER_ADAPTER.getLogger(key)));</span><br /><span class="line">        logger = LOGGERS.get(key);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> logger;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>FailsafeLogger ，我们在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/logger-adaptive/">「4.1 FailsafeLogger」</a>&nbsp;中详细解析。</li>
+</ul>
+<h2 id="2-4-setLevel">2.4 setLevel</h2>
+<p><code>#setLevel(Level level)</code>&nbsp;方法，设置日志级别。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">setLevel</span><span class="params">(Level level)</span> </span>{</span><br /><span class="line">    LOGGER_ADAPTER.setLevel(level);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="2-5-getLevel">2.5 getLevel</h2>
+<p><code>#getLevel()</code>&nbsp;方法，获得日志级别。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Level <span class="title">getLevel</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> LOGGER_ADAPTER.getLevel();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="2-6-getFile">2.6 getFile</h2>
+<p><code>#getFile()</code>&nbsp;方法，获得<strong>当前</strong>日志文件。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> File <span class="title">getFile</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> LOGGER_ADAPTER.getFile();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="3-LoggerAdapter">3. LoggerAdapter</h1>
+<p><code>com.alibaba.dubbo.common.logger.LoggerAdapter</code>&nbsp;，Logger&nbsp;<strong>适配器</strong>接口，负责对接不同<strong>日志库</strong>的 LoggerFactory 。接口方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function">Logger <span class="title">getLogger</span><span class="params">(Class&lt;?&gt; key)</span></span>;</span><br /><span class="line"><span class="function">Logger <span class="title">getLogger</span><span class="params">(String key)</span></span>;</span><br /><br /><span class="line"><span class="function">Level <span class="title">getLevel</span><span class="params">()</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">setLevel</span><span class="params">(Level level)</span></span>;</span><br /><br /><span class="line"><span class="function">File <span class="title">getFile</span><span class="params">()</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">setFile</span><span class="params">(File file)</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="3-1-Log4jLoggerAdapter">3.1 Log4jLoggerAdapter</h2>
+<p><code>com.alibaba.dubbo.common.logger.log4j.Log4jLoggerAdapter</code>&nbsp;，实现 LoggerAdapter 接口，<strong>log4j</strong>的 LoggerAdapter 实现类。</p>
+<h3 id="3-1-1-构造方法">3.1.1 构造方法</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Root Logger 的文件，在构造方法中初始化</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> File file;</span><br /><br /><span class="line"><span class="meta">@SuppressWarnings</span>(<span class="string">"unchecked"</span>)</span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">Log4jLoggerAdapter</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        <span class="comment">// 获得 Root Logger 对象</span></span><br /><span class="line">        org.apache.log4j.Logger logger = LogManager.getRootLogger();</span><br /><span class="line">        <span class="keyword">if</span> (logger != <span class="keyword">null</span>) {</span><br /><span class="line">            <span class="comment">// 循环每个 Logger 对象的 Appender 对象</span></span><br /><span class="line">            Enumeration&lt;Appender&gt; appenders = logger.getAllAppenders();</span><br /><span class="line">            <span class="keyword">if</span> (appenders != <span class="keyword">null</span>) {</span><br /><span class="line">                <span class="keyword">while</span> (appenders.hasMoreElements()) {</span><br /><span class="line">                    <span class="comment">// 当且仅当 FileAppender 时</span></span><br /><span class="line">                    Appender appender = appenders.nextElement();</span><br /><span class="line">                    <span class="keyword">if</span> (appender <span class="keyword">instanceof</span> FileAppender) {</span><br /><span class="line">                        FileAppender fileAppender = (FileAppender) appender;</span><br /><span class="line">                        String filename = fileAppender.getFile();</span><br /><span class="line">                        file = <span class="keyword">new</span> File(filename);</span><br /><span class="line">                        <span class="keyword">break</span>;</span><br /><span class="line">                    }</span><br /><span class="line">                }</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>file</code>&nbsp;属性，通过<strong>构造方法</strong>，进行初始化。</li>
+</ul>
+<h3 id="3-1-2-getLogger">3.1.2 getLogger</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> Logger <span class="title">getLogger</span><span class="params">(Class&lt;?&gt; key)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> Log4jLogger(LogManager.getLogger(key));</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> Logger <span class="title">getLogger</span><span class="params">(String key)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> Log4jLogger(LogManager.getLogger(key));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>先调用&nbsp;<code>org.apache.log4j.LogManager#getLogger(...)</code>&nbsp;方法，获得&nbsp;<code>org.apache.log4j.Log</code>&nbsp;对象。</li>
+<li>再将&nbsp;<code>org.apache.log4j.Log</code>&nbsp;对象作为方法参数，创建&nbsp;<code>com.alibaba.dubbo.common.logger.log4j.Log4jLogger</code>&nbsp;对象。</li>
+</ul>
+<h3 id="3-1-3-getLevel">3.1.3 getLevel</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> Level <span class="title">getLevel</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> fromLog4jLevel(LogManager.getRootLogger().getLevel());</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>获得 Root Logger 的日志级别。</li>
+<li>
+<p>调用&nbsp;<code>#fromLog4jLevel(Level)</code>&nbsp;，将 Log4j 的日志级别转成 Dubbo 的日志级别。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> Level <span class="title">fromLog4jLevel</span><span class="params">(org.apache.log4j.Level level)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (level == org.apache.log4j.Level.ALL)</span><br /><span class="line">        <span class="keyword">return</span> Level.ALL;</span><br /><span class="line">    <span class="keyword">if</span> (level == org.apache.log4j.Level.TRACE)</span><br /><span class="line">        <span class="keyword">return</span> Level.TRACE;</span><br /><span class="line">    <span class="keyword">if</span> (level == org.apache.log4j.Level.DEBUG)</span><br /><span class="line">        <span class="keyword">return</span> Level.DEBUG;</span><br /><span class="line">    <span class="keyword">if</span> (level == org.apache.log4j.Level.INFO)</span><br /><span class="line">        <span class="keyword">return</span> Level.INFO;</span><br /><span class="line">    <span class="keyword">if</span> (level == org.apache.log4j.Level.WARN)</span><br /><span class="line">        <span class="keyword">return</span> Level.WARN;</span><br /><span class="line">    <span class="keyword">if</span> (level == org.apache.log4j.Level.ERROR)</span><br /><span class="line">        <span class="keyword">return</span> Level.ERROR;</span><br /><span class="line">    <span class="comment">// if (level == org.apache.log4j.Level.OFF)</span></span><br /><span class="line">    <span class="keyword">return</span> Level.OFF;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h3 id="3-1-4-setLevel">3.1.4 setLevel</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setLevel</span><span class="params">(Level level)</span> </span>{</span><br /><span class="line">    LogManager.getRootLogger().setLevel(toLog4jLevel(level));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>设置 Root Logger 的日志级别。</li>
+<li>
+<p>调用&nbsp;<code>#toLog4jLevel(Level)</code>&nbsp;，将 Dubbo 的日志级别转成 Log4j 的日志级别。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> org.apache.log4j.<span class="function">Level <span class="title">toLog4jLevel</span><span class="params">(Level level)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (level == Level.ALL)</span><br /><span class="line">        <span class="keyword">return</span> org.apache.log4j.Level.ALL;</span><br /><span class="line">    <span class="keyword">if</span> (level == Level.TRACE)</span><br /><span class="line">        <span class="keyword">return</span> org.apache.log4j.Level.TRACE;</span><br /><span class="line">    <span class="keyword">if</span> (level == Level.DEBUG)</span><br /><span class="line">        <span class="keyword">return</span> org.apache.log4j.Level.DEBUG;</span><br /><span class="line">    <span class="keyword">if</span> (level == Level.INFO)</span><br /><span class="line">        <span class="keyword">return</span> org.apache.log4j.Level.INFO;</span><br /><span class="line">    <span class="keyword">if</span> (level == Level.WARN)</span><br /><span class="line">        <span class="keyword">return</span> org.apache.log4j.Level.WARN;</span><br /><span class="line">    <span class="keyword">if</span> (level == Level.ERROR)</span><br /><span class="line">        <span class="keyword">return</span> org.apache.log4j.Level.ERROR;</span><br /><span class="line">    <span class="comment">// if (level == Level.OFF)</span></span><br /><span class="line">    <span class="keyword">return</span> org.apache.log4j.Level.OFF;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h3 id="3-1-5-getFile">3.1.5 getFile</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> File <span class="title">getFile</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> file;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h3 id="3-1-6-setFile">3.1.6 setFile</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setFile</span><span class="params">(File file)</span> </span>{</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>不支持设置。</li>
+</ul>
+<h2 id="3-2-JdkLoggerAdapter">3.2 JdkLoggerAdapter</h2>
+<p>类似 Log4jLoggerAdapter ，省略。</p>
+<h2 id="3-3-Slf4jLoggerAdapter">3.3 Slf4jLoggerAdapter</h2>
+<p><code>com.alibaba.dubbo.common.logger.log4j.Log4jLoggerAdapter</code>&nbsp;，实现 LoggerAdapter 接口，<strong>slf4j</strong>的 LoggerAdapter 实现类。</p>
+<blockquote>
+<p>SLF4J 不同于其他日志类库，与其它日志类库有很大的不同。SLF4J (Simple logging Facade for Java) 不是一个真正的日志实现，而是一个抽象层（ abstraction layer），它允许你在后台使用任意一个日志类库。如果是在编写供内外部都可以使用的API或者通用类库，那么你真不会希望使用你类库的客户端必须使用你选择的日志类库。</p>
+</blockquote>
+<ul>
+<li>
+<p>因此，Slf4jLoggerAdapter 的实现方法中，操作&nbsp;<code>file</code>&nbsp;和&nbsp;<code>level</code>&nbsp;属性是<strong>无用</strong>。因为，具体的&nbsp;<code>file</code>&nbsp;和&nbsp;<code>level</code>由<strong>真正的日志实现</strong>决定。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Slf4jLoggerAdapter</span> <span class="keyword">implements</span> <span class="title">LoggerAdapter</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> Level level;</span><br /><span class="line">    <span class="keyword">private</span> File file;</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Logger <span class="title">getLogger</span><span class="params">(String key)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> Slf4jLogger(org.slf4j.LoggerFactory.getLogger(key));</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Logger <span class="title">getLogger</span><span class="params">(Class&lt;?&gt; key)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> Slf4jLogger(org.slf4j.LoggerFactory.getLogger(key));</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Level <span class="title">getLevel</span><span class="params">()</span> </span>{ <span class="comment">// 无用</span></span><br /><span class="line">        <span class="keyword">return</span> level;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setLevel</span><span class="params">(Level level)</span> </span>{ <span class="comment">// 无用</span></span><br /><span class="line">        <span class="keyword">this</span>.level = level;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> File <span class="title">getFile</span><span class="params">()</span> </span>{ <span class="comment">// 无用</span></span><br /><span class="line">        <span class="keyword">return</span> file;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setFile</span><span class="params">(File file)</span> </span>{ <span class="comment">// 无用</span></span><br /><span class="line">        <span class="keyword">this</span>.file = file;</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>也因此，打印日志的调用栈为：<strong>Dubbo</strong>&nbsp;Slf4jLogger =&gt;&nbsp;<strong>Slf4j</strong>&nbsp;Logger =&gt;&nbsp;<strong>真正</strong>的 Logger 实现类。</li>
+</ul>
+</li>
+</ul>
+<h2 id="3-4-JclLoggerAdapter">3.4 JclLoggerAdapter</h2>
+<p>类似 Slf4jLoggerAdapter ，省略。</p>
+<h1 id="4-Logger">4. Logger</h1>
+<p><code>com.alibaba.dubbo.common.logger.Logger</code>&nbsp;，Logger 接口。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">trace</span><span class="params">(String msg)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">trace</span><span class="params">(Throwable e)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">trace</span><span class="params">(String msg, Throwable e)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">debug</span><span class="params">(String msg)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">debug</span><span class="params">(Throwable e)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">debug</span><span class="params">(String msg, Throwable e)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">info</span><span class="params">(String msg)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">info</span><span class="params">(Throwable e)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">info</span><span class="params">(String msg, Throwable e)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">warn</span><span class="params">(String msg)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">warn</span><span class="params">(Throwable e)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">warn</span><span class="params">(String msg, Throwable e)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">error</span><span class="params">(String msg)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">error</span><span class="params">(Throwable e)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">error</span><span class="params">(String msg, Throwable e)</span></span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">isTraceEnabled</span><span class="params">()</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">isDebugEnabled</span><span class="params">()</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">isInfoEnabled</span><span class="params">()</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">isWarnEnabled</span><span class="params">()</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">isErrorEnabled</span><span class="params">()</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>方法的定义，复制自 Apache Common Logger 。</li>
+</ul>
+<h2 id="4-1-FailsafeLogger">4.1 FailsafeLogger</h2>
+<p><code>com.alibaba.dubbo.common.logger.support.FailsafeLogger</code>&nbsp;，实现 Logger 接口，<strong>失败安全</strong>的 Logger 实现类。</p>
+<p>我们以&nbsp;<code>#error(String msg)</code>&nbsp;<strong>实现</strong>方法，举例子。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Dubbo Logger 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Logger logger;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">FailsafeLogger</span><span class="params">(Logger logger)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.logger = logger;</span><br /><span class="line">}</span><br /><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">error</span><span class="params">(String msg)</span> </span>{</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        logger.error(appendContextMessage(msg));</span><br /><span class="line">    } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>即使报错，也会被&nbsp;<strong>try catch</strong>&nbsp;掉。</li>
+<li>
+<p><code>#appendContextMessage(msg)</code>&nbsp;方法，拼接 Dubbo 的&nbsp;<strong>version 和 host</strong>&nbsp;到日志中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> String <span class="title">appendContextMessage</span><span class="params">(String msg)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> <span class="string">" [DUBBO] "</span> + msg + <span class="string">", dubbo version: "</span> + Version.getVersion() + <span class="string">", current host: "</span> + NetUtils.getLogHost();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>其他实现方法，也类似该方法。</p>
+</li>
+</ul>
+<h2 id="4-2-Log4jLogger">4.2 Log4jLogger</h2>
+<p><code>com.alibaba.dubbo.common.logger.log4j.Log4jLogger</code>&nbsp;，实现 Logger 接口，<strong>log4j</strong>&nbsp;的 Logger 实现类。</p>
+<p>我们以&nbsp;<code>#error(String msg)</code>&nbsp;<strong>实现</strong>方法，举例子。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String FQCN = FailsafeLogger.class.getName();</span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> org.apache.log4j.Logger logger;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">Log4jLogger</span><span class="params">(org.apache.log4j.Logger logger)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.logger = logger;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">error</span><span class="params">(String msg)</span> </span>{</span><br /><span class="line">    logger.log(FQCN, Level.ERROR, msg, <span class="keyword">null</span>);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>每个实现方法，调用&nbsp;<strong>Log4J Logger</strong>&nbsp;对象，对应的方法。</li>
+<li>其他实现方法，也类似该方法。</li>
+</ul>
+<h2 id="4-3-JdkLogger">4.3 JdkLogger</h2>
+<p>类似 Log4jLogger ，省略。</p>
+<h2 id="4-4-Slf4jLogger">4.4 Slf4jLogger</h2>
+<p>类似 Log4jLogger ，省略。</p>
+<h2 id="4-5-JclLogger">4.5 JclLogger</h2>
+<p>类似 Log4jLogger ，省略。</p>
+<h1 id="5-Level">5. Level</h1>
+<p><code>com.alibaba.dubbo.common.logger.Level</code>&nbsp;，日志级别<strong>枚举</strong>。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="keyword">enum</span> Level {</span><br /><br /><span class="line">    ALL,</span><br /><span class="line">    TRACE,</span><br /><span class="line">    DEBUG,</span><br /><span class="line">    INFO,</span><br /><span class="line">    WARN,</span><br /><span class="line">    ERROR,</span><br /><span class="line">    OFF</span><br />    <br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</div>

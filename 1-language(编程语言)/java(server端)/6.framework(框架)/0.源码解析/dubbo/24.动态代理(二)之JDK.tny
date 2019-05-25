@@ -1,0 +1,56 @@
+<header class="article-header">
+<h1 class="article-title">动态代理（二）之 JDK</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文接&nbsp;<a href="http://svip.iocoder.cn/Dubbo/proxy-javassist/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 动态代理（一）之 Javassist》</a>&nbsp;一文，分享使用&nbsp;<strong>JDK</strong>&nbsp;生成动态代理的代码实现。</p>
+<p>如果 JDK Proxy 不熟悉的胖友，可以看下&nbsp;<a href="http://blog.csdn.net/jiankunking/article/details/52143504" target="_blank" rel="external nofollow noopener noreferrer">《 Java JDK 动态代理（AOP）使用及实现原理分析》</a>&nbsp;学习下。🙂 学无止境呀。</p>
+<p>另外，如果使用 JDK 生成代理，配置方式如下：</p>
+<figure class="highlight xml">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">// 服务引用</span><br /><span class="line"><span class="tag">&lt;<span class="name">dubbo:reference</span> <span class="attr">proxy</span>=<span class="string">"jdk"</span> /&gt;</span></span><br /><br /><span class="line">// 服务暴露</span><br /><span class="line"><span class="tag">&lt;<span class="name">dubbo:service</span> <span class="attr">proxy</span>=<span class="string">"jdk"</span> /&gt;</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="2-JdkProxyFactory">2. JdkProxyFactory</h1>
+<p><code>com.alibaba.dubbo.rpc.proxy.jdk.JdkProxyFactory</code>&nbsp;，实现 AbstractProxyInvoker 抽象类，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">JdkProxyFactory</span> <span class="keyword">extends</span> <span class="title">AbstractProxyFactory</span> </span>{</span><br /><span class="line"> <span class="number">2</span>: </span><br /><span class="line"> <span class="number">3</span>:     <span class="meta">@SuppressWarnings</span>(<span class="string">"unchecked"</span>)</span><br /><span class="line"> <span class="number">4</span>:     <span class="keyword">public</span> &lt;T&gt; <span class="function">T <span class="title">getProxy</span><span class="params">(Invoker&lt;T&gt; invoker, Class&lt;?&gt;[] interfaces)</span> </span>{</span><br /><span class="line"> <span class="number">5</span>:         <span class="keyword">return</span> (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), interfaces, <span class="keyword">new</span> InvokerInvocationHandler(invoker));</span><br /><span class="line"> <span class="number">6</span>:     }</span><br /><span class="line"> <span class="number">7</span>: </span><br /><span class="line"> <span class="number">8</span>:     <span class="keyword">public</span> &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">getInvoker</span><span class="params">(T proxy, Class&lt;T&gt; type, URL url)</span> </span>{</span><br /><span class="line"> <span class="number">9</span>:         <span class="keyword">return</span> <span class="keyword">new</span> AbstractProxyInvoker&lt;T&gt;(proxy, type, url) {</span><br /><span class="line"><span class="number">10</span>:             <span class="meta">@Override</span></span><br /><span class="line"><span class="number">11</span>:             <span class="function"><span class="keyword">protected</span> Object <span class="title">doInvoke</span><span class="params">(T proxy, String methodName,</span></span></span><br /><span class="line"><span class="function"><span class="params"><span class="number">12</span>:                                       Class&lt;?&gt;[] parameterTypes,</span></span></span><br /><span class="line"><span class="function"><span class="params"><span class="number">13</span>:                                       Object[] arguments)</span> <span class="keyword">throws</span> Throwable </span>{</span><br /><span class="line"><span class="number">14</span>:                 <span class="comment">// 获得方法</span></span><br /><span class="line"><span class="number">15</span>:                 Method method = proxy.getClass().getMethod(methodName, parameterTypes);</span><br /><span class="line"><span class="number">16</span>:                 <span class="comment">// 调用方法</span></span><br /><span class="line"><span class="number">17</span>:                 <span class="keyword">return</span> method.invoke(proxy, arguments);</span><br /><span class="line"><span class="number">18</span>:             }</span><br /><span class="line"><span class="number">19</span>:         };</span><br /><span class="line"><span class="number">20</span>:     }</span><br /><span class="line"><span class="number">21</span>: </span><br /><span class="line"><span class="number">22</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>#getProxy(invoker, interfaces)</code>&nbsp;方法
+<ul>
+<li>第 5 行：创建 InvokerInvocationHandler 对象，传入&nbsp;<code>invoker</code>&nbsp;对象。</li>
+<li>第 5 行：调用&nbsp;<code>java.lang.reflect.Proxy#getProxy(ClassLoader loader, Class&lt;?&gt;[] interfaces, InvocationHandler h)</code>&nbsp;方法，创建 Proxy 对象。</li>
+<li>🙂 相比 Javassist 精简很多，期待 JDK Proxy 的不断性能优化。</li>
+</ul>
+</li>
+<li><code>#getInvoker(proxy, type, url)</code>&nbsp;方法
+<ul>
+<li>第 9 至 19 行：创建 AbstractProxyInvoker 对象，实现&nbsp;<code>#doInvoker(...)</code>&nbsp;方法。
+<ul>
+<li>第 15 行：调用&nbsp;<code>Class#getMethod(String name, Class&lt;?&gt;... parameterTypes)</code>&nbsp;方法，反射获得方法。</li>
+<li>第 17 行：调用&nbsp;<code>Method#invoke(proxy, arguments)</code>&nbsp;方法，执行方法。</li>
+<li>推荐阅读：<a href="http://www.fanyilun.me/2015/10/29/Java%E5%8F%8D%E5%B0%84%E5%8E%9F%E7%90%86/" target="_blank" rel="external nofollow noopener noreferrer">《Java反射原理简析》</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>

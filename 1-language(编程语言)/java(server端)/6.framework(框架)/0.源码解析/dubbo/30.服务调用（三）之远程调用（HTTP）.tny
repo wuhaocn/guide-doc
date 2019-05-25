@@ -1,0 +1,256 @@
+<header class="article-header">
+<h1 class="article-title">服务调用（三）之远程调用（HTTP）</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文，我们分享&nbsp;<code>http://</code>&nbsp;协议的远程调用，主要分成<strong>三个部分</strong>：</p>
+<ul>
+<li>服务暴露</li>
+<li>服务引用</li>
+<li>服务调用</li>
+</ul>
+<p>对应项目为&nbsp;<code>dubbo-rpc-http</code>&nbsp;。</p>
+<p>对应文档为&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/http.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; http://》</a>&nbsp;。定义如下：</p>
+<blockquote>
+<p>基于 HTTP 表单的远程调用协议，采用 Spring 的&nbsp;<strong>HttpInvoker</strong>&nbsp;实现</p>
+</blockquote>
+<p><strong>注意</strong>，从定义上我们可以看出，不是我们常规理解的 HTTP 调用，而是&nbsp;<strong>Spring 的 HttpInvoker</strong>&nbsp;。</p>
+<p>本文涉及类图（红圈部分）如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_10_10/01.png" alt="类图" /></p>
+<h1 id="2-AbstractProxyProtocol">2. AbstractProxyProtocol</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/protocol/AbstractProxyProtocol.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol.AbstractProxyProtocol</code></a>&nbsp;，实现 AbstractProtocol 抽象类，<strong>Proxy</strong>协议抽象类。为 HttpProtocol 、RestProtocol 等子类，提供公用的服务暴露、服务引用的<strong>公用方法</strong>，同时定义了如下<strong>抽象方法</strong>，用于不同子类协议实现类的<strong>自定义</strong>的逻辑：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 执行暴露，并返回取消暴露的回调 Runnable</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> impl 服务 Proxy 对象</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> type 服务接口</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> url URL</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> &lt;T&gt; 服务接口</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> 消暴露的回调 Runnable</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@throws</span> RpcException 当发生异常</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">protected</span> <span class="keyword">abstract</span> &lt;T&gt; <span class="function">Runnable <span class="title">doExport</span><span class="params">(T impl, Class&lt;T&gt; type, URL url)</span> <span class="keyword">throws</span> RpcException</span>;</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 执行引用，并返回调用远程服务的 Service 对象</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> type 服务接口</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> url URL</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> &lt;T&gt; 服务接口</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> 调用远程服务的 Service 对象</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@throws</span> RpcException 当发生异常</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">protected</span> <span class="keyword">abstract</span> &lt;T&gt; <span class="function">T <span class="title">doRefer</span><span class="params">(Class&lt;T&gt; type, URL url)</span> <span class="keyword">throws</span> RpcException</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="2-1-构造方法">2.1 构造方法</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 需要抛出的异常类集合，详见 {<span class="doctag">@link</span> #reder(Class, URL)} 方法。</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> List&lt;Class&lt;?&gt;&gt; rpcExceptions = <span class="keyword">new</span> CopyOnWriteArrayList&lt;Class&lt;?&gt;&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * ProxyFactory 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> ProxyFactory proxyFactory;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">AbstractProxyProtocol</span><span class="params">()</span> </span>{</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">AbstractProxyProtocol</span><span class="params">(Class&lt;?&gt;... exceptions)</span> </span>{</span><br /><span class="line">    <span class="keyword">for</span> (Class&lt;?&gt; exception : exceptions) {</span><br /><span class="line">        addRpcException(exception);</span><br /><span class="line">    }</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">addRpcException</span><span class="params">(Class&lt;?&gt; exception)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.rpcExceptions.add(exception);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>rpcExceptions</code>&nbsp;属性，不同协议的远程调用，会抛出的异常是不同的。在&nbsp;<code>#refer(Class, URL)</code>&nbsp;方法中，我们会看到对这个属性的使用，理解会更清晰一些。</li>
+</ul>
+<h2 id="2-2-export">2.2 export</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Exporter 集合</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key: 服务键 {<span class="doctag">@link</span> #serviceKey(URL)} 或 {<span class="doctag">@link</span> URL#getServiceKey()} 。</span></span><br /><span class="line"><span class="comment"> *      不同协议会不同</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">protected</span> <span class="keyword">final</span> Map&lt;String, Exporter&lt;?&gt;&gt; exporterMap = <span class="keyword">new</span> ConcurrentHashMap&lt;String, Exporter&lt;?&gt;&gt;(); <span class="comment">// FROM AbstractProtocol.java</span></span><br /><br /><span class="line">  <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line">  <span class="number">2</span>: <span class="meta">@SuppressWarnings</span>(<span class="string">"unchecked"</span>)</span><br /><span class="line">  <span class="number">3</span>: <span class="keyword">public</span> &lt;T&gt; <span class="function">Exporter&lt;T&gt; <span class="title">export</span><span class="params">(<span class="keyword">final</span> Invoker&lt;T&gt; invoker)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">  <span class="number">4</span>:     <span class="comment">// 获得服务键</span></span><br /><span class="line">  <span class="number">5</span>:     <span class="keyword">final</span> String uri = serviceKey(invoker.getUrl());</span><br /><span class="line">  <span class="number">6</span>:     <span class="comment">// 获得 Exporter 对象。若已经暴露，直接返回。</span></span><br /><span class="line">  <span class="number">7</span>:     Exporter&lt;T&gt; exporter = (Exporter&lt;T&gt;) exporterMap.get(uri);</span><br /><span class="line">  <span class="number">8</span>:     <span class="keyword">if</span> (exporter != <span class="keyword">null</span>) {</span><br /><span class="line">  <span class="number">9</span>:         <span class="keyword">return</span> exporter;</span><br /><span class="line"> <span class="number">10</span>:     }</span><br /><span class="line"> <span class="number">11</span>:     <span class="comment">// 执行暴露服务</span></span><br /><span class="line"> <span class="number">12</span>:     <span class="keyword">final</span> Runnable runnable = doExport(proxyFactory.getProxy(invoker), invoker.getInterface(), invoker.getUrl());</span><br /><span class="line"> <span class="number">13</span>:     <span class="comment">// 创建 Exporter 对象</span></span><br /><span class="line"> <span class="number">14</span>:     exporter = <span class="keyword">new</span> AbstractExporter&lt;T&gt;(invoker) {</span><br /><span class="line"> <span class="number">15</span>: </span><br /><span class="line"> <span class="number">16</span>:         <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">17</span>:         <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">unexport</span><span class="params">()</span> </span>{</span><br /><span class="line"> <span class="number">18</span>:             <span class="comment">// 取消暴露</span></span><br /><span class="line"> <span class="number">19</span>:             <span class="keyword">super</span>.unexport();</span><br /><span class="line"> <span class="number">20</span>:             exporterMap.remove(uri);</span><br /><span class="line"> <span class="number">21</span>:             <span class="comment">// 执行取消暴露的回调</span></span><br /><span class="line"> <span class="number">22</span>:             <span class="keyword">if</span> (runnable != <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">23</span>:                 <span class="keyword">try</span> {</span><br /><span class="line"> <span class="number">24</span>:                     runnable.run();</span><br /><span class="line"> <span class="number">25</span>:                 } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line"> <span class="number">26</span>:                     logger.warn(t.getMessage(), t);</span><br /><span class="line"> <span class="number">27</span>:                 }</span><br /><span class="line"> <span class="number">28</span>:             }</span><br /><span class="line"> <span class="number">29</span>:         }</span><br /><span class="line"> <span class="number">30</span>: </span><br /><span class="line"> <span class="number">31</span>:     };</span><br /><span class="line"> <span class="number">32</span>:     <span class="comment">// 添加到 Exporter 集合</span></span><br /><span class="line"> <span class="number">33</span>:     exporterMap.put(uri, exporter);</span><br /><span class="line"> <span class="number">34</span>:     <span class="keyword">return</span> exporter;</span><br /><span class="line"> <span class="number">35</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 5 行：调用&nbsp;<code>#serviceKey(url)</code>&nbsp;方法，获得服务键。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">static</span> String <span class="title">serviceKey</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> ProtocolUtils.serviceKey(url);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 6 至 10 行：从&nbsp;<code>exporterMap</code>&nbsp;中，获得 Exporter 对象。若已经暴露，直接返回。</p>
+</li>
+<li>第 12 行：调用&nbsp;<code>ProxyFactory#getProxy(invoker)</code>&nbsp;方法，获得 Service Proxy 对象。</li>
+<li>第 12 行：调用&nbsp;<code>#doExport(impl, type, url)</code>&nbsp;<strong>抽象</strong>方法，执行<strong>子类实现</strong>的暴露服务。</li>
+<li>第 14 至 31 行：创建 Exporter 对象。基于 AbstractExporter 抽象类实现，覆写&nbsp;<code>#unexport()</code>&nbsp;方法，代码如下：
+<ul>
+<li>第 18 至 20 行：取消暴露。</li>
+<li>第 22 至 28 行：调用&nbsp;<code>Runnable#run()</code>&nbsp;方法，执行取消暴露的回调方法。</li>
+</ul>
+</li>
+<li>第 33 行：添加到 Exporter 集合。</li>
+</ul>
+<h2 id="2-3-refer">2.3 refer</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Invoker 集合</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="comment">//TODO SOFEREFENCE</span></span><br /><span class="line"><span class="keyword">protected</span> <span class="keyword">final</span> Set&lt;Invoker&lt;?&gt;&gt; invokers = <span class="keyword">new</span> ConcurrentHashSet&lt;Invoker&lt;?&gt;&gt;(); <span class="comment">// FROM AbstractProtocol.java</span></span><br /><br /><span class="line">  <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line">  <span class="number">2</span>: <span class="keyword">public</span> &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">refer</span><span class="params">(<span class="keyword">final</span> Class&lt;T&gt; type, <span class="keyword">final</span> URL url)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">  <span class="number">3</span>:     <span class="comment">// 执行引用服务</span></span><br /><span class="line">  <span class="number">4</span>:     <span class="keyword">final</span> Invoker&lt;T&gt; target = proxyFactory.getInvoker(doRefer(type, url), type, url);</span><br /><span class="line">  <span class="number">5</span>:     <span class="comment">// 创建 Invoker 对象</span></span><br /><span class="line">  <span class="number">6</span>:     Invoker&lt;T&gt; invoker = <span class="keyword">new</span> AbstractInvoker&lt;T&gt;(type, url) {</span><br /><span class="line">  <span class="number">7</span>: </span><br /><span class="line">  <span class="number">8</span>:         <span class="meta">@Override</span></span><br /><span class="line">  <span class="number">9</span>:         <span class="function"><span class="keyword">protected</span> Result <span class="title">doInvoke</span><span class="params">(Invocation invocation)</span> <span class="keyword">throws</span> Throwable </span>{</span><br /><span class="line"> <span class="number">10</span>:             <span class="keyword">try</span> {</span><br /><span class="line"> <span class="number">11</span>:                 <span class="comment">// 调用</span></span><br /><span class="line"> <span class="number">12</span>:                 Result result = target.invoke(invocation);</span><br /><span class="line"> <span class="number">13</span>:                 <span class="comment">// 若返回结果带有异常，并且需要抛出，则抛出异常。</span></span><br /><span class="line"> <span class="number">14</span>:                 Throwable e = result.getException();</span><br /><span class="line"> <span class="number">15</span>:                 <span class="keyword">if</span> (e != <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">16</span>:                     <span class="keyword">for</span> (Class&lt;?&gt; rpcException : rpcExceptions) {</span><br /><span class="line"> <span class="number">17</span>:                         <span class="keyword">if</span> (rpcException.isAssignableFrom(e.getClass())) {</span><br /><span class="line"> <span class="number">18</span>:                             <span class="keyword">throw</span> getRpcException(type, url, invocation, e);</span><br /><span class="line"> <span class="number">19</span>:                         }</span><br /><span class="line"> <span class="number">20</span>:                     }</span><br /><span class="line"> <span class="number">21</span>:                 }</span><br /><span class="line"> <span class="number">22</span>:                 <span class="keyword">return</span> result;</span><br /><span class="line"> <span class="number">23</span>:             } <span class="keyword">catch</span> (RpcException e) {</span><br /><span class="line"> <span class="number">24</span>:                 <span class="comment">// 若是未知异常，获得异常对应的错误码</span></span><br /><span class="line"> <span class="number">25</span>:                 <span class="keyword">if</span> (e.getCode() == RpcException.UNKNOWN_EXCEPTION) {</span><br /><span class="line"> <span class="number">26</span>:                     e.setCode(getErrorCode(e.getCause()));</span><br /><span class="line"> <span class="number">27</span>:                 }</span><br /><span class="line"> <span class="number">28</span>:                 <span class="keyword">throw</span> e;</span><br /><span class="line"> <span class="number">29</span>:             } <span class="keyword">catch</span> (Throwable e) {</span><br /><span class="line"> <span class="number">30</span>:                 <span class="comment">// 抛出 RpcException 异常</span></span><br /><span class="line"> <span class="number">31</span>:                 <span class="keyword">throw</span> getRpcException(type, url, invocation, e);</span><br /><span class="line"> <span class="number">32</span>:             }</span><br /><span class="line"> <span class="number">33</span>:         }</span><br /><span class="line"> <span class="number">34</span>: </span><br /><span class="line"> <span class="number">35</span>:     };</span><br /><span class="line"> <span class="number">36</span>:     <span class="comment">// 添加到 Invoker 集合。</span></span><br /><span class="line"> <span class="number">37</span>:     invokers.add(invoker);</span><br /><span class="line"> <span class="number">38</span>:     <span class="keyword">return</span> invoker;</span><br /><span class="line"> <span class="number">39</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 4 行：调用&nbsp;<code>#doRefer(type, url)</code>&nbsp;<strong>抽象</strong>方法，执行<strong>子类实现</strong>的引用服务。</li>
+<li>第 4 行：调用&nbsp;<code>ProxyFactory#getInvoker(proxy, type, url)</code>&nbsp;方法，获得 Invoker 对象。</li>
+<li>
+<p>第 6 至 35 行：创建 Invoker 对象。基于 AbstractExporter 抽象类实现，覆写&nbsp;<code>#doInvoke(invocation)</code>&nbsp;方法，代码如下：</p>
+<ul>
+<li>第 12 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，执行 RPC 调用。</li>
+<li>第 13 至 21 行：若返回结果带有异常，并且需要抛出( 异常在&nbsp;<code>rpcExceptions</code>&nbsp;中)，则抛出异常。</li>
+<li>第 22 行：返回调用结果。</li>
+<li>
+<p>第 23 至 28 行：若捕捉到 RpcException 异常，调用&nbsp;<code>#getErrorCode(Throwable)</code>&nbsp;方法，获得异常对应的错误码。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 获得异常对应的错误码</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> e 异常</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@return</span> 错误码</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">int</span> <span class="title">getErrorCode</span><span class="params">(Throwable e)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> RpcException.UNKNOWN_EXCEPTION;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>子类协议实现类，一般会覆写这个方法，实现自己异常的翻译。</li>
+</ul>
+</li>
+<li>
+<p>第 29 至 32 行：若捕捉到 Throwable 异常，调用&nbsp;<code>#getRpcException(type, url, invocation, e)</code>&nbsp;方法，包装成 RpcException 异常，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">protected</span> RpcException <span class="title">getRpcException</span><span class="params">(Class&lt;?&gt; type, URL url, Invocation invocation, Throwable e)</span> </span>{</span><br /><span class="line">    RpcException re = <span class="keyword">new</span> RpcException(<span class="string">"Failed to invoke remote service: "</span> + type + <span class="string">", method: "</span></span><br /><span class="line">            + invocation.getMethodName() + <span class="string">", cause: "</span> + e.getMessage(), e);</span><br /><span class="line">    re.setCode(getErrorCode(e));</span><br /><span class="line">    <span class="keyword">return</span> re;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+</li>
+<li>
+<p>第 37 行：添加到 Invoker 集合。</p>
+</li>
+</ul>
+<h1 id="3-HttpProtocol">3. HttpProtocol</h1>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-rpc/dubbo-rpc-http/src/main/java/com/alibaba/dubbo/rpc/protocol/http/HttpProtocol.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol.http.HttpProtocol</code></a>&nbsp;，实现 AbstractProxyProtocol 抽象类，<code>dubbo://</code>&nbsp;协议实现类。</p>
+<h2 id="3-1-构造方法">3.1 构造方法</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 默认服务器端口</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> DEFAULT_PORT = <span class="number">80</span>;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Http 服务器集合</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key：ip:port</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, HttpServer&gt; serverMap = <span class="keyword">new</span> ConcurrentHashMap&lt;String, HttpServer&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Spring HttpInvokerServiceExporter 集合</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key：path 服务名</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, HttpInvokerServiceExporter&gt; skeletonMap = <span class="keyword">new</span> ConcurrentHashMap&lt;String, HttpInvokerServiceExporter&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * HttpBinder$Adaptive 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> HttpBinder httpBinder;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">HttpProtocol</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">super</span>(RemoteAccessException.class);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setHttpBinder</span><span class="params">(HttpBinder httpBinder)</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.httpBinder = httpBinder;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><code>serverMap</code>&nbsp;属性，HttpServer 集合。键为&nbsp;<code>ip:port</code>&nbsp;，通过&nbsp;<code>#getAddr(url)</code>&nbsp;方法，计算。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// AbstractProxyProtocol.java</span></span><br /><span class="line"><span class="function"><span class="keyword">protected</span> String <span class="title">getAddr</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">    String bindIp = url.getParameter(Constants.BIND_IP_KEY, url.getHost());</span><br /><span class="line">    <span class="keyword">if</span> (url.getParameter(Constants.ANYHOST_KEY, <span class="keyword">false</span>)) {</span><br /><span class="line">        bindIp = Constants.ANYHOST_VALUE;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> NetUtils.getIpByHost(bindIp) + <span class="string">":"</span> + url.getParameter(Constants.BIND_PORT_KEY, url.getPort());</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p><code>skeletonMap</code>&nbsp;属性，Spring HttpInvokerServiceExporter 集合。请求处理过程为&nbsp;<code>HttpServer =&gt; DispatcherServlet =&gt; InternalHandler =&gt; HttpInvokerServiceExporter</code>&nbsp;。</p>
+</li>
+<li><code>httpBinder</code>&nbsp;属性，HttpBinder$Adaptive 对象，通过&nbsp;<code>#setHttpBinder(httpBinder)</code>&nbsp;方法，Dubbo SPI 调用设置。</li>
+<li><code>rpcExceptions = RemoteAccessException.class</code>&nbsp;。</li>
+</ul>
+<h2 id="3-2-doExport">3.2 doExport</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">protected</span> &lt;T&gt; <span class="function">Runnable <span class="title">doExport</span><span class="params">(<span class="keyword">final</span> T impl, Class&lt;T&gt; type, URL url)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// 获得服务器地址</span></span><br /><span class="line"> <span class="number">4</span>:     String addr = getAddr(url);</span><br /><span class="line"> <span class="number">5</span>:     <span class="comment">// 获得 HttpServer 对象。若不存在，进行创建。</span></span><br /><span class="line"> <span class="number">6</span>:     HttpServer server = serverMap.get(addr);</span><br /><span class="line"> <span class="number">7</span>:     <span class="keyword">if</span> (server == <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">8</span>:         server = httpBinder.bind(url, <span class="keyword">new</span> InternalHandler()); <span class="comment">// InternalHandler</span></span><br /><span class="line"> <span class="number">9</span>:         serverMap.put(addr, server);</span><br /><span class="line"><span class="number">10</span>:     }</span><br /><span class="line"><span class="number">11</span>:     <span class="comment">// 创建 HttpInvokerServiceExporter 对象</span></span><br /><span class="line"><span class="number">12</span>:     <span class="keyword">final</span> HttpInvokerServiceExporter httpServiceExporter = <span class="keyword">new</span> HttpInvokerServiceExporter();</span><br /><span class="line"><span class="number">13</span>:     httpServiceExporter.setServiceInterface(type);</span><br /><span class="line"><span class="number">14</span>:     httpServiceExporter.setService(impl);</span><br /><span class="line"><span class="number">15</span>:     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">16</span>:         httpServiceExporter.afterPropertiesSet();</span><br /><span class="line"><span class="number">17</span>:     } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line"><span class="number">18</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(e.getMessage(), e);</span><br /><span class="line"><span class="number">19</span>:     }</span><br /><span class="line"><span class="number">20</span>:     <span class="comment">// 添加到 skeletonMap 中</span></span><br /><span class="line"><span class="number">21</span>:     <span class="keyword">final</span> String path = url.getAbsolutePath();</span><br /><span class="line"><span class="number">22</span>:     skeletonMap.put(path, httpServiceExporter);</span><br /><span class="line"><span class="number">23</span>:     <span class="comment">// 返回取消暴露的回调 Runnable</span></span><br /><span class="line"><span class="number">24</span>:     <span class="keyword">return</span> <span class="keyword">new</span> Runnable() {</span><br /><span class="line"><span class="number">25</span>:         <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>{</span><br /><span class="line"><span class="number">26</span>:             skeletonMap.remove(path);</span><br /><span class="line"><span class="number">27</span>:         }</span><br /><span class="line"><span class="number">28</span>:     };</span><br /><span class="line"><span class="number">29</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>基于&nbsp;<code>dubbo-remoting-http</code>&nbsp;项目，作为<strong>通信服务器</strong>。</li>
+<li>第 4 行：调用&nbsp;<code>#getAddr(url)</code>&nbsp;方法，获得服务器地址。</li>
+<li>第 5 至 10 行：从&nbsp;<code>serverMap</code>&nbsp;中，获得 HttpServer 对象。若不存在，调用&nbsp;<code>HttpBinder#bind(url, handler)</code>&nbsp;方法，创建 HttpServer 对象。此处使用的 InternalHandler ，下文详细解析。</li>
+<li>第 11 至 19 行：创建 HttpInvokerServiceExporter 对象。</li>
+<li>第 20 至 22 行：添加到&nbsp;<code>skeletonMap</code>&nbsp;集合中。</li>
+<li>第 23 至 28 行：返回取消暴露的回调 Runnable 对象。</li>
+</ul>
+<h3 id="3-2-1-InternalHandler">3.2.1 InternalHandler</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> <span class="class"><span class="keyword">class</span> <span class="title">InternalHandler</span> <span class="keyword">implements</span> <span class="title">HttpHandler</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">handle</span><span class="params">(HttpServletRequest request, HttpServletResponse response)</span> <span class="keyword">throws</span> ServletException </span>{</span><br /><span class="line">        String uri = request.getRequestURI();</span><br /><span class="line">        <span class="comment">// 获得 HttpInvokerServiceExporter 对象</span></span><br /><span class="line">        HttpInvokerServiceExporter skeleton = skeletonMap.get(uri);</span><br /><span class="line">        <span class="comment">// 必须是 POST 请求</span></span><br /><span class="line">        <span class="keyword">if</span> (!request.getMethod().equalsIgnoreCase(<span class="string">"POST"</span>)) {</span><br /><span class="line">            response.setStatus(<span class="number">500</span>);</span><br /><span class="line">        <span class="comment">// 执行调用</span></span><br /><span class="line">        } <span class="keyword">else</span> {</span><br /><span class="line">            RpcContext.getContext().setRemoteAddress(request.getRemoteAddr(), request.getRemotePort());</span><br /><span class="line">            <span class="keyword">try</span> {</span><br /><span class="line">                skeleton.handleRequest(request, response);</span><br /><span class="line">            } <span class="keyword">catch</span> (Throwable e) {</span><br /><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> ServletException(e);</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="3-3-doRefer">3.3 doRefer</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="meta">@SuppressWarnings</span>(<span class="string">"unchecked"</span>)</span><br /><span class="line"> <span class="number">3</span>: <span class="keyword">protected</span> &lt;T&gt; <span class="function">T <span class="title">doRefer</span><span class="params">(<span class="keyword">final</span> Class&lt;T&gt; serviceType, <span class="keyword">final</span> URL url)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">4</span>:     <span class="comment">// 创建 HttpInvokerProxyFactoryBean 对象</span></span><br /><span class="line"> <span class="number">5</span>:     <span class="keyword">final</span> HttpInvokerProxyFactoryBean httpProxyFactoryBean = <span class="keyword">new</span> HttpInvokerProxyFactoryBean();</span><br /><span class="line"> <span class="number">6</span>:     httpProxyFactoryBean.setServiceUrl(url.toIdentityString());</span><br /><span class="line"> <span class="number">7</span>:     httpProxyFactoryBean.setServiceInterface(serviceType);</span><br /><span class="line"> <span class="number">8</span>:     <span class="comment">// 创建执行器 SimpleHttpInvokerRequestExecutor 对象</span></span><br /><span class="line"> <span class="number">9</span>:     String client = url.getParameter(Constants.CLIENT_KEY);</span><br /><span class="line"><span class="number">10</span>:     <span class="keyword">if</span> (client == <span class="keyword">null</span> || client.length() == <span class="number">0</span> || <span class="string">"simple"</span>.equals(client)) {</span><br /><span class="line"><span class="number">11</span>:         SimpleHttpInvokerRequestExecutor httpInvokerRequestExecutor = <span class="keyword">new</span> SimpleHttpInvokerRequestExecutor() {</span><br /><span class="line"><span class="number">12</span>:             <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">prepareConnection</span><span class="params">(HttpURLConnection con,</span></span></span><br /><span class="line"><span class="function"><span class="params"><span class="number">13</span>:                                              <span class="keyword">int</span> contentLength)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line"><span class="number">14</span>:                 <span class="keyword">super</span>.prepareConnection(con, contentLength);</span><br /><span class="line"><span class="number">15</span>:                 con.setReadTimeout(url.getParameter(Constants.TIMEOUT_KEY, Constants.DEFAULT_TIMEOUT));</span><br /><span class="line"><span class="number">16</span>:                 con.setConnectTimeout(url.getParameter(Constants.CONNECT_TIMEOUT_KEY, Constants.DEFAULT_CONNECT_TIMEOUT));</span><br /><span class="line"><span class="number">17</span>:             }</span><br /><span class="line"><span class="number">18</span>:         };</span><br /><span class="line"><span class="number">19</span>:         httpProxyFactoryBean.setHttpInvokerRequestExecutor(httpInvokerRequestExecutor);</span><br /><span class="line"><span class="number">20</span>:     <span class="comment">// 创建执行器 HttpComponentsHttpInvokerRequestExecutor 对象</span></span><br /><span class="line"><span class="number">21</span>:     } <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">"commons"</span>.equals(client)) {</span><br /><span class="line"><span class="number">22</span>:         HttpComponentsHttpInvokerRequestExecutor httpInvokerRequestExecutor = <span class="keyword">new</span> HttpComponentsHttpInvokerRequestExecutor();</span><br /><span class="line"><span class="number">23</span>:         httpInvokerRequestExecutor.setReadTimeout(url.getParameter(Constants.CONNECT_TIMEOUT_KEY, Constants.DEFAULT_CONNECT_TIMEOUT));</span><br /><span class="line"><span class="number">24</span>:         httpProxyFactoryBean.setHttpInvokerRequestExecutor(httpInvokerRequestExecutor);</span><br /><span class="line"><span class="number">25</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">26</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Unsupported http protocol client "</span> + client + <span class="string">", only supported: simple, commons"</span>);</span><br /><span class="line"><span class="number">27</span>:     }</span><br /><span class="line"><span class="number">28</span>:     httpProxyFactoryBean.afterPropertiesSet();</span><br /><span class="line"><span class="number">29</span>:     <span class="comment">// 返回 HttpInvokerProxyFactoryBean 对象</span></span><br /><span class="line"><span class="number">30</span>:     <span class="keyword">return</span> (T) httpProxyFactoryBean.getObject();</span><br /><span class="line"><span class="number">31</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>基于 HttpClient ，作为<strong>通信客户端</strong>。</li>
+<li>第 4 至 7 行：创建 HttpInvokerProxyFactoryBean 对象。</li>
+<li>第 9 至 27 行：获得&nbsp;<code>client</code>&nbsp;配置项，根据该配置项，创建对应的执行器。
+<ul>
+<li><code>"simple"</code>：第 10 至 19 行：创建执行器 SimpleHttpInvokerRequestExecutor 对象。</li>
+<li><code>"commons"</code>：第 20 至 24 行：创建执行器 HttpComponentsHttpInvokerRequestExecutor 对象。</li>
+<li>两者的差异点在于使用的 HttpClient 不同，前者使用 JDK HttpClient ，后者使用 Apache HttpClient 。</li>
+</ul>
+</li>
+<li>第 30 行：返回 HttpInvokerProxyFactoryBean 对象。</li>
+<li>🙂 具体 RPC 调用的实现，在父类&nbsp;<code>#refer()</code>&nbsp;方法里。</li>
+</ul>
+<h3 id="3-3-1-getErrorCode">3.3.1 getErrorCode</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="meta">@SuppressWarnings</span>(<span class="string">"Duplicates"</span>)</span><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">int</span> <span class="title">getErrorCode</span><span class="params">(Throwable e)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (e <span class="keyword">instanceof</span> RemoteAccessException) {</span><br /><span class="line">        e = e.getCause();</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">if</span> (e != <span class="keyword">null</span>) {</span><br /><span class="line">        Class&lt;?&gt; cls = e.getClass();</span><br /><span class="line">        <span class="keyword">if</span> (SocketTimeoutException.class.equals(cls)) {</span><br /><span class="line">            <span class="keyword">return</span> RpcException.TIMEOUT_EXCEPTION;</span><br /><span class="line">        } <span class="keyword">else</span> <span class="keyword">if</span> (IOException.class.isAssignableFrom(cls)) {</span><br /><span class="line">            <span class="keyword">return</span> RpcException.NETWORK_EXCEPTION;</span><br /><span class="line">        } <span class="keyword">else</span> <span class="keyword">if</span> (ClassNotFoundException.class.isAssignableFrom(cls)) {</span><br /><span class="line">            <span class="keyword">return</span> RpcException.SERIALIZATION_EXCEPTION;</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> <span class="keyword">super</span>.getErrorCode(e);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>将异常，翻译成 Dubbo 异常码。</li>
+</ul>
+</div>

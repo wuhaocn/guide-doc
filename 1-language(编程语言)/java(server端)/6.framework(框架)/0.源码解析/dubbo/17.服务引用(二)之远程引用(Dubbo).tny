@@ -1,0 +1,568 @@
+<header class="article-header">
+<h1 class="article-title">服务引用（二）之远程引用（Dubbo）</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/reference-refer-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务引用（一）之本地引用（Injvm）》</a>&nbsp;一文中，我们已经分享了<strong>本地引用服务</strong>。在本文中，我们来分享<strong>远程引用服务</strong>。在 Dubbo 中提供多种协议( Protocol ) 的实现，大体流程一致，本文以&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/dubbo.html" target="_blank" rel="external nofollow noopener noreferrer">Dubbo Protocol</a>&nbsp;为例子，这也是 Dubbo 的<strong>默认</strong>协议。</p>
+<p>如果不熟悉该协议的同学，可以先看看&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/dubbo.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 使用指南 &mdash;&mdash; dubbo://》</a>&nbsp;，简单了解即可。</p>
+<blockquote>
+<p><strong>特性</strong></p>
+<p>缺省协议，使用基于 mina&nbsp;<code>1.1.7</code>&nbsp;和 hessian&nbsp;<code>3.2.1</code>&nbsp;的 remoting 交互。</p>
+<ul>
+<li>连接个数：单连接</li>
+<li>连接方式：长连接</li>
+<li>传输协议：TCP</li>
+<li>传输方式：NIO 异步传输</li>
+<li>序列化：Hessian 二进制序列化</li>
+<li>适用范围：传入传出参数数据包较小（建议小于100K），消费者比提供者个数多，单一消费者无法压满提供者，尽量不要用 dubbo 协议传输大文件或超大字符串。</li>
+<li>适用场景：常规远程服务方法调用</li>
+</ul>
+</blockquote>
+<p>相比<strong>本地引用</strong>，<strong>远程引用</strong>会多做如下几件事情：</p>
+<ul>
+<li>向注册中心<strong>订阅</strong>，从而<strong>发现</strong>服务提供者列表。</li>
+<li>启动通信客户端，通过它进行<strong>远程调用</strong>。</li>
+</ul>
+<h1 id="2-远程引用">2. 远程引用</h1>
+<p>远程暴露服务的顺序图如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_05_04/02.png" alt="远程引用顺序图" /></p>
+<p>在&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/c635dd1990a1803643194048f408db310f06175b/dubbo-config/dubbo-config-api/src/main/java/com/alibaba/dubbo/config/ServiceConfig.java#L621-L648" target="_blank" rel="external nofollow noopener noreferrer"><code>#createProxy(map)</code></a>&nbsp;方法中，涉及<strong>远程引用服务</strong>的代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 服务引用 URL 数组</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> List&lt;URL&gt; urls = <span class="keyword">new</span> ArrayList&lt;URL&gt;();</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 直连服务地址</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * 1. 可以是注册中心，也可以是服务提供者</span></span><br /><span class="line"><span class="comment"> * 2. 可配置多个，使用 ; 分隔</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="comment">// url for peer-to-peer invocation</span></span><br /><span class="line"><span class="keyword">private</span> String url;</span><br /><br /><span class="line">  <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">  2:  * 创建 Service 代理对象</span></span><br /><span class="line"><span class="comment">  3:  *</span></span><br /><span class="line"><span class="comment">  4:  * <span class="doctag">@param</span> map 集合</span></span><br /><span class="line"><span class="comment">  5:  * <span class="doctag">@return</span> 代理对象</span></span><br /><span class="line"><span class="comment">  6:  */</span></span><br /><span class="line">  <span class="number">7</span>: <span class="meta">@SuppressWarnings</span>({<span class="string">"unchecked"</span>, <span class="string">"rawtypes"</span>, <span class="string">"deprecation"</span>})</span><br /><span class="line">  <span class="number">8</span>: <span class="function"><span class="keyword">private</span> T <span class="title">createProxy</span><span class="params">(Map&lt;String, String&gt; map)</span> </span>{</span><br /><span class="line">  <span class="number">9</span>:     URL tmpUrl = <span class="keyword">new</span> URL(<span class="string">"temp"</span>, <span class="string">"localhost"</span>, <span class="number">0</span>, map);</span><br /><span class="line"> <span class="number">10</span>:     <span class="comment">// 【省略代码】是否本地引用</span></span><br /><span class="line"> <span class="number">11</span>:     <span class="keyword">final</span> <span class="keyword">boolean</span> isJvmRefer;</span><br /><span class="line"> <span class="number">12</span>: </span><br /><span class="line"> <span class="number">13</span>:     <span class="comment">// 【省略代码】本地引用</span></span><br /><span class="line"> <span class="number">14</span>:     <span class="keyword">if</span> (isJvmRefer) {</span><br /><span class="line"> <span class="number">15</span>:     <span class="comment">// 正常流程，一般为远程引用</span></span><br /><span class="line"> <span class="number">16</span>:     } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">17</span>:         <span class="comment">// 定义直连地址，可以是服务提供者的地址，也可以是注册中心的地址</span></span><br /><span class="line"> <span class="number">18</span>:         <span class="keyword">if</span> (url != <span class="keyword">null</span> &amp;&amp; url.length() &gt; <span class="number">0</span>) { <span class="comment">// user specified URL, could be peer-to-peer address, or register center's address.</span></span><br /><span class="line"> <span class="number">19</span>:             <span class="comment">// 拆分地址成数组，使用 ";" 分隔。</span></span><br /><span class="line"> <span class="number">20</span>:             String[] us = Constants.SEMICOLON_SPLIT_PATTERN.split(url);</span><br /><span class="line"> <span class="number">21</span>:             <span class="comment">// 循环数组，添加到 `url` 中。</span></span><br /><span class="line"> <span class="number">22</span>:             <span class="keyword">if</span> (us != <span class="keyword">null</span> &amp;&amp; us.length &gt; <span class="number">0</span>) {</span><br /><span class="line"> <span class="number">23</span>:                 <span class="keyword">for</span> (String u : us) {</span><br /><span class="line"> <span class="number">24</span>:                     <span class="comment">// 创建 URL 对象</span></span><br /><span class="line"> <span class="number">25</span>:                     URL url = URL.valueOf(u);</span><br /><span class="line"> <span class="number">26</span>:                     <span class="comment">// 设置默认路径</span></span><br /><span class="line"> <span class="number">27</span>:                     <span class="keyword">if</span> (url.getPath() == <span class="keyword">null</span> || url.getPath().length() == <span class="number">0</span>) {</span><br /><span class="line"> <span class="number">28</span>:                         url = url.setPath(interfaceName);</span><br /><span class="line"> <span class="number">29</span>:                     }</span><br /><span class="line"> <span class="number">30</span>:                     <span class="comment">// 注册中心的地址，带上服务引用的配置参数</span></span><br /><span class="line"> <span class="number">31</span>:                     <span class="keyword">if</span> (Constants.REGISTRY_PROTOCOL.equals(url.getProtocol())) {</span><br /><span class="line"> <span class="number">32</span>:                         urls.add(url.addParameterAndEncoded(Constants.REFER_KEY, StringUtils.toQueryString(map)));</span><br /><span class="line"> <span class="number">33</span>:                     <span class="comment">// 服务提供者的地址</span></span><br /><span class="line"> <span class="number">34</span>:                     } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">35</span>:                         urls.add(ClusterUtils.mergeUrl(url, map));</span><br /><span class="line"> <span class="number">36</span>:                     }</span><br /><span class="line"> <span class="number">37</span>:                 }</span><br /><span class="line"> <span class="number">38</span>:             }</span><br /><span class="line"> <span class="number">39</span>:         <span class="comment">// 注册中心</span></span><br /><span class="line"> <span class="number">40</span>:         } <span class="keyword">else</span> { <span class="comment">// assemble URL from register center's configuration</span></span><br /><span class="line"> <span class="number">41</span>:             <span class="comment">// 加载注册中心 URL 数组</span></span><br /><span class="line"> <span class="number">42</span>:             List&lt;URL&gt; us = loadRegistries(<span class="keyword">false</span>);</span><br /><span class="line"> <span class="number">43</span>:             <span class="comment">// 循环数组，添加到 `url` 中。</span></span><br /><span class="line"> <span class="number">44</span>:             <span class="keyword">if</span> (us != <span class="keyword">null</span> &amp;&amp; !us.isEmpty()) {</span><br /><span class="line"> <span class="number">45</span>:                 <span class="keyword">for</span> (URL u : us) {</span><br /><span class="line"> <span class="number">46</span>:                     <span class="comment">// 加载监控中心 URL</span></span><br /><span class="line"> <span class="number">47</span>:                     URL monitorUrl = loadMonitor(u);</span><br /><span class="line"> <span class="number">48</span>:                     <span class="comment">// 服务引用配置对象 `map`，带上监控中心的 URL</span></span><br /><span class="line"> <span class="number">49</span>:                     <span class="keyword">if</span> (monitorUrl != <span class="keyword">null</span>) {</span><br /><span class="line"> <span class="number">50</span>:                         map.put(Constants.MONITOR_KEY, URL.encode(monitorUrl.toFullString()));</span><br /><span class="line"> <span class="number">51</span>:                     }</span><br /><span class="line"> <span class="number">52</span>:                     <span class="comment">// 注册中心的地址，带上服务引用的配置参数</span></span><br /><span class="line"> <span class="number">53</span>:                     urls.add(u.addParameterAndEncoded(Constants.REFER_KEY, StringUtils.toQueryString(map))); <span class="comment">// 注册中心，带上服务引用的配置参数</span></span><br /><span class="line"> <span class="number">54</span>:                 }</span><br /><span class="line"> <span class="number">55</span>:             }</span><br /><span class="line"> <span class="number">56</span>:             <span class="keyword">if</span> (urls == <span class="keyword">null</span> || urls.isEmpty()) {</span><br /><span class="line"> <span class="number">57</span>:                 <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"No such any registry to reference "</span> + interfaceName + <span class="string">" on the consumer "</span> + NetUtils.getLocalHost() + <span class="string">" use dubbo version "</span> + Version.getVersion() + <span class="string">", please config &lt;dubbo:registry address=\"...\" /&gt; to your spring config."</span>);</span><br /><span class="line"> <span class="number">58</span>:             }</span><br /><span class="line"> <span class="number">59</span>:         }</span><br /><span class="line"> <span class="number">60</span>: </span><br /><span class="line"> <span class="number">61</span>:         <span class="comment">// 单 `urls` 时，引用服务，返回 Invoker 对象</span></span><br /><span class="line"> <span class="number">62</span>:         <span class="keyword">if</span> (urls.size() == <span class="number">1</span>) {</span><br /><span class="line"> <span class="number">63</span>:             <span class="comment">// 引用服务</span></span><br /><span class="line"> <span class="number">64</span>:             invoker = refprotocol.refer(interfaceClass, urls.get(<span class="number">0</span>));</span><br /><span class="line"> <span class="number">65</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">66</span>:             <span class="comment">// 循环 `urls` ，引用服务，返回 Invoker 对象</span></span><br /><span class="line"> <span class="number">67</span>:             List&lt;Invoker&lt;?&gt;&gt; invokers = <span class="keyword">new</span> ArrayList&lt;Invoker&lt;?&gt;&gt;();</span><br /><span class="line"> <span class="number">68</span>:             URL registryURL = <span class="keyword">null</span>;</span><br /><span class="line"> <span class="number">69</span>:             <span class="keyword">for</span> (URL url : urls) {</span><br /><span class="line"> <span class="number">70</span>:                 <span class="comment">// 引用服务</span></span><br /><span class="line"> <span class="number">71</span>:                 invokers.add(refprotocol.refer(interfaceClass, url));</span><br /><span class="line"> <span class="number">72</span>:                 <span class="comment">// 使用最后一个注册中心的 URL</span></span><br /><span class="line"> <span class="number">73</span>:                 <span class="keyword">if</span> (Constants.REGISTRY_PROTOCOL.equals(url.getProtocol())) {</span><br /><span class="line"> <span class="number">74</span>:                     registryURL = url; <span class="comment">// use last registry url</span></span><br /><span class="line"> <span class="number">75</span>:                 }</span><br /><span class="line"> <span class="number">76</span>:             }</span><br /><span class="line"> <span class="number">77</span>:             <span class="comment">// 有注册中心</span></span><br /><span class="line"> <span class="number">78</span>:             <span class="keyword">if</span> (registryURL != <span class="keyword">null</span>) { <span class="comment">// registry url is available</span></span><br /><span class="line"> <span class="number">79</span>:                 <span class="comment">// 对有注册中心的 Cluster 只用 AvailableCluster</span></span><br /><span class="line"> <span class="number">80</span>:                 <span class="comment">// use AvailableCluster only when register's cluster is available</span></span><br /><span class="line"> <span class="number">81</span>:                 URL u = registryURL.addParameter(Constants.CLUSTER_KEY, AvailableCluster.NAME);</span><br /><span class="line"> <span class="number">83</span>:                 invoker = cluster.join(<span class="keyword">new</span> StaticDirectory(u, invokers));</span><br /><span class="line"> <span class="number">84</span>:             <span class="comment">// 无注册中心</span></span><br /><span class="line"> <span class="number">85</span>:             } <span class="keyword">else</span> { <span class="comment">// not a registry url</span></span><br /><span class="line"> <span class="number">87</span>:                 invoker = cluster.join(<span class="keyword">new</span> StaticDirectory(invokers));</span><br /><span class="line"> <span class="number">88</span>:             }</span><br /><span class="line"> <span class="number">89</span>:         }</span><br /><span class="line"> <span class="number">90</span>:     }</span><br /><span class="line"> <span class="number">91</span>: </span><br /><span class="line"> <span class="number">92</span>:     <span class="comment">// 【省略代码】启动时检查</span></span><br /><span class="line"> <span class="number">93</span>: </span><br /><span class="line"> <span class="number">94</span>:     <span class="comment">// 创建 Service 代理对象</span></span><br /><span class="line"> <span class="number">95</span>:     <span class="comment">// create service proxy</span></span><br /><span class="line"> <span class="number">96</span>:     <span class="keyword">return</span> (T) proxyFactory.getProxy(invoker);</span><br /><span class="line"> <span class="number">97</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 11 行：省略<strong>是否本地引用</strong>的代码，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/reference-refer-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务引用（一）之本地引用（Injvm）》</a>&nbsp;已经有分享。</li>
+<li>第 13 至 15 行：省略<strong>本地引用</strong>的代码，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/reference-refer-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务引用（一）之本地引用（Injvm）》</a>&nbsp;已经有分享。</li>
+<li>第 16 至 90 行：正常流程，一般为远程引用。</li>
+<li>第 18 至 38 行：<code>url</code>&nbsp;配置项，<strong>定义直连地址</strong>，可以是服务提供者的地址，也可以是注册中心的地址。
+<ul>
+<li>第 20 行：拆分地址成数组，使用 &ldquo;;&rdquo; 分隔。</li>
+<li>第 22 至 23 行：循环数组&nbsp;<code>us</code>&nbsp;，创建 URL 对象后，添加到&nbsp;<code>urls</code>&nbsp;中。</li>
+<li>第 25 行：创建 URL 对象。</li>
+<li>第 26 至 29 行：路径属性&nbsp;<code>url.path</code>&nbsp;未设置时，缺省使用接口全名&nbsp;<code>interfaceName</code>&nbsp;。</li>
+<li>第 30 至 32 行：若&nbsp;<code>url.protocol = registry</code>&nbsp;时，<strong>注册中心的地址</strong>，在参数&nbsp;<code>url.parameters.refer</code>上，设置上服务引用的配置参数集合&nbsp;<code>map</code>&nbsp;。</li>
+<li>第 33 至 36 行：<strong>服务提供者的地址</strong>。
+<ul>
+<li>从逻辑上类似【第 53 行】的代码。</li>
+<li>一般情况下，不建议这样在&nbsp;<code>url</code>&nbsp;配置注册中心，而是在&nbsp;<code>registry</code>&nbsp;配置。如果要配置，格式为&nbsp;<code>registry://host:port?registry=</code>&nbsp;，例如&nbsp;<code>registry://127.0.0.1?registry=zookeeper</code>&nbsp;。</li>
+<li>TODO ClusterUtils.mergeUrl</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>第 39 至 59 行：<code>protocol</code>&nbsp;配置项，<strong>注册中心</strong>。
+<ul>
+<li>第 42 行：调用&nbsp;<code>#loadRegistries(provider)</code>&nbsp;方法，加载注册中心的 com.alibaba.dubbo.common.URL` 数组。
+<ul>
+<li>🙂 在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务暴露（一）之本地暴露（Injvm）》「2.1 loadRegistries」</a>&nbsp;详细解析。</li>
+</ul>
+</li>
+<li>第 43 至 58 行：循环数组&nbsp;<code>us</code>&nbsp;，创建 URL 对象后，添加到&nbsp;<code>urls</code>&nbsp;中。
+<ul>
+<li>第 47 行：调用&nbsp;<code>#loadMonitor(registryURL)</code>&nbsp;方法，获得监控中心 URL 。
+<ul>
+<li>🙂 在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/reference-refer-dubbo/">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务暴露（二）之远程暴露（Dubbo）》「2.1 loadRegistries」</a>&nbsp;小节，详细解析。</li>
+</ul>
+</li>
+<li>第 49 至 51 行：服务引用配置对象&nbsp;<code>map</code>，带上监控中心的 URL 。具体用途，我们在后面分享监控中心会看到。</li>
+<li>第 53 行：调用&nbsp;<a href="https://github.com/YunaiV/dubbo/blob/c635dd1990a1803643194048f408db310f06175b/dubbo-common/src/main/java/com/alibaba/dubbo/common/URL.java#L891-L896" target="_blank" rel="external nofollow noopener noreferrer"><code>URL#addParameterAndEncoded(key, value)</code></a>&nbsp;方法，将服务引用配置对象参数集合&nbsp;<code>map</code>&nbsp;，作为&nbsp;<code>"refer"</code>&nbsp;参数添加到注册中心的 URL 中，<strong>并且需要编码</strong>。通过这样的方式，注册中心的 URL 中，<strong>包含了服务引用的配置</strong>。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p>第 61 至 64 行：单&nbsp;<code>urls</code>&nbsp;时，<strong>直接调用</strong>&nbsp;<code>Protocol#refer(type, url)</code>&nbsp;方法，引用服务，返回 Invoker 对象。</p>
+<ul>
+<li>此处 Dubbo SPI&nbsp;<strong>自适应</strong>的特性的<strong>好处</strong>就出来了，可以<strong>自动</strong>根据 URL 参数，获得对应的拓展实现。例如，<code>invoker</code>传入后，根据&nbsp;<code>invoker.url</code>&nbsp;自动获得对应 Protocol 拓展实现为 DubboProtocol 。</li>
+<li>
+<p>实际上，Protocol 有两个 Wrapper 拓展实现类： ProtocolFilterWrapper、ProtocolListenerWrapper 。所以，<code>#export(...)</code>&nbsp;方法的调用顺序是：</p>
+<ul>
+<li><strong>Protocol$Adaptive =&gt; ProtocolFilterWrapper =&gt; ProtocolListenerWrapper =&gt; RegistryProtocol</strong></li>
+<li>=&gt;</li>
+<li><strong>Protocol$Adaptive =&gt; ProtocolFilterWrapper =&gt; ProtocolListenerWrapper =&gt; DubboProtocol</strong></li>
+<li>也就是说，<strong>这一条大的调用链，包含两条小的调用链</strong>。原因是：
+<ul>
+<li>首先，传入的是注册中心的 URL ，通过 Protocol$Adaptive 获取到的是 RegistryProtocol 对象。</li>
+<li>其次，RegistryProtocol 会在其&nbsp;<code>#refer(...)</code>&nbsp;方法中，使用服务提供者的 URL ( 即注册中心的 URL 的&nbsp;<code>refer</code>&nbsp;参数值)，再次调用 Protocol$Adaptive 获取到的是 DubboProtocol 对象，进行服务暴露。</li>
+</ul>
+</li>
+<li>
+<p><strong>为什么是这样的顺序</strong>？通过这样的顺序，可以实现类似&nbsp;<strong>AOP</strong>&nbsp;的效果，在获取服务提供者列表后，再创建连接服务提供者的客户端。伪代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">RegistryProtocol#refer(...) {</span><br />    <br /><span class="line">    <span class="comment">// 1. 获取服务提供者列表 【并且订阅】</span></span><br />    <br /><span class="line">    <span class="comment">// 2. 创建调用连接服务提供者的客户端 </span></span><br /><span class="line">    DubboProtocol#refer(...);</span><br />    <br /><span class="line">    <span class="comment">// ps：实际这个过程中，还有别的代码，详细见下文。</span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>x</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p>第 65 至 89 行：多&nbsp;<code>urls</code>&nbsp;时，<strong>循环调用</strong>&nbsp;<code>Protocol#refer(type, url)</code>&nbsp;方法，引用服务，返回 Invoker 对象。此时，会有多个 Invoker 对象，需要进行合并。</p>
+<ul>
+<li>什么时候会出现多个&nbsp;<code>urls</code>&nbsp;呢？例如：<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/multi-registry.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 多注册中心注册》</a>&nbsp;。</li>
+<li>第 66 至 76 行：循环&nbsp;<code>urls</code>&nbsp;，引用服务。
+<ul>
+<li>第 71 行：调用&nbsp;<code>Protocol#refer(type, url)</code>&nbsp;方法，引用服务，返回 Invoker 对象。然后，添加到&nbsp;<code>invokers</code>&nbsp;中。</li>
+<li>第 72 会 75 行：使用最后一个注册中心的 URL ，赋值到&nbsp;<code>registryURL</code>&nbsp;。</li>
+</ul>
+</li>
+<li>第 77 至 88 行：详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-3-impl-directory/?self">《精尽 Dubbo 源码解析 &mdash;&mdash; 集群容错（三）之 Directory 实现》</a>&nbsp;。</li>
+</ul>
+</li>
+<li>第 92 行：省略<strong>启动时检查</strong>的代码，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/reference-refer-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务引用（一）之本地引用（Injvm）》</a>&nbsp;已经有分享。</li>
+<li>第 96 行：省略<strong>创建 Service 代理对象</strong>的代码，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/reference-refer-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务引用（一）之本地引用（Injvm）》</a>&nbsp;已经有分享。</li>
+</ul>
+<h1 id="3-Protocol">3. Protocol</h1>
+<p><strong>服务引用与暴露的 Protocol 很多类似点</strong>，本文就不重复叙述了。</p>
+<p>建议不熟悉的胖友，请点击&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务暴露（一）之本地暴露（Injvm）》「3. Protocol」</a>&nbsp;查看。</p>
+<p>本文涉及的 Protocol 类图如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_05_04/03.png" alt="Protocol 类图" /></p>
+<h2 id="3-1-ProtocolFilterWrapper">3.1 ProtocolFilterWrapper</h2>
+<p>接&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-reference-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务引用（一）之本地引用（Injvm）》「 3.1 ProtocolFilterWrapper」</a>小节。</p>
+<p>本文涉及的&nbsp;<code>#refer(type, url)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="number">1</span>: <span class="keyword">public</span> &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">refer</span><span class="params">(Class&lt;T&gt; type, URL url)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"><span class="number">2</span>:     <span class="comment">// 注册中心</span></span><br /><span class="line"><span class="number">3</span>:     <span class="keyword">if</span> (Constants.REGISTRY_PROTOCOL.equals(url.getProtocol())) {</span><br /><span class="line"><span class="number">4</span>:         <span class="keyword">return</span> protocol.refer(type, url);</span><br /><span class="line"><span class="number">5</span>:     }</span><br /><span class="line"><span class="number">6</span>:     <span class="comment">// 引用服务，返回 Invoker 对象</span></span><br /><span class="line"><span class="number">7</span>:     <span class="comment">// 给改 Invoker 对象，包装成带有 Filter 过滤链的 Invoker 对象</span></span><br /><span class="line"><span class="number">8</span>:     <span class="keyword">return</span> buildInvokerChain(protocol.refer(type, url), Constants.REFERENCE_FILTER_KEY, Constants.CONSUMER);</span><br /><span class="line"><span class="number">9</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 2 至 5 行：当&nbsp;<code>invoker.url.protocl = registry</code>&nbsp;，<strong>注册中心的 URL</strong>&nbsp;，无需创建 Filter 过滤链。</li>
+<li>第 8 行：调用&nbsp;<code>protocol#refer(type, url)</code>&nbsp;方法，继续引用服务，最终返回 Invoker 。</li>
+<li>第 8 行：在引用服务完成后，调用&nbsp;<code>#buildInvokerChain(invoker, key, group)</code>&nbsp;方法，创建带有 Filter 过滤链的 Invoker 对象。</li>
+</ul>
+<h2 id="3-2-RegistryProtocol">3.2 RegistryProtocol</h2>
+<h3 id="3-2-1-refer">3.2.1 refer</h3>
+<p>本文涉及的&nbsp;<code>#refer(type, url)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Cluster 自适应拓展实现类对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Cluster cluster;</span><br /><br /><span class="line">  <span class="number">1</span>: <span class="keyword">public</span> &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">refer</span><span class="params">(Class&lt;T&gt; type, URL url)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">  <span class="number">2</span>:     <span class="comment">// 获得真实的注册中心的 URL</span></span><br /><span class="line">  <span class="number">3</span>:     url = url.setProtocol(url.getParameter(Constants.REGISTRY_KEY, Constants.DEFAULT_REGISTRY)).removeParameter(Constants.REGISTRY_KEY);</span><br /><span class="line">  <span class="number">4</span>:     <span class="comment">// 获得注册中心</span></span><br /><span class="line">  <span class="number">5</span>:     Registry registry = registryFactory.getRegistry(url);</span><br /><span class="line">  <span class="number">6</span>:     <span class="comment">// TODO 芋艿</span></span><br /><span class="line">  <span class="number">7</span>:     <span class="keyword">if</span> (RegistryService.class.equals(type)) {</span><br /><span class="line">  <span class="number">8</span>:         <span class="keyword">return</span> proxyFactory.getInvoker((T) registry, type, url);</span><br /><span class="line">  <span class="number">9</span>:     }</span><br /><span class="line"> <span class="number">10</span>: </span><br /><span class="line"> <span class="number">11</span>:     <span class="comment">// 获得服务引用配置参数集合</span></span><br /><span class="line"> <span class="number">12</span>:     <span class="comment">// group="a,b" or group="*"</span></span><br /><span class="line"> <span class="number">13</span>:     Map&lt;String, String&gt; qs = StringUtils.parseQueryString(url.getParameterAndDecoded(Constants.REFER_KEY));</span><br /><span class="line"> <span class="number">14</span>:     String group = qs.get(Constants.GROUP_KEY);</span><br /><span class="line"> <span class="number">15</span>:     <span class="comment">// 分组聚合，参见文档 http://dubbo.apache.org/zh-cn/docs/user/demos/group-merger.html</span></span><br /><span class="line"> <span class="number">16</span>:     <span class="keyword">if</span> (group != <span class="keyword">null</span> &amp;&amp; group.length() &gt; <span class="number">0</span>) {</span><br /><span class="line"> <span class="number">17</span>:         <span class="keyword">if</span> ((Constants.COMMA_SPLIT_PATTERN.split(group)).length &gt; <span class="number">1</span></span><br /><span class="line"> <span class="number">18</span>:                 || <span class="string">"*"</span>.equals(group)) {</span><br /><span class="line"> <span class="number">19</span>:             <span class="comment">// 执行服务引用</span></span><br /><span class="line"> <span class="number">20</span>:             <span class="keyword">return</span> doRefer(getMergeableCluster(), registry, type, url);</span><br /><span class="line"> <span class="number">21</span>:         }</span><br /><span class="line"> <span class="number">22</span>:     }</span><br /><span class="line"> <span class="number">23</span>:     <span class="comment">// 执行服务引用</span></span><br /><span class="line"> <span class="number">24</span>:     <span class="keyword">return</span> doRefer(cluster, registry, type, url);</span><br /><span class="line"> <span class="number">25</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 行：获得<strong>真实</strong>的注册中心的 URL 。该过程是我们在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/reference-refer-dubbo/">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务暴露（一）之本地暴露（Injvm）》「2.1 loadRegistries」</a>&nbsp;的那张图的反向流程，即<strong>红线部分</strong>&nbsp;：<img src="http://static2.iocoder.cn/images/Dubbo/2018_03_10/01.png" alt="getRegistryUrl" /></li>
+<li>第 5 行：获得注册中心 Registry 对象。</li>
+<li>第 7至 9 行：【TODO 8018】RegistryService.class</li>
+<li>第 13 行：获得服务引用配置参数集合&nbsp;<code>qs</code>&nbsp;。</li>
+<li>第 16 至 22 行：分组聚合，参见&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/group-merger.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 分组聚合》</a>&nbsp;文档。</li>
+<li>
+<p>第 24 行：调用&nbsp;<code>#doRefer(cluster, registry, type, url)</code>&nbsp;方法，执行服务引用。不同于【第 20 行】的代码，后者调用&nbsp;<code>#getMergeableCluster()</code>&nbsp;方法，获得<strong>可合并的</strong>&nbsp;Cluster 对象，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> Cluster <span class="title">getMergeableCluster</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> ExtensionLoader.getExtensionLoader(Cluster.class).getExtension(<span class="string">"mergeable"</span>);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h3 id="3-2-2-doRefer">3.2.2 doRefer</h3>
+<p><code>#doRefer(cluster, registry, type, url)</code>&nbsp;方法，执行服务引用的逻辑。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 执行服务引用，返回 Invoker 对象</span></span><br /><span class="line"><span class="comment"> 3:  *</span></span><br /><span class="line"><span class="comment"> 4:  * <span class="doctag">@param</span> cluster Cluster 对象</span></span><br /><span class="line"><span class="comment"> 5:  * <span class="doctag">@param</span> registry 注册中心对象</span></span><br /><span class="line"><span class="comment"> 6:  * <span class="doctag">@param</span> type 服务接口类型</span></span><br /><span class="line"><span class="comment"> 7:  * <span class="doctag">@param</span> url 注册中心 URL</span></span><br /><span class="line"><span class="comment"> 8:  * <span class="doctag">@param</span> &lt;T&gt; 泛型</span></span><br /><span class="line"><span class="comment"> 9:  * <span class="doctag">@return</span> Invoker 对象</span></span><br /><span class="line"><span class="comment">10:  */</span></span><br /><span class="line"><span class="number">11</span>: <span class="keyword">private</span> &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">doRefer</span><span class="params">(Cluster cluster, Registry registry, Class&lt;T&gt; type, URL url)</span> </span>{</span><br /><span class="line"><span class="number">12</span>:     <span class="comment">// 创建 RegistryDirectory 对象，并设置注册中心</span></span><br /><span class="line"><span class="number">13</span>:     RegistryDirectory&lt;T&gt; directory = <span class="keyword">new</span> RegistryDirectory&lt;T&gt;(type, url);</span><br /><span class="line"><span class="number">14</span>:     directory.setRegistry(registry);</span><br /><span class="line"><span class="number">15</span>:     directory.setProtocol(protocol);</span><br /><span class="line"><span class="number">16</span>:     <span class="comment">// 创建订阅 URL</span></span><br /><span class="line"><span class="number">17</span>:     <span class="comment">// all attributes of REFER_KEY</span></span><br /><span class="line"><span class="number">18</span>:     Map&lt;String, String&gt; parameters = <span class="keyword">new</span> HashMap&lt;String, String&gt;(directory.getUrl().getParameters()); <span class="comment">// 服务引用配置集合</span></span><br /><span class="line"><span class="number">19</span>:     URL subscribeUrl = <span class="keyword">new</span> URL(Constants.CONSUMER_PROTOCOL, parameters.remove(Constants.REGISTER_IP_KEY), <span class="number">0</span>, type.getName(), parameters);</span><br /><span class="line"><span class="number">20</span>:     <span class="comment">// 向注册中心注册自己（服务消费者）</span></span><br /><span class="line"><span class="number">21</span>:     <span class="keyword">if</span> (!Constants.ANY_VALUE.equals(url.getServiceInterface())</span><br /><span class="line"><span class="number">22</span>:             &amp;&amp; url.getParameter(Constants.REGISTER_KEY, <span class="keyword">true</span>)) {</span><br /><span class="line"><span class="number">23</span>:         registry.register(subscribeUrl.addParameters(Constants.CATEGORY_KEY, Constants.CONSUMERS_CATEGORY,</span><br /><span class="line"><span class="number">24</span>:                 Constants.CHECK_KEY, String.valueOf(<span class="keyword">false</span>)));</span><br /><span class="line"><span class="number">25</span>:     }</span><br /><span class="line"><span class="number">26</span>:     <span class="comment">// 向注册中心订阅服务提供者</span></span><br /><span class="line"><span class="number">27</span>:     directory.subscribe(subscribeUrl.addParameter(Constants.CATEGORY_KEY,</span><br /><span class="line"><span class="number">28</span>:             Constants.PROVIDERS_CATEGORY</span><br /><span class="line"><span class="number">29</span>:                     + <span class="string">","</span> + Constants.CONFIGURATORS_CATEGORY</span><br /><span class="line"><span class="number">30</span>:                     + <span class="string">","</span> + Constants.ROUTERS_CATEGORY));</span><br /><span class="line"><span class="number">31</span>: </span><br /><span class="line"><span class="number">32</span>:     <span class="comment">// 创建 Invoker 对象</span></span><br /><span class="line"><span class="number">33</span>:     Invoker invoker = cluster.join(directory);</span><br /><span class="line"><span class="number">34</span>:     <span class="comment">// 向本地注册表，注册消费者</span></span><br /><span class="line"><span class="number">35</span>:     ProviderConsumerRegTable.registerConsuemr(invoker, url, subscribeUrl, directory);</span><br /><span class="line"><span class="number">36</span>:     <span class="keyword">return</span> invoker;</span><br /><span class="line"><span class="number">37</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 12 至 15 行，创建 RegistryDirectory 对象，并设置注册中心到它的属性。</li>
+<li>第 18 行：获得服务引用配置集合&nbsp;<code>parameters</code>&nbsp;。<strong>注意</strong>，<code>url</code>&nbsp;传入 RegistryDirectory 后，经过处理并重新创建，所以&nbsp;<code>url != directory.url</code>&nbsp;，所以获得的是服务引用配置集合。如下图所示：<img src="http://static2.iocoder.cn/images/Dubbo/2018_05_04/01.png" alt="parameters" /></li>
+<li>第 19 行：创建订阅 URL 对象。</li>
+<li>第 20 至 25 行：调用&nbsp;<code>RegistryService#register(url)</code>&nbsp;方法，向注册中心注册<strong>自己</strong>（服务消费者）。
+<ul>
+<li>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/registry-api/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 注册中心（一）之抽象 API》「3. RegistryService」&nbsp;</a>，有详细解析。</li>
+</ul>
+</li>
+<li>第 26 终 30 行：调用&nbsp;<code>Directory#subscribe(url)</code>&nbsp;方法，向注册中心订阅服务提供者 + 路由规则 + 配置规则。
+<ul>
+<li>在该方法中，会循环获得到的服务体用这列表，调用&nbsp;<code>Protocol#refer(type, url)</code>&nbsp;方法，创建每个调用服务的 Invoker 对象。</li>
+</ul>
+</li>
+<li>第 33 行：创建 Invoker 对象。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/cluster-1-api-interface/?self">《精尽 Dubbo 源码解析 &mdash;&mdash; 集群容错（一）之抽象 API》</a>&nbsp;。</li>
+<li>第 35 行：调用&nbsp;<code>ProviderConsumerRegTable#registerConsuemr(invoker, url, subscribeUrl, directory)</code>&nbsp;方法，向本地注册表，注册消费者。
+<ul>
+<li>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/registry-api/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 注册中心（一）之抽象 API》「5. ProviderConsumerRegTable」&nbsp;</a>，有详细解析。</li>
+</ul>
+</li>
+<li>第 36 行：返回 Invoker 对象。</li>
+</ul>
+<h2 id="3-3-DubboProtocol">3.3 DubboProtocol</h2>
+<h3 id="3-3-1-refer">3.3.1 refer</h3>
+<p>本文涉及的&nbsp;<code>#refer(type, url)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// AbstractProtocol.java 父类</span></span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Invoker 集合</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="comment">//TODO SOFEREFENCE</span></span><br /><span class="line"><span class="keyword">protected</span> <span class="keyword">final</span> Set&lt;Invoker&lt;?&gt;&gt; invokers = <span class="keyword">new</span> ConcurrentHashSet&lt;Invoker&lt;?&gt;&gt;();</span><br /><br /><span class="line"><span class="comment">// DubboProtocol.java</span></span><br /><br /><span class="line">  <span class="number">1</span>: <span class="keyword">public</span> &lt;T&gt; <span class="function">Invoker&lt;T&gt; <span class="title">refer</span><span class="params">(Class&lt;T&gt; serviceType, URL url)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">  <span class="number">2</span>:     <span class="comment">// 初始化序列化优化器</span></span><br /><span class="line">  <span class="number">3</span>:     optimizeSerialization(url);</span><br /><span class="line">  <span class="number">4</span>:     <span class="comment">// 获得远程通信客户端数组</span></span><br /><span class="line">  <span class="number">5</span>:     <span class="comment">// 创建 DubboInvoker 对象</span></span><br /><span class="line">  <span class="number">6</span>:     <span class="comment">// create rpc invoker.</span></span><br /><span class="line">  <span class="number">7</span>:     DubboInvoker&lt;T&gt; invoker = <span class="keyword">new</span> DubboInvoker&lt;T&gt;(serviceType, url, getClients(url), invokers);</span><br /><span class="line">  <span class="number">8</span>:     <span class="comment">// 添加到 `invokers`</span></span><br /><span class="line">  <span class="number">9</span>:     invokers.add(invoker);</span><br /><span class="line"> <span class="number">10</span>:     <span class="keyword">return</span> invoker;</span><br /><span class="line"> <span class="number">11</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>invokers</code>&nbsp;属性，Invoker 集合。</li>
+<li>第 3 行：调用&nbsp;<code>#optimizeSerialization(url)</code>&nbsp;方法，初始化序列化优化器。在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-1-all?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 序列化（一）之总体实现》</a>&nbsp;中，详细解析。</li>
+<li>第 7 行：调用&nbsp;<code>#getClients(url)</code>&nbsp;方法，创建远程通信客户端数组。</li>
+<li>第 7 行：创建 DubboInvoker 对象。</li>
+<li>第 9 行：添加到&nbsp;<code>invokers</code>&nbsp;。</li>
+<li>第 10 行：返回 Invoker 对象。</li>
+</ul>
+<h3 id="3-3-2-getClients">3.3.2 getClients</h3>
+<blockquote>
+<p>友情提示，涉及 Client 的内容，胖友先看过&nbsp;<a href="http://svip.iocoder.cn/Dubbo/remoting-api-interface/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; NIO 服务器》</a>&nbsp;所有的文章。</p>
+</blockquote>
+<p><code>#getClients(url)</code>&nbsp;方法，获得连接服务提供者的远程通信客户端数组。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 获得连接服务提供者的远程通信客户端数组</span></span><br /><span class="line"><span class="comment"> 3:  *</span></span><br /><span class="line"><span class="comment"> 4:  * <span class="doctag">@param</span> url 服务提供者 URL</span></span><br /><span class="line"><span class="comment"> 5:  * <span class="doctag">@return</span> 远程通信客户端</span></span><br /><span class="line"><span class="comment"> 6:  */</span></span><br /><span class="line"> <span class="number">7</span>: <span class="keyword">private</span> ExchangeClient[] getClients(URL url) {</span><br /><span class="line"> <span class="number">8</span>:     <span class="comment">// 是否共享连接</span></span><br /><span class="line"> <span class="number">9</span>:     <span class="comment">// whether to share connection</span></span><br /><span class="line"><span class="number">10</span>:     <span class="keyword">boolean</span> service_share_connect = <span class="keyword">false</span>;</span><br /><span class="line"><span class="number">11</span>:     <span class="keyword">int</span> connections = url.getParameter(Constants.CONNECTIONS_KEY, <span class="number">0</span>);</span><br /><span class="line"><span class="number">12</span>:     <span class="comment">// if not configured, connection is shared, otherwise, one connection for one service</span></span><br /><span class="line"><span class="number">13</span>:     <span class="keyword">if</span> (connections == <span class="number">0</span>) { <span class="comment">// 未配置时，默认共享</span></span><br /><span class="line"><span class="number">14</span>:         service_share_connect = <span class="keyword">true</span>;</span><br /><span class="line"><span class="number">15</span>:         connections = <span class="number">1</span>;</span><br /><span class="line"><span class="number">16</span>:     }</span><br /><span class="line"><span class="number">17</span>: </span><br /><span class="line"><span class="number">18</span>:     <span class="comment">// 创建连接服务提供者的 ExchangeClient 对象数组</span></span><br /><span class="line"><span class="number">19</span>:     ExchangeClient[] clients = <span class="keyword">new</span> ExchangeClient[connections];</span><br /><span class="line"><span class="number">20</span>:     <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; clients.length; i++) {</span><br /><span class="line"><span class="number">21</span>:         <span class="keyword">if</span> (service_share_connect) { <span class="comment">// 共享</span></span><br /><span class="line"><span class="number">22</span>:             clients[i] = getSharedClient(url);</span><br /><span class="line"><span class="number">23</span>:         } <span class="keyword">else</span> { <span class="comment">// 不共享</span></span><br /><span class="line"><span class="number">24</span>:             clients[i] = initClient(url);</span><br /><span class="line"><span class="number">25</span>:         }</span><br /><span class="line"><span class="number">26</span>:     }</span><br /><span class="line"><span class="number">27</span>:     <span class="keyword">return</span> clients;</span><br /><span class="line"><span class="number">28</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 8 至 16 行：是否共享连接。</li>
+<li>第 18 至 26 行：创建连接服务提供者的 ExchangeClient 对象数组。
+<ul>
+<li><strong>注意</strong>，若开启共享连接，基于 URL 为维度共享。</li>
+<li>第 21 至 22 行：共享连接，调用&nbsp;<code>#getSharedClient(url)</code>&nbsp;方法，获得 ExchangeClient 对象。</li>
+<li>第 23 至 25 行：不共享连接，调用&nbsp;<code>#initClient(url)</code>&nbsp;方法，直接创建 ExchangeClient 对象。</li>
+</ul>
+</li>
+<li><code>connections</code>&nbsp;配置项。
+<ul>
+<li>默认 0 。即，对同一个远程服务器，<strong>共用</strong>同一个连接。</li>
+<li>大于 0 。即，每个服务引用，<strong>独立</strong>每一个连接。</li>
+<li><a href="http://dubbo.apache.org/zh-cn/docs/user/demos/config-connections.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 连接控制》</a></li>
+<li><a href="http://dubbo.apache.org/zh-cn/docs/user/references/xml/dubbo-reference.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; dubbo:reference》</a></li>
+</ul>
+</li>
+</ul>
+<h3 id="3-3-3-getSharedClient">3.3.3 getSharedClient</h3>
+<p><code>#getClients(url)</code>&nbsp;方法，获得连接服务提供者的远程通信客户端数组。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 通信客户端集合</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key: 服务器地址。格式为：host:port</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, ReferenceCountExchangeClient&gt; referenceClientMap = <span class="keyword">new</span> ConcurrentHashMap&lt;String, ReferenceCountExchangeClient&gt;(); <span class="comment">// &lt;host:port,Exchanger&gt;</span></span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * TODO 8030 ，这个是什么用途啊。</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key: 服务器地址。格式为：host:port 。和 {<span class="doctag">@link</span> #referenceClientMap} Key ，是一致的。</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, LazyConnectExchangeClient&gt; ghostClientMap = <span class="keyword">new</span> ConcurrentHashMap&lt;String, LazyConnectExchangeClient&gt;();</span><br /><br /><span class="line">  <span class="number">1</span>: <span class="function"><span class="keyword">private</span> ExchangeClient <span class="title">getSharedClient</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">  <span class="number">2</span>:     <span class="comment">// 从集合中，查找 ReferenceCountExchangeClient 对象</span></span><br /><span class="line">  <span class="number">3</span>:     String key = url.getAddress();</span><br /><span class="line">  <span class="number">4</span>:     ReferenceCountExchangeClient client = referenceClientMap.get(key);</span><br /><span class="line">  <span class="number">5</span>:     <span class="keyword">if</span> (client != <span class="keyword">null</span>) {</span><br /><span class="line">  <span class="number">6</span>:         <span class="comment">// 若未关闭，增加指向该 Client 的数量，并返回它</span></span><br /><span class="line">  <span class="number">7</span>:         <span class="keyword">if</span> (!client.isClosed()) {</span><br /><span class="line">  <span class="number">8</span>:             client.incrementAndGetCount();</span><br /><span class="line">  <span class="number">9</span>:             <span class="keyword">return</span> client;</span><br /><span class="line"> <span class="number">10</span>:         <span class="comment">// 若已关闭，移除</span></span><br /><span class="line"> <span class="number">11</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">12</span>:             referenceClientMap.remove(key);</span><br /><span class="line"> <span class="number">13</span>:         }</span><br /><span class="line"> <span class="number">14</span>:     }</span><br /><span class="line"> <span class="number">15</span>:     <span class="comment">// 同步，创建 ExchangeClient 对象。</span></span><br /><span class="line"> <span class="number">16</span>:     <span class="keyword">synchronized</span> (key.intern()) {</span><br /><span class="line"> <span class="number">17</span>:         <span class="comment">// 创建 ExchangeClient 对象</span></span><br /><span class="line"> <span class="number">18</span>:         ExchangeClient exchangeClient = initClient(url);</span><br /><span class="line"> <span class="number">19</span>:         <span class="comment">// 将 `exchangeClient` 包装，创建 ReferenceCountExchangeClient 对象</span></span><br /><span class="line"> <span class="number">20</span>:         client = <span class="keyword">new</span> ReferenceCountExchangeClient(exchangeClient, ghostClientMap);</span><br /><span class="line"> <span class="number">21</span>:         <span class="comment">// 添加到集合</span></span><br /><span class="line"> <span class="number">22</span>:         referenceClientMap.put(key, client);</span><br /><span class="line"> <span class="number">23</span>:         <span class="comment">// 添加到 `ghostClientMap`</span></span><br /><span class="line"> <span class="number">24</span>:         ghostClientMap.remove(key);</span><br /><span class="line"> <span class="number">25</span>:         <span class="keyword">return</span> client;</span><br /><span class="line"> <span class="number">26</span>:     }</span><br /><span class="line"> <span class="number">27</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>referenceClientMap</code>&nbsp;属性，通信客户端集合。在我们创建好 Client 对象，&ldquo;<strong>连接</strong>&rdquo;服务器后，会添加到这个集合中，用于后续的 Client 的<strong>共享</strong>。
+<ul>
+<li>ReferenceCountExchangeClient ，顾名思义，带有指向数量计数的 Client 封装。</li>
+<li>&ldquo;<strong>连接</strong>&rdquo; ，打引号的原因，因为有 LazyConnectExchangeClient ，还是顾名思义，延迟连接的 Client 封装。</li>
+<li>🙂 ReferenceCountExchangeClient 和 LazyConnectExchangeClient 的具体实现，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/reference-refer-dubbo/">「5. Client」</a>&nbsp;详细解析。</li>
+</ul>
+</li>
+<li><code>ghostClientMap</code>&nbsp;属性，幽灵客户端集合。TODO 8030 ，这个是什么用途啊。
+<ul>
+<li>【添加】每次 ReferenceCountExchangeClient&nbsp;<strong>彻底</strong>关闭( 指向归零 ) ，其内部的&nbsp;<code>client</code>&nbsp;会替换成<strong>重新创建</strong>的 LazyConnectExchangeClient 对象，此时叫这个对象为<strong>幽灵客户端</strong>，添加到&nbsp;<code>ghostClientMap</code>&nbsp;中。</li>
+<li>【移除】当幽灵客户端，对应的 URL 的服务器被重新连接上后，会被移除。</li>
+<li><strong>注意</strong>，在幽灵客户端<strong>被移除之前</strong>，<code>referenceClientMap</code>&nbsp;中，依然保留着对应的 URL 的 ReferenceCountExchangeClient 对象。所以，<code>ghostClientMap</code>&nbsp;相当于标记&nbsp;<code>referenceClientMap</code>&nbsp;中，哪些 LazyConnectExchangeClient 对象，是<strong>幽灵</strong>状态。👻</li>
+</ul>
+</li>
+<li>第 2 至 4 行：从集合&nbsp;<code>referenceClientMap</code>&nbsp;中，查找 ReferenceCountExchangeClient 对象。</li>
+<li>第 5 至 14 行：查找到客户端。
+<ul>
+<li>第 6 至 9 行：若<strong>未关闭</strong>，调用&nbsp;<code>ReferenceCountExchangeClient#incrementAndGetCount()</code>&nbsp;方法，增加指向该客户端的数量，并返回。</li>
+<li>第 11 至 13 行：若<strong>已关闭</strong>，适用于<strong>幽灵</strong>状态的 ReferenceCountExchangeClient 对象，从&nbsp;<code>referenceClientMap</code>&nbsp;中移除，准备下面的代码，创建<strong>新的</strong>&nbsp;ReferenceCountExchangeClient 对象。</li>
+</ul>
+</li>
+<li>第 15 至 26 行：<strong>同步</strong>(&nbsp;<code>synchronized</code>&nbsp;) ，创建新的 ReferenceCountExchangeClient 对象。
+<ul>
+<li>第 18 行：调用&nbsp;<code>#initClient(url)</code>&nbsp;方法，创建 ExchangeClient 对象。</li>
+<li>第 20 行：将 ExchangeClient 对象，封装创建成 ReferenceCountExchangeClient 独享。</li>
+<li>第 22 行：添加到集合&nbsp;<code>referenceClientMap</code>&nbsp;。</li>
+<li>第 24 行：移除出集合&nbsp;<code>ghostClientMap</code>&nbsp;，因为不再是<strong>幽灵</strong>状态啦。</li>
+</ul>
+</li>
+</ul>
+<h3 id="3-3-4-initClient">3.3.4 initClient</h3>
+<p><code>#initClient(url)</code>&nbsp;方法，创建 ExchangeClient 对象，&rdquo;连接&rdquo;服务器。</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">private</span> ExchangeClient <span class="title">initClient</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="comment">// 校验 Client 的 Dubbo SPI 拓展是否存在</span></span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// client type setting.</span></span><br /><span class="line"> <span class="number">4</span>:     String str = url.getParameter(Constants.CLIENT_KEY, url.getParameter(Constants.SERVER_KEY, Constants.DEFAULT_REMOTING_CLIENT));</span><br /><span class="line"> <span class="number">5</span>:     <span class="comment">// BIO is not allowed since it has severe performance issue.</span></span><br /><span class="line"> <span class="number">6</span>:     <span class="keyword">if</span> (str != <span class="keyword">null</span> &amp;&amp; str.length() &gt; <span class="number">0</span> &amp;&amp; !ExtensionLoader.getExtensionLoader(Transporter.class).hasExtension(str)) {</span><br /><span class="line"> <span class="number">7</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Unsupported client type: "</span> + str + <span class="string">","</span> +</span><br /><span class="line"> <span class="number">8</span>:                 <span class="string">" supported client type is "</span> + StringUtils.join(ExtensionLoader.getExtensionLoader(Transporter.class).getSupportedExtensions(), <span class="string">" "</span>));</span><br /><span class="line"> <span class="number">9</span>:     }</span><br /><span class="line"><span class="number">10</span>: </span><br /><span class="line"><span class="number">11</span>:     <span class="comment">// 设置编解码器为 Dubbo ，即 DubboCountCodec</span></span><br /><span class="line"><span class="number">12</span>:     url = url.addParameter(Constants.CODEC_KEY, DubboCodec.NAME);</span><br /><span class="line"><span class="number">13</span>: </span><br /><span class="line"><span class="number">14</span>:     <span class="comment">// 默认开启 heartbeat</span></span><br /><span class="line"><span class="number">15</span>:     <span class="comment">// enable heartbeat by default</span></span><br /><span class="line"><span class="number">16</span>:     url = url.addParameterIfAbsent(Constants.HEARTBEAT_KEY, String.valueOf(Constants.DEFAULT_HEARTBEAT));</span><br /><span class="line"><span class="number">17</span>: </span><br /><span class="line"><span class="number">18</span>:     <span class="comment">// 连接服务器，创建客户端</span></span><br /><span class="line"><span class="number">19</span>:     ExchangeClient client;</span><br /><span class="line"><span class="number">20</span>:     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">21</span>:         <span class="comment">// 懒连接，创建 LazyConnectExchangeClient 对象</span></span><br /><span class="line"><span class="number">22</span>:         <span class="comment">// connection should be lazy</span></span><br /><span class="line"><span class="number">23</span>:         <span class="keyword">if</span> (url.getParameter(Constants.LAZY_CONNECT_KEY, <span class="keyword">false</span>)) {</span><br /><span class="line"><span class="number">24</span>:             client = <span class="keyword">new</span> LazyConnectExchangeClient(url, requestHandler);</span><br /><span class="line"><span class="number">25</span>:         <span class="comment">// 直接连接，创建 HeaderExchangeClient 对象</span></span><br /><span class="line"><span class="number">26</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">27</span>:             client = Exchangers.connect(url, requestHandler);</span><br /><span class="line"><span class="number">28</span>:         }</span><br /><span class="line"><span class="number">29</span>:     } <span class="keyword">catch</span> (RemotingException e) {</span><br /><span class="line"><span class="number">30</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Fail to create remoting client for service("</span> + url + <span class="string">"): "</span> + e.getMessage(), e);</span><br /><span class="line"><span class="number">31</span>:     }</span><br /><span class="line"><span class="number">32</span>:     <span class="keyword">return</span> client;</span><br /><span class="line"><span class="number">33</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 2 至 9 行：校验配置的 Client 的 Dubbo SPI 拓展是否存在。若不存在，抛出 RpcException 异常。</li>
+<li>第 12 行：设置编解码器为&nbsp;<code>"Dubbo"</code>&nbsp;协议，即 DubboCountCodec 。</li>
+<li>第 16 行：默认开启<strong>心跳</strong>功能。</li>
+<li>第 19 至 31 行：连接服务器，创建客户端。
+<ul>
+<li>第 21 至 24 行：<strong>懒加载</strong>，创建 LazyConnectExchangeClient 对象。</li>
+<li>第 25 至 28 行：<strong>直接连接</strong>，创建 HeaderExchangeClient 对象。</li>
+</ul>
+</li>
+</ul>
+<h1 id="4-Invoker">4. Invoker</h1>
+<p>本文涉及的 Invoker 类图如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_05_04/04.png" alt="Invoker 类图" /></p>
+<h2 id="4-1-DubboInvoker">4.1 DubboInvoker</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/8de6d56d06965a38712c46a0220f4e59213db72f/dubbo-rpc/dubbo-rpc-default/src/main/java/com/alibaba/dubbo/rpc/protocol/dubbo/DubboInvoker.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol.dubbo.DubboInvoker</code></a>&nbsp;，实现 AbstractExporter 抽象类，Dubbo Invoker 实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 远程通信客户端数组</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: <span class="keyword">private</span> <span class="keyword">final</span> ExchangeClient[] clients;</span><br /><span class="line"> <span class="number">5</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 6:  * 使用的 {<span class="doctag">@link</span> #clients} 的位置</span></span><br /><span class="line"><span class="comment"> 7:  */</span></span><br /><span class="line"> <span class="number">8</span>: <span class="keyword">private</span> <span class="keyword">final</span> AtomicPositiveInteger index = <span class="keyword">new</span> AtomicPositiveInteger();</span><br /><span class="line"> <span class="number">9</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">10:  * 版本</span></span><br /><span class="line"><span class="comment">11:  */</span></span><br /><span class="line"><span class="number">12</span>: <span class="keyword">private</span> <span class="keyword">final</span> String version;</span><br /><span class="line"><span class="number">13</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">14:  * 销毁锁</span></span><br /><span class="line"><span class="comment">15:  *</span></span><br /><span class="line"><span class="comment">16:  * 在 {<span class="doctag">@link</span> #destroy()} 中使用</span></span><br /><span class="line"><span class="comment">17:  */</span></span><br /><span class="line"><span class="number">18</span>: <span class="keyword">private</span> <span class="keyword">final</span> ReentrantLock destroyLock = <span class="keyword">new</span> ReentrantLock();</span><br /><span class="line"><span class="number">19</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">20:  * Invoker 集合，从 {<span class="doctag">@link</span> DubboProtocol#invokers} 获取</span></span><br /><span class="line"><span class="comment">21:  */</span></span><br /><span class="line"><span class="number">22</span>: <span class="keyword">private</span> <span class="keyword">final</span> Set&lt;Invoker&lt;?&gt;&gt; invokers;</span><br /><span class="line"><span class="number">23</span>: </span><br /><span class="line"><span class="number">24</span>: <span class="function"><span class="keyword">public</span> <span class="title">DubboInvoker</span><span class="params">(Class&lt;T&gt; serviceType, URL url, ExchangeClient[] clients)</span> </span>{</span><br /><span class="line"><span class="number">25</span>:     <span class="keyword">this</span>(serviceType, url, clients, <span class="keyword">null</span>);</span><br /><span class="line"><span class="number">26</span>: }</span><br /><span class="line"><span class="number">27</span>: </span><br /><span class="line"><span class="number">28</span>: <span class="function"><span class="keyword">public</span> <span class="title">DubboInvoker</span><span class="params">(Class&lt;T&gt; serviceType, URL url, ExchangeClient[] clients, Set&lt;Invoker&lt;?&gt;&gt; invokers)</span> </span>{</span><br /><span class="line"><span class="number">29</span>:     <span class="keyword">super</span>(serviceType, url, <span class="keyword">new</span> String[]{Constants.INTERFACE_KEY, Constants.GROUP_KEY, Constants.TOKEN_KEY, Constants.TIMEOUT_KEY});</span><br /><span class="line"><span class="number">30</span>:     <span class="keyword">this</span>.clients = clients;</span><br /><span class="line"><span class="number">31</span>:     <span class="comment">// get version.</span></span><br /><span class="line"><span class="number">32</span>:     <span class="keyword">this</span>.version = url.getParameter(Constants.VERSION_KEY, <span class="string">"0.0.0"</span>);</span><br /><span class="line"><span class="number">33</span>:     <span class="keyword">this</span>.invokers = invokers;</span><br /><span class="line"><span class="number">34</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>胖友，请看属性上的代码注释。</li>
+<li>第 29 行：调用父类构造方法。该方法中，会将&nbsp;<code>interface</code>&nbsp;<code>group</code>&nbsp;<code>version</code>&nbsp;<code>token</code>&nbsp;<code>timeout</code>&nbsp;添加到公用的隐式传参&nbsp;<code>AbstractInvoker.attachment</code>&nbsp;属性。
+<ul>
+<li>🙂 代码比较简单，胖友请自己阅读。</li>
+</ul>
+</li>
+</ul>
+<h1 id="5-Client">5. Client</h1>
+<blockquote>
+<p>友情提示，涉及 Client 的内容，胖友先看过&nbsp;<a href="http://svip.iocoder.cn/Dubbo/remoting-api-interface/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; NIO 服务器》</a>&nbsp;所有的文章。</p>
+</blockquote>
+<h2 id="5-1-ReferenceCountExchangeClient">5.1 ReferenceCountExchangeClient</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-rpc/dubbo-rpc-default/src/main/java/com/alibaba/dubbo/rpc/protocol/dubbo/ReferenceCountExchangeClient.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol.dubbo.ReferenceCountExchangeClient</code></a>&nbsp;，实现 ExchangeClient 接口，<strong>支持指向计数</strong>的信息交换客户端实现类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * URL</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: <span class="keyword">private</span> <span class="keyword">final</span> URL url;</span><br /><span class="line"> <span class="number">5</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 6:  * 指向数量</span></span><br /><span class="line"><span class="comment"> 7:  */</span></span><br /><span class="line"> <span class="number">8</span>: <span class="keyword">private</span> <span class="keyword">final</span> AtomicInteger refenceCount = <span class="keyword">new</span> AtomicInteger(<span class="number">0</span>);</span><br /><span class="line"> <span class="number">9</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">10:  * 幽灵客户端集合</span></span><br /><span class="line"><span class="comment">11:  */</span></span><br /><span class="line"><span class="number">12</span>: <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, LazyConnectExchangeClient&gt; ghostClientMap;</span><br /><span class="line"><span class="number">13</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">14:  * 客户端</span></span><br /><span class="line"><span class="comment">15:  */</span></span><br /><span class="line"><span class="number">16</span>: <span class="keyword">private</span> ExchangeClient client;</span><br /><span class="line"><span class="number">17</span>: </span><br /><span class="line"><span class="number">18</span>: <span class="function"><span class="keyword">public</span> <span class="title">ReferenceCountExchangeClient</span><span class="params">(ExchangeClient client, ConcurrentMap&lt;String, LazyConnectExchangeClient&gt; ghostClientMap)</span> </span>{</span><br /><span class="line"><span class="number">19</span>:     <span class="keyword">this</span>.client = client;</span><br /><span class="line"><span class="number">20</span>:     <span class="comment">// 指向加一</span></span><br /><span class="line"><span class="number">21</span>:     refenceCount.incrementAndGet();</span><br /><span class="line"><span class="number">22</span>:     <span class="keyword">this</span>.url = client.getUrl();</span><br /><span class="line"><span class="number">23</span>:     <span class="keyword">if</span> (ghostClientMap == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">24</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"ghostClientMap can not be null, url: "</span> + url);</span><br /><span class="line"><span class="number">25</span>:     }</span><br /><span class="line"><span class="number">26</span>:     <span class="keyword">this</span>.ghostClientMap = ghostClientMap;</span><br /><span class="line"><span class="number">27</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>refenceCount</code>&nbsp;属性，指向计数。
+<ul>
+<li>【初始】构造方法，【第 21 行】，计数加一。</li>
+<li>【引用】每次引用，计数加一。</li>
+</ul>
+</li>
+<li><code>ghostClientMap</code>&nbsp;属性，幽灵客户端集合，和&nbsp;<code>Protocol.ghostClientMap</code>&nbsp;参数，一致。</li>
+<li><code>client</code>&nbsp;属性，客户端。
+<ul>
+<li>【创建】构造方法，传入&nbsp;<code>client</code>&nbsp;属性，指向它。</li>
+<li>【关闭】关闭方法，创建 LazyConnectExchangeClient 对象，指向该幽灵客户端。</li>
+</ul>
+</li>
+</ul>
+<p><strong>装饰器模式</strong></p>
+<p>基于<strong>装饰器模式</strong>，所以，每个实现方法，都是调用&nbsp;<code>client</code>&nbsp;的对应的方法。例如：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">send</span><span class="params">(Object message)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    client.send(message);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>计数</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">incrementAndGetCount</span><span class="params">()</span> </span>{</span><br /><span class="line">    refenceCount.incrementAndGet();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>关闭</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">close</span><span class="params">(<span class="keyword">int</span> timeout)</span> </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="keyword">if</span> (refenceCount.decrementAndGet() &lt;= <span class="number">0</span>) {</span><br /><span class="line"> <span class="number">4</span>:         <span class="comment">// 关闭 `client`</span></span><br /><span class="line"> <span class="number">5</span>:         <span class="keyword">if</span> (timeout == <span class="number">0</span>) {</span><br /><span class="line"> <span class="number">6</span>:             client.close();</span><br /><span class="line"> <span class="number">7</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"> <span class="number">8</span>:             client.close(timeout);</span><br /><span class="line"> <span class="number">9</span>:         }</span><br /><span class="line"><span class="number">10</span>:         <span class="comment">// 替换 `client` 为 LazyConnectExchangeClient 对象。</span></span><br /><span class="line"><span class="number">11</span>:         client = replaceWithLazyClient();</span><br /><span class="line"><span class="number">12</span>:     }</span><br /><span class="line"><span class="number">13</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 行：计数<strong>减一</strong>。若无指向，进行真正的关闭。</li>
+<li>第 4 至 9 行：调用&nbsp;<code>client</code>&nbsp;的关闭方法，进行关闭。</li>
+<li>
+<p>第 11 行：调用&nbsp;<code>#replaceWithLazyClient()</code>&nbsp;方法，替换&nbsp;<code>client</code>&nbsp;为 LazyConnectExchangeClient 对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">private</span> LazyConnectExchangeClient <span class="title">replaceWithLazyClient</span><span class="params">()</span> </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="comment">// this is a defensive operation to avoid client is closed by accident, the initial state of the client is false</span></span><br /><span class="line"> <span class="number">3</span>:     URL lazyUrl = url.addParameter(Constants.LAZY_CONNECT_INITIAL_STATE_KEY, Boolean.FALSE)</span><br /><span class="line"> <span class="number">4</span>:             .addParameter(Constants.RECONNECT_KEY, Boolean.FALSE) <span class="comment">// 不重连</span></span><br /><span class="line"> <span class="number">5</span>:             .addParameter(Constants.SEND_RECONNECT_KEY, Boolean.TRUE.toString())</span><br /><span class="line"> <span class="number">6</span>:             .addParameter(<span class="string">"warning"</span>, Boolean.TRUE.toString())</span><br /><span class="line"> <span class="number">7</span>:             .addParameter(LazyConnectExchangeClient.REQUEST_WITH_WARNING_KEY, <span class="keyword">true</span>)</span><br /><span class="line"> <span class="number">8</span>:             .addParameter(<span class="string">"_client_memo"</span>, <span class="string">"referencecounthandler.replacewithlazyclient"</span>); <span class="comment">// 备注</span></span><br /><span class="line"> <span class="number">9</span>: </span><br /><span class="line"><span class="number">10</span>:     <span class="comment">// 创建 LazyConnectExchangeClient 对象，若不存在。</span></span><br /><span class="line"><span class="number">11</span>:     String key = url.getAddress();</span><br /><span class="line"><span class="number">12</span>:     <span class="comment">// in worst case there's only one ghost connection.</span></span><br /><span class="line"><span class="number">13</span>:     LazyConnectExchangeClient gclient = ghostClientMap.get(key);</span><br /><span class="line"><span class="number">14</span>:     <span class="keyword">if</span> (gclient == <span class="keyword">null</span> || gclient.isClosed()) {</span><br /><span class="line"><span class="number">15</span>:         gclient = <span class="keyword">new</span> LazyConnectExchangeClient(lazyUrl, client.getExchangeHandler());</span><br /><span class="line"><span class="number">16</span>:         ghostClientMap.put(key, gclient);</span><br /><span class="line"><span class="number">17</span>:     }</span><br /><span class="line"><span class="number">18</span>:     <span class="keyword">return</span> gclient;</span><br /><span class="line"><span class="number">19</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 至 8 行：基于&nbsp;<code>url</code>&nbsp;，创建 LazyConnectExchangeClient 的 URL 链接。设置的一些参数，结合&nbsp;<a href="http://svip.iocoder.cn/Dubbo/reference-refer-dubbo/">「5.2 LazyConnectExchangeClient」</a>&nbsp;一起看。</li>
+<li>第 10 至 17 行：创建 LazyConnectExchangeClient 对象，若不存在。</li>
+</ul>
+</li>
+</ul>
+<h2 id="5-2-LazyConnectExchangeClient">5.2 LazyConnectExchangeClient</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-rpc/dubbo-rpc-default/src/main/java/com/alibaba/dubbo/rpc/protocol/dubbo/LazyConnectExchangeClient.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.rpc.protocol.dubbo.LazyConnectExchangeClient</code></a>&nbsp;，实现 ExchangeClient 接口，<strong>支持懒连接服务器</strong>的信息交换客户端实现类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="keyword">static</span> <span class="keyword">final</span> String REQUEST_WITH_WARNING_KEY = <span class="string">"lazyclient_request_with_warning"</span>;</span><br /><span class="line"> <span class="number">2</span>: </span><br /><span class="line"> <span class="number">3</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 4:  * URL</span></span><br /><span class="line"><span class="comment"> 5:  */</span></span><br /><span class="line"> <span class="number">6</span>: <span class="keyword">private</span> <span class="keyword">final</span> URL url;</span><br /><span class="line"> <span class="number">7</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 8:  * 通道处理器</span></span><br /><span class="line"><span class="comment"> 9:  */</span></span><br /><span class="line"><span class="number">10</span>: <span class="keyword">private</span> <span class="keyword">final</span> ExchangeHandler requestHandler;</span><br /><span class="line"><span class="number">11</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">12:  * 连接锁</span></span><br /><span class="line"><span class="comment">13:  */</span></span><br /><span class="line"><span class="number">14</span>: <span class="keyword">private</span> <span class="keyword">final</span> Lock connectLock = <span class="keyword">new</span> ReentrantLock();</span><br /><span class="line"><span class="number">15</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">16:  * lazy connect 如果没有初始化时的连接状态</span></span><br /><span class="line"><span class="comment">17:  */</span></span><br /><span class="line"><span class="number">18</span>: <span class="comment">// lazy connect, initial state for connection</span></span><br /><span class="line"><span class="number">19</span>: <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">boolean</span> initialState;</span><br /><span class="line"><span class="number">20</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">21:  * 通信客户端</span></span><br /><span class="line"><span class="comment">22:  */</span></span><br /><span class="line"><span class="number">23</span>: <span class="keyword">private</span> <span class="keyword">volatile</span> ExchangeClient client;</span><br /><span class="line"><span class="number">24</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">25:  * 请求时，是否检查告警</span></span><br /><span class="line"><span class="comment">26:  */</span></span><br /><span class="line"><span class="number">27</span>: <span class="keyword">protected</span> <span class="keyword">final</span> <span class="keyword">boolean</span> requestWithWarning;</span><br /><span class="line"><span class="number">28</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment">29:  * 警告计数器。每超过一定次数，打印告警日志。参见 {<span class="doctag">@link</span> #warning(Object)}</span></span><br /><span class="line"><span class="comment">30:  */</span></span><br /><span class="line"><span class="number">31</span>: <span class="keyword">private</span> AtomicLong warningcount = <span class="keyword">new</span> AtomicLong(<span class="number">0</span>);</span><br /><span class="line"><span class="number">32</span>: </span><br /><span class="line"><span class="number">33</span>: <span class="function"><span class="keyword">public</span> <span class="title">LazyConnectExchangeClient</span><span class="params">(URL url, ExchangeHandler requestHandler)</span> </span>{</span><br /><span class="line"><span class="number">34</span>:     <span class="comment">// lazy connect, need set send.reconnect = true, to avoid channel bad status.</span></span><br /><span class="line"><span class="number">35</span>:     <span class="keyword">this</span>.url = url.addParameter(Constants.SEND_RECONNECT_KEY, Boolean.TRUE.toString());</span><br /><span class="line"><span class="number">36</span>:     <span class="keyword">this</span>.requestHandler = requestHandler;</span><br /><span class="line"><span class="number">37</span>:     <span class="keyword">this</span>.initialState = url.getParameter(Constants.LAZY_CONNECT_INITIAL_STATE_KEY, Constants.DEFAULT_LAZY_CONNECT_INITIAL_STATE);</span><br /><span class="line"><span class="number">38</span>:     <span class="keyword">this</span>.requestWithWarning = url.getParameter(REQUEST_WITH_WARNING_KEY, <span class="keyword">false</span>);</span><br /><span class="line"><span class="number">39</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><code>initialState</code>&nbsp;属性，如果没有初始化客户端时的链接状态。有点绕，看&nbsp;<code>#isConnected()</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">isConnected</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (client == <span class="keyword">null</span>) { <span class="comment">// 客户端未初始化</span></span><br /><span class="line">        <span class="keyword">return</span> initialState;</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        <span class="keyword">return</span> client.isConnected();</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>所以，我们可以看到 ReferenceCountExchangeClient 关闭创建的 LazyConnectExchangeClient 对象的&nbsp;<code>initialState = false</code>&nbsp;，未连接。</li>
+<li><strong>默认值</strong>，<code>DEFAULT_LAZY_CONNECT_INITIAL_STATE = true</code>&nbsp;。</li>
+</ul>
+</li>
+<li>
+<p><code>requestWithWarning</code>&nbsp;属性，请求时，是否检查告警。</p>
+<ul>
+<li>所以，我们可以看到 ReferenceCountExchangeClient 关闭创建的 LazyConnectExchangeClient 对象的&nbsp;<code>initialState = false</code>&nbsp;，未连接。</li>
+<li><strong>默认值</strong>，<code>false</code>&nbsp;。</li>
+</ul>
+</li>
+<li>
+<p><code>warningcount</code>&nbsp;属性，警告计数器。每超过一定次数，打印告警日志。每次发送请求时，会调用&nbsp;<code>#warning(request)</code>&nbsp;方法，根据情况，打印告警日志。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">warning</span><span class="params">(Object request)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (requestWithWarning) { <span class="comment">// 开启</span></span><br /><span class="line">        <span class="keyword">if</span> (warningcount.get() % <span class="number">5000</span> == <span class="number">0</span>) { <span class="comment">// 5000 次</span></span><br /><span class="line">            logger.warn(<span class="keyword">new</span> IllegalStateException(<span class="string">"safe guard client , should not be called ,must have a bug."</span>));</span><br /><span class="line">        }</span><br /><span class="line">        warningcount.incrementAndGet(); <span class="comment">// 增加计数</span></span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>理论来说，不会被调用。如果被调用，那么就是一个 BUG 咯。</li>
+</ul>
+</li>
+</ul>
+<p><strong>装饰器模式</strong></p>
+<p>基于<strong>装饰器模式</strong>，所以，每个实现方法，都是调用&nbsp;<code>client</code>&nbsp;的对应的方法。例如：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">close</span><span class="params">(<span class="keyword">int</span> timeout)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (client != <span class="keyword">null</span>)</span><br /><span class="line">        client.close(timeout);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><strong>初始化客户端</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">initClient</span><span class="params">()</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    <span class="comment">// 已初始化，跳过</span></span><br /><span class="line">    <span class="keyword">if</span> (client != <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">return</span>;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">if</span> (logger.isInfoEnabled()) {</span><br /><span class="line">        logger.info(<span class="string">"Lazy connect to "</span> + url);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 获得锁</span></span><br /><span class="line">    connectLock.lock();</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        <span class="comment">// 已初始化，跳过</span></span><br /><span class="line">        <span class="keyword">if</span> (client != <span class="keyword">null</span>) {</span><br /><span class="line">            <span class="keyword">return</span>;</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// 创建 Client ，连接服务器</span></span><br /><span class="line">        <span class="keyword">this</span>.client = Exchangers.connect(url, requestHandler);</span><br /><span class="line">    } <span class="keyword">finally</span> {</span><br /><span class="line">        <span class="comment">// 释放锁</span></span><br /><span class="line">        connectLock.unlock();</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>发送消息/请求前，都会调用该方法，保证客户端已经初始化。代码如下：</li>
+</ul>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">send</span><span class="params">(Object message, <span class="keyword">boolean</span> sent)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    initClient();</span><br /><span class="line">    client.send(message, sent);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> ResponseFuture <span class="title">request</span><span class="params">(Object request, <span class="keyword">int</span> timeout)</span> <span class="keyword">throws</span> RemotingException </span>{</span><br /><span class="line">    warning(request);</span><br /><span class="line">    initClient();</span><br /><span class="line">    <span class="keyword">return</span> client.request(request, timeout);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</div>

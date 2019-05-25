@@ -1,0 +1,226 @@
+<header class="article-header">
+<h1 class="article-title">&nbsp;服务调用（一）之本地调用（Injvm）</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>从这篇文章开始，我们开始分享<strong>服务调用</strong>的实现。在前面，艿艿已经写了服务：</p>
+<ul>
+<li>本地暴露、远程暴露</li>
+<li>本地引用、远程引用</li>
+</ul>
+<p>那么在服务调用，必然也是分：</p>
+<ul>
+<li>本地调用</li>
+<li>远程调用</li>
+</ul>
+<p>本文分享<strong>本地调用</strong>，在&nbsp;<code>dubbo-rpc-injvm</code>&nbsp;模块实现。</p>
+<p>相比远程调用，实现上会简单很多：因为调用的服务，就在本地进程内，且不存在多个，所以不需要<strong>集群容错</strong>和<strong>网络通信</strong>相关的功能。</p>
+<h1 id="2-调试环境">2. 调试环境</h1>
+<blockquote>
+<p>友情提示：笔者建议胖友先尝试自己搭建本地调用的调试环境，如果碰到问题在看本小节。</p>
+</blockquote>
+<p>基于&nbsp;<code>dubbo-demo-consumer</code>&nbsp;改造：</p>
+<p>1、将&nbsp;<code>dubbo-demo-provider</code>&nbsp;模块的&nbsp;<code>com.alibaba.dubbo.demo.provider.DemoServiceImpl</code>&nbsp;类，复制到&nbsp;<code>dubbo-demo-consumer</code>&nbsp;模块的&nbsp;<code>com.alibaba.dubbo.demo.consumer</code>&nbsp;包下。</p>
+<p>2、在&nbsp;<code>resources/META-INF/spring</code>&nbsp;目录下，新建&nbsp;<code>dubbo-demo-injvm.xml</code>&nbsp;文件，内容如下：</p>
+<figure class="highlight xml">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="tag">&lt;<span class="name">beans</span> <span class="attr">xmlns:xsi</span>=<span class="string">"http://www.w3.org/2001/XMLSchema-instance"</span></span></span><br /><span class="line"><span class="tag">       <span class="attr">xmlns:dubbo</span>=<span class="string">"http://code.alibabatech.com/schema/dubbo"</span></span></span><br /><span class="line"><span class="tag">       <span class="attr">xmlns</span>=<span class="string">"http://www.springframework.org/schema/beans"</span></span></span><br /><span class="line"><span class="tag">       <span class="attr">xsi:schemaLocation</span>=<span class="string">"http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-2.5.xsd</span></span></span><br /><span class="line"><span class="tag"><span class="string">       http://code.alibabatech.com/schema/dubbo http://code.alibabatech.com/schema/dubbo/dubbo.xsd"</span>&gt;</span></span><br /><br /><span class="line">    <span class="tag">&lt;<span class="name">dubbo:application</span> <span class="attr">name</span>=<span class="string">"demo-injvm"</span>/&gt;</span></span><br /><br /><span class="line">    <span class="tag">&lt;<span class="name">dubbo:registry</span> <span class="attr">address</span>=<span class="string">"N/A"</span>/&gt;</span></span><br /><br /><span class="line">    <span class="tag">&lt;<span class="name">dubbo:reference</span> <span class="attr">id</span>=<span class="string">"demoService"</span> <span class="attr">interface</span>=<span class="string">"com.alibaba.dubbo.demo.DemoService"</span> <span class="attr">protocol</span>=<span class="string">"injvm"</span> <span class="attr">scope</span>=<span class="string">"local"</span> /&gt;</span></span><br /><br /><span class="line">    <span class="tag">&lt;<span class="name">bean</span> <span class="attr">id</span>=<span class="string">"demoServiceImpl"</span> <span class="attr">class</span>=<span class="string">"com.alibaba.dubbo.demo.consumer.DemoServiceImpl"</span>/&gt;</span></span><br /><span class="line">    <span class="tag">&lt;<span class="name">dubbo:service</span> <span class="attr">interface</span>=<span class="string">"com.alibaba.dubbo.demo.DemoService"</span> <span class="attr">ref</span>=<span class="string">"demoServiceImpl"</span> <span class="attr">protocol</span>=<span class="string">"injvm"</span> <span class="attr">scope</span>=<span class="string">"local"</span> /&gt;</span></span><br /><br /><span class="line"><span class="tag">&lt;/<span class="name">beans</span>&gt;</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>3、修改&nbsp;<code>com.alibaba.dubbo.demo.consumer.Consumer</code>&nbsp;类，加载的 Spring 配置文件为&nbsp;<code>dubbo-demo-injvm.xml</code>&nbsp;，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">ClassPathXmlApplicationContext context = <span class="keyword">new</span> ClassPathXmlApplicationContext(<span class="keyword">new</span> String[]{<span class="string">"META-INF/spring/dubbo-demo-injvm.xml"</span>});</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>4、启动 Consumer ，即可开始调试。</p>
+<hr />
+<p><a href="https://github.com/YunaiV/dubbo/tree/f14e4e4fffaede31cbece589e0f543ec6669b2ae/dubbo-demo/dubbo-demo-consumer" target="_blank" rel="external nofollow noopener noreferrer"><code>dubbo-demo-consumer</code></a>&nbsp;，是笔者改完，可运行的一个快照版本。</p>
+<h1 id="3-顺序图">3. 顺序图</h1>
+<ul>
+<li>消费者调用服务的顺序图：<img src="http://static2.iocoder.cn/images/Dubbo/2018_10_01/01.png" alt="消费者调用服务的顺序图" /></li>
+<li>提供者提供服务的顺序图：<img src="http://static2.iocoder.cn/images/Dubbo/2018_10_01/02.png" alt="提供者提供服务的顺序图" /></li>
+</ul>
+<p>🙂 流程上还是比较简单的，笔者就不哔哔了。如果胖友不太理解，可以回看之前的文章，再多多调试理解，或者知识星球发帖一起讨论。</p>
+<p>下面，我们来看每个步骤的实现代码。</p>
+<h1 id="4-消费者调用服务">4. 消费者调用服务</h1>
+<h2 id="4-1-Proxy">4.1 Proxy</h2>
+<blockquote>
+<p>提示：对应图中 [1] [2] [3]</p>
+</blockquote>
+<p>见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/proxy-javassist/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 动态代理（一）之 Javassist》</a>&nbsp;文章。</p>
+<h2 id="4-2-ProtocolFilterWrapper">4.2 ProtocolFilterWrapper</h2>
+<blockquote>
+<p>提示：对应图中 [5]</p>
+</blockquote>
+<p>ProtocolFilterWrapper 的带有过滤链的 Invoker ，整个调用过程和 J2EE FilterChain 是一致的，具体每个 Dubbo Filter 的实现，我们另开文章。</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">for</span> (<span class="keyword">int</span> i = filters.size() - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i--) {</span><br /><span class="line">    <span class="keyword">final</span> Filter filter = filters.get(i);</span><br /><span class="line">    <span class="keyword">final</span> Invoker&lt;T&gt; next = last;</span><br /><span class="line">    last = <span class="keyword">new</span> Invoker&lt;T&gt;() {</span><br /><br /><span class="line">        <span class="function"><span class="keyword">public</span> Class&lt;T&gt; <span class="title">getInterface</span><span class="params">()</span> </span>{</span><br /><span class="line">            <span class="keyword">return</span> invoker.getInterface();</span><br /><span class="line">        }</span><br /><br /><span class="line">        <span class="function"><span class="keyword">public</span> URL <span class="title">getUrl</span><span class="params">()</span> </span>{</span><br /><span class="line">            <span class="keyword">return</span> invoker.getUrl();</span><br /><span class="line">        }</span><br /><br /><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">isAvailable</span><span class="params">()</span> </span>{</span><br /><span class="line">            <span class="keyword">return</span> invoker.isAvailable();</span><br /><span class="line">        }</span><br /><br /><span class="line">        <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">            <span class="keyword">return</span> filter.invoke(next, invocation);</span><br /><span class="line">        }</span><br /><br /><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">destroy</span><span class="params">()</span> </span>{</span><br /><span class="line">            invoker.destroy();</span><br /><span class="line">        }</span><br /><br /><span class="line">        <span class="meta">@Override</span></span><br /><span class="line">        <span class="function"><span class="keyword">public</span> String <span class="title">toString</span><span class="params">()</span> </span>{</span><br /><span class="line">            <span class="keyword">return</span> invoker.toString();</span><br /><span class="line">        }</span><br /><span class="line">    };</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p><code>#invoke(invocation)</code>&nbsp;方法中，调用&nbsp;<code>Filter#(invoker, invocation)</code>&nbsp;方法，不断执行过滤逻辑。而在 Filter 中，又不断调用&nbsp;<code>Invoker#invoker(invocation)</code>&nbsp;方法，最终最后一个 Filter ，会调用&nbsp;<code>InjvmInvoker#invoke(invocation)</code>&nbsp;方法，继续执行逻辑。</p>
+<blockquote>
+<p>友情提示，InjvmInvoker 只是此处的例子，不同的协议，会调用不同的 Invoker 实现类，例如 Dubbo 协议，调用的是 DubboInvoker 。</p>
+</blockquote>
+<p>另外，Filter 调用 Invoker 的示例如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DemoFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">        <span class="keyword">return</span> invoker.invoke(invocation); <span class="comment">// 调用</span></span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="4-3-ListenerInvokerWrapper">4.3 ListenerInvokerWrapper</h2>
+<blockquote>
+<p>提示：对应图中 [6]</p>
+</blockquote>
+<p>ListenerInvokerWrapper 类，主要目的是为了 InvokerListener 的触发，目前该监听器只有&nbsp;<code>#referred(invoker)</code>&nbsp;<code>#destroyed(invoker)</code>&nbsp;两个接口方法，并未对&nbsp;<code>#invoke(invocation)</code>&nbsp;的过程，实现监听。因此，ListenerInvokerWrapper 的&nbsp;<code>#invoke(invocation)</code>&nbsp;的实现基本等于零，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">    <span class="keyword">return</span> invoker.invoke(invocation);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="4-4-AbstractInvoker">4.4 AbstractInvoker</h2>
+<blockquote>
+<p>提示：对应图中 [7]</p>
+</blockquote>
+<p>AbstractInvoker ，在&nbsp;<code>#invoke(invocation)</code>&nbsp;方法中，实现了<strong>公用逻辑</strong>，同时<strong>抽象</strong>了&nbsp;<code>#doInvoke(invocation)</code>&nbsp;方法，子类实现自定义逻辑。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invocation inv)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"> <span class="number">2</span>:     <span class="keyword">if</span> (destroyed.get()) {</span><br /><span class="line"> <span class="number">3</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Rpc invoker for service "</span> + <span class="keyword">this</span> + <span class="string">" on consumer "</span> + NetUtils.getLocalHost()</span><br /><span class="line"> <span class="number">4</span>:                 + <span class="string">" use dubbo version "</span> + Version.getVersion()</span><br /><span class="line"> <span class="number">5</span>:                 + <span class="string">" is DESTROYED, can not be invoked any more!"</span>);</span><br /><span class="line"> <span class="number">6</span>:     }</span><br /><span class="line"> <span class="number">7</span>:     RpcInvocation invocation = (RpcInvocation) inv;</span><br /><span class="line"> <span class="number">8</span>:     <span class="comment">// 设置 `invoker` 属性</span></span><br /><span class="line"> <span class="number">9</span>:     invocation.setInvoker(<span class="keyword">this</span>);</span><br /><span class="line"><span class="number">10</span>:     <span class="comment">// 添加公用的隐式传参，例如，`path` `interface` 等等，详见 RpcInvocation 类。</span></span><br /><span class="line"><span class="number">11</span>:     <span class="keyword">if</span> (attachment != <span class="keyword">null</span> &amp;&amp; attachment.size() &gt; <span class="number">0</span>) {</span><br /><span class="line"><span class="number">12</span>:         invocation.addAttachmentsIfAbsent(attachment);</span><br /><span class="line"><span class="number">13</span>:     }</span><br /><span class="line"><span class="number">14</span>:     <span class="comment">// 添加自定义的隐士传参</span></span><br /><span class="line"><span class="number">15</span>:     Map&lt;String, String&gt; context = RpcContext.getContext().getAttachments();</span><br /><span class="line"><span class="number">16</span>:     <span class="keyword">if</span> (context != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">17</span>:         invocation.addAttachmentsIfAbsent(context);</span><br /><span class="line"><span class="number">18</span>:     }</span><br /><span class="line"><span class="number">19</span>:     <span class="comment">// 设置 `async=true` ，若为异步方法</span></span><br /><span class="line"><span class="number">20</span>:     <span class="keyword">if</span> (getUrl().getMethodParameter(invocation.getMethodName(), Constants.ASYNC_KEY, <span class="keyword">false</span>)) {</span><br /><span class="line"><span class="number">21</span>:         invocation.setAttachment(Constants.ASYNC_KEY, Boolean.TRUE.toString());</span><br /><span class="line"><span class="number">22</span>:     }</span><br /><span class="line"><span class="number">23</span>:     RpcUtils.attachInvocationIdIfAsync(getUrl(), invocation);</span><br /><span class="line"><span class="number">24</span>:</span><br /><span class="line"><span class="number">25</span>:     <span class="comment">// 执行调用</span></span><br /><span class="line"><span class="number">26</span>:     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">27</span>:         <span class="keyword">return</span> doInvoke(invocation);</span><br /><span class="line"><span class="number">28</span>:     <span class="comment">// TODO 【8023 biz exception】</span></span><br /><span class="line"><span class="number">29</span>:     } <span class="keyword">catch</span> (InvocationTargetException e) { <span class="comment">// biz exception</span></span><br /><span class="line"><span class="number">30</span>:         Throwable te = e.getTargetException();</span><br /><span class="line"><span class="number">31</span>:         <span class="keyword">if</span> (te == <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">32</span>:             <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(e);</span><br /><span class="line"><span class="number">33</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">34</span>:             <span class="keyword">if</span> (te <span class="keyword">instanceof</span> RpcException) {</span><br /><span class="line"><span class="number">35</span>:                 ((RpcException) te).setCode(RpcException.BIZ_EXCEPTION);</span><br /><span class="line"><span class="number">36</span>:             }</span><br /><span class="line"><span class="number">37</span>:             <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(te);</span><br /><span class="line"><span class="number">38</span>:         }</span><br /><span class="line"><span class="number">39</span>:     } <span class="keyword">catch</span> (RpcException e) {</span><br /><span class="line"><span class="number">40</span>:         <span class="keyword">if</span> (e.isBiz()) {</span><br /><span class="line"><span class="number">41</span>:             <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(e);</span><br /><span class="line"><span class="number">42</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">43</span>:             <span class="keyword">throw</span> e;</span><br /><span class="line"><span class="number">44</span>:         }</span><br /><span class="line"><span class="number">45</span>:     } <span class="keyword">catch</span> (Throwable e) {</span><br /><span class="line"><span class="number">46</span>:         <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(e);</span><br /><span class="line"><span class="number">47</span>:     }</span><br /><span class="line"><span class="number">48</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 7 至 23 行：设置&nbsp;<code>invocation</code>&nbsp;的属性。</p>
+<ul>
+<li>第 9 行：设置&nbsp;<code>invoker</code>&nbsp;属性为自己。在上面，我们已经看到 Invoker 是层层嵌套，只要到了这里才是真正的 Invoker 对象。</li>
+<li>第 10 至 13 行：添加<strong>公用的</strong>的隐式传参。例如，<code>path</code>&nbsp;<code>interface</code>&nbsp;等等。所有见&nbsp;<a href="https://github.com/apache/incubator-dubbo/blob/master/dubbo-rpc/dubbo-rpc-api/src/main/java/com/alibaba/dubbo/rpc/RpcInvocation.java#L50-L76" target="_blank" rel="external nofollow noopener noreferrer">RpcInvocation</a>&nbsp;构造方法。从&nbsp;<code>Invocation#addAttachmentsIfAbsent(context)</code>&nbsp;方法，不存在才添加，因此业务上隐式传参的 KEY 不能冲突到这几个。</li>
+<li>
+<p>第 14 至 18 行：添加<strong>自定义的</strong>隐式传参，从&nbsp;<code>RpcContext.attachments</code>&nbsp;中。使用 RpcContext 隐式传参需要注意：</p>
+<blockquote>
+<p>注意：RpcContext 是一个临时状态记录器，当接收到 RPC 请求，或发起 RPC 请求时，RpcContext 的状态都会变化。<br />比如：A 调 B，B 再调 C，则 B 机器上，在 B 调 C 之前，RpcContext 记录的是 A 调 B 的信息，在 B 调 C 之后，RpcContext 记录的是 B 调 C 的信息。</p>
+</blockquote>
+</li>
+<li>
+<p>第 19 至 23 行：异步方法，相关的处理，后面文章分享。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>第 27 行：调用&nbsp;<code>#doInvoke(invocation)</code>&nbsp;<strong>抽象</strong>方法，实现不同协议自定义的调用实现。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> Result <span class="title">doInvoke</span><span class="params">(Invocation invocation)</span> <span class="keyword">throws</span> Throwable</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 28 至 47 行：// TODO 【8023 biz exception】</p>
+</li>
+</ul>
+<p>看完这个方法，我们可以看到，一次 Dubbo RPC ，涉及到抽象模型如下图：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2018_10_01/03.png" alt="RPC" /></p>
+<h2 id="4-5-InjvmInvoker">4.5 InjvmInvoker</h2>
+<blockquote>
+<p>提示：对应图中 [8]</p>
+</blockquote>
+<p><code>#doInvoke(invocation)</code>&nbsp;实现方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Exporter 集合</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * key: 服务键</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * 该值实际就是 {<span class="doctag">@link</span> com.alibaba.dubbo.rpc.protocol.AbstractProtocol#exporterMap}</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String, Exporter&lt;?&gt;&gt; exporterMap;</span><br /><br /><span class="line">  <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line">  <span class="number">2</span>: <span class="function"><span class="keyword">public</span> Result <span class="title">doInvoke</span><span class="params">(Invocation invocation)</span> <span class="keyword">throws</span> Throwable </span>{</span><br /><span class="line">  <span class="number">3</span>:     <span class="comment">// 获得 Exporter 对象</span></span><br /><span class="line">  <span class="number">4</span>:     Exporter&lt;?&gt; exporter = InjvmProtocol.getExporter(exporterMap, getUrl());</span><br /><span class="line">  <span class="number">5</span>:     <span class="keyword">if</span> (exporter == <span class="keyword">null</span>) {</span><br /><span class="line">  <span class="number">6</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Service ["</span> + key + <span class="string">"] not found."</span>);</span><br /><span class="line">  <span class="number">7</span>:     }</span><br /><span class="line">  <span class="number">8</span>:     <span class="comment">// 设置服务提供者地址为本地</span></span><br /><span class="line">  <span class="number">9</span>:     RpcContext.getContext().setRemoteAddress(NetUtils.LOCALHOST, <span class="number">0</span>);</span><br /><span class="line"> <span class="number">10</span>:     <span class="comment">// 调用</span></span><br /><span class="line"> <span class="number">11</span>:     <span class="keyword">return</span> exporter.getInvoker().invoke(invocation);</span><br /><span class="line"> <span class="number">12</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 3 至 7 行：调用&nbsp;<code>InjvmProtocol#getExporter(exporterMap, url)</code>&nbsp;方法，获得对应的 Exporter 对象。在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/service-export-local/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 服务暴露（一）之本地暴露（Injvm）》</a>&nbsp;中，我们已经看到，<code>exporterMap</code>&nbsp;属性，就是从 InjvmProtocol 的&nbsp;<code>exporterMap</code>&nbsp;属性。
+<ul>
+<li>在远程调用中，选择服务提供者的逻辑会更加复杂，后续文章见。</li>
+</ul>
+</li>
+<li>第 9 行：设置服务提供者地址为本地。</li>
+<li>第 11 行：获得到 Exporter 对象，里面就有<strong>服务提供者的 Invoker 对象</strong>。调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，调用服务。</li>
+</ul>
+<h1 id="5-提供者提供服务">5. 提供者提供服务</h1>
+<h2 id="5-1-InjvmInvoker">5.1 InjvmInvoker</h2>
+<blockquote>
+<p>提示：对应图中 [1] [2]</p>
+</blockquote>
+<p>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/rpc-injvm/">「4.5 InjvmInvoker」</a>&nbsp;已经分享。</p>
+<h2 id="5-2-ProtocolFilterWrapper">5.2 ProtocolFilterWrapper</h2>
+<blockquote>
+<p>提示：对应图中 [3] [4]</p>
+</blockquote>
+<p>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/rpc-injvm/">「4.2 ProtocolFilterWrapper」</a>&nbsp;基本一致，差异点在服务消费者和提供者的过滤器是<strong>不同</strong>的。</p>
+<h2 id="5-3-DelegateProviderMetaDataInvoker">5.3 DelegateProviderMetaDataInvoker</h2>
+<blockquote>
+<p>提示：对应图中 [5]</p>
+</blockquote>
+<p>DelegateProviderMetaDataInvoker ，带有服务提供者配置 ServiceConfig 的 Invoker 对象。从目前代码上来看，ServiceConfig 暂时没用到。</p>
+<p><code>#invoke(invocation)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Invoker 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">protected</span> <span class="keyword">final</span> Invoker&lt;T&gt; invoker;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 服务提供者配置</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> ServiceConfig metadata;</span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">    <span class="keyword">return</span> invoker.invoke(invocation);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="5-4-Wrapper">5.4 Wrapper</h2>
+<blockquote>
+<p>提示：对应图中 [6] [7] [8] [9]</p>
+</blockquote>
+<p>见&nbsp;<a href="http://svip.iocoder.cn/Dubbo/proxy-javassist/?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 动态代理（一）之 Javassist》</a>&nbsp;文章。</p>
+</div>

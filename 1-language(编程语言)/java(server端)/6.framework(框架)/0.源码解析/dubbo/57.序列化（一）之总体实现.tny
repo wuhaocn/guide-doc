@@ -1,0 +1,441 @@
+<header class="article-header">
+<h1 class="article-title">序列化（一）之总体实现</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>从本文开始，我们来分享 Dubbo 的序列化的实现。在&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/dev/impls/serialize.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 开发指南 &mdash;&mdash; 序列化扩展》</a>&nbsp;，对序列化定义如下：</p>
+<blockquote>
+<p>将对象转成字节流，用于网络传输，以及将字节流转为对象，用于在收到字节流数据后还原成对象。</p>
+</blockquote>
+<ul>
+<li>所以，序列化实际上包含<strong>两部分</strong>。</li>
+<li>有一个概念，我们需要<strong>强调</strong>一下：协议和序列化，是两件事情。举个例子，HTTP 是一种协议，可以有 XML 和 JSON&nbsp;<strong>等等</strong>序列化( 数据交换 )的方式。同时，XML 和 JSON 不仅仅可以用在 HTTP 协议，也可以用在 HTTPS 等等协议中。<strong>所以，协议和序列化不是包含的关系，而是组合的关系</strong>。</li>
+</ul>
+<p>序列化在&nbsp;<code>dubbo-common</code>&nbsp;项目的&nbsp;<code>serialize</code>&nbsp;模块实现。代码结构如下图：</p>
+<blockquote>
+<p>🙂 在最新版本的 Dubbo 项目中，<code>serialize</code>&nbsp;模块，已经<strong>独立</strong>成&nbsp;<code>dubbo-serialize</code>&nbsp;项目。</p>
+</blockquote>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2019_02_15/01.png" alt="代码结构" /></p>
+<ul>
+<li>最外层，定义了 API&nbsp;<strong>接口</strong>。</li>
+<li><code>support</code>&nbsp;包，提供了多种序列化的<strong>实现</strong>。</li>
+</ul>
+<h1 id="2-API-定义">2. API 定义</h1>
+<p>API 接口，类图如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2019_02_15/02.png" alt="类图" /></p>
+<h2 id="2-1-Serialization">2.1 Serialization</h2>
+<p><code>com.alibaba.dubbo.common.serialize.Serialization</code>&nbsp;，<strong>序列化</strong>接口。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span>(<span class="string">"hessian2"</span>)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Serialization</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get content type id</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 获得内容类型编号</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> content type id</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">byte</span> <span class="title">getContentTypeId</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * get content type</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 获得内容类型名</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> content type</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">String <span class="title">getContentType</span><span class="params">()</span></span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * create serializer</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 创建 ObjectOutput 对象，序列化输出到 OutputStream</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url URL</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> output 输出流</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> serializer</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> IOException 当发生 IO 异常时</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span></span><br /><span class="line">    <span class="function">ObjectOutput <span class="title">serialize</span><span class="params">(URL url, OutputStream output)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * create deserializer</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * 创建 ObjectInput 对象，从 InputStream 反序列化</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url URL</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> input 输入流</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> deserializer</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> IOException 当发生 IO 异常时</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span></span><br /><span class="line">    <span class="function">ObjectInput <span class="title">deserialize</span><span class="params">(URL url, InputStream input)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>@SPI("hessian2")</code>&nbsp;注解，Dubbo SPI&nbsp;<strong>拓展点</strong>，默认为&nbsp;<code>"hessian2"</code>&nbsp;，即未配置情况下，使用 Hessian 进行序列化和反序列化 。</li>
+<li><code>#getContentTypeId()</code>,<code>#getContentType()</code>&nbsp;方法，获得内容类型编号和名字。</li>
+<li>
+<p><code>#serialize(...)</code>,<code>#deserialize(...)</code>&nbsp;方法，🙂 具体看注释。</p>
+<ul>
+<li>
+<p>虽然添加了&nbsp;<code>@Adaptive</code>&nbsp;注解， 但是实际上，不使用 Dubbo SPI Adaptive 机制，而是代码中，直接获取。例如：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// CodecSupport.java</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Serialization <span class="title">getSerialization</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> ExtensionLoader.getExtensionLoader(Serialization.class).getExtension(</span><br /><span class="line">            url.getParameter(Constants.SERIALIZATION_KEY, Constants.DEFAULT_REMOTING_SERIALIZATION));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>x</li>
+</ul>
+</li>
+<li>Serialization 实现类，实现这两个方法，创建对应的 ObjectOutput 和 ObjectInput&nbsp;<strong>实现类</strong>的对象。</li>
+</ul>
+</li>
+</ul>
+<h2 id="2-2-DataInput">2.2 DataInput</h2>
+<p><code>com.alibaba.dubbo.common.serialize.DataInput</code>&nbsp;，数据<strong>输入</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">readBool</span><span class="params">()</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">byte</span> <span class="title">readByte</span><span class="params">()</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">short</span> <span class="title">readShort</span><span class="params">()</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">readInt</span><span class="params">()</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">long</span> <span class="title">readLong</span><span class="params">()</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">float</span> <span class="title">readFloat</span><span class="params">()</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">double</span> <span class="title">readDouble</span><span class="params">()</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line"><span class="function">String <span class="title">readUTF</span><span class="params">()</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line"><span class="keyword">byte</span>[] readBytes() <span class="keyword">throws</span> IOException;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>从 InputStream 中，读取<strong>基本类型</strong>的数据。</li>
+</ul>
+<h3 id="2-2-1-ObjectInput">2.2.1 ObjectInput</h3>
+<p><code>com.alibaba.dubbo.common.serialize.ObjectInput</code>&nbsp;，实现 DataInput 接口，对象<strong>输入</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function">Object <span class="title">readObject</span><span class="params">()</span> <span class="keyword">throws</span> IOException, ClassNotFoundException</span>;</span><br /><span class="line">&lt;T&gt; <span class="function">T <span class="title">readObject</span><span class="params">(Class&lt;T&gt; cls)</span> <span class="keyword">throws</span> IOException, ClassNotFoundException</span>;</span><br /><span class="line">&lt;T&gt; <span class="function">T <span class="title">readObject</span><span class="params">(Class&lt;T&gt; cls, Type type)</span> <span class="keyword">throws</span> IOException, ClassNotFoundException</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>在 DataInput 的基础上，增加读取对象的数据。</li>
+</ul>
+<h2 id="2-3-DataOutput">2.3 DataOutput</h2>
+<blockquote>
+<p>DataOutput 和 DataInput 相反。</p>
+</blockquote>
+<p><code>com.alibaba.dubbo.common.serialize.DataOutput</code>&nbsp;，数据<strong>输出</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeBool</span><span class="params">(<span class="keyword">boolean</span> v)</span> <span class="keyword">throws</span> IOException</span>;</span><br />    <br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeByte</span><span class="params">(<span class="keyword">byte</span> v)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeShort</span><span class="params">(<span class="keyword">short</span> v)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeInt</span><span class="params">(<span class="keyword">int</span> v)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeLong</span><span class="params">(<span class="keyword">long</span> v)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeFloat</span><span class="params">(<span class="keyword">float</span> v)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeDouble</span><span class="params">(<span class="keyword">double</span> v)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeUTF</span><span class="params">(String v)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeBytes</span><span class="params">(<span class="keyword">byte</span>[] v)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeBytes</span><span class="params">(<span class="keyword">byte</span>[] v, <span class="keyword">int</span> off, <span class="keyword">int</span> len)</span> <span class="keyword">throws</span> IOException</span>;</span><br /><br /><span class="line"><span class="comment">// Flush buffer.</span></span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">flushBuffer</span><span class="params">()</span> <span class="keyword">throws</span> IOException</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>向 InputStream 中，写入<strong>基本类型</strong>的数据。</li>
+</ul>
+<h3 id="2-3-1-ObjectOutput">2.3.1 ObjectOutput</h3>
+<p><code>com.alibaba.dubbo.common.serialize.ObjectOutput</code>&nbsp;，实现 DataOutput 接口，对象<strong>输出</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">writeObject</span><span class="params">(Object obj)</span> <span class="keyword">throws</span> IOException</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>在 DataOutput 的基础上，增加写入对象的数据。</li>
+</ul>
+<h2 id="2-4-Cleanable">2.4 Cleanable</h2>
+<p><code>com.alibaba.dubbo.common.serialize.Cleanable</code>&nbsp;，<strong>清理</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">cleanup</span><span class="params">()</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>部分 Serialize 实现类，完成序列化或反序列化，需要做清理。通过实现该接口，执行清理的逻辑。</li>
+</ul>
+<h2 id="2-5-Optimizer-相关">2.5 Optimizer 相关</h2>
+<h3 id="2-5-1-SerializationOptimizer">2.5.1 SerializationOptimizer</h3>
+<p><code>com.alibaba.dubbo.common.serialize.support.SerializationOptimizer</code>&nbsp;，序列化优化器接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">SerializationOptimizer</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> 需要使用优化的类的集合</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function">Collection&lt;Class&gt; <span class="title">getSerializableClasses</span><span class="params">()</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>在 Kryo 、FST 中，支持<strong>配置</strong>需要优化的类。业务系统中，可以实现自定义的 SerializationOptimizer 子类，进行配置。当然，使用文件也是一个选择，Dubbo 在实现考虑取舍的原因如下：</p>
+<blockquote>
+<p>FROM 类注释</p>
+<p>This class can be replaced with the contents in config file, but for now I think the class is easier to write</p>
+<p>这个类可以替换为配置文件中的内容，但是现在我认为这个类更容易编写。</p>
+</blockquote>
+<h3 id="2-5-2-SerializableClassRegistry">2.5.2 SerializableClassRegistry</h3>
+<p><code>com.alibaba.dubbo.common.serialize.support.SerializableClassRegistry</code>&nbsp;，序列化优化类的注册表。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">SerializableClassRegistry</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Set&lt;Class&gt; registrations = <span class="keyword">new</span> LinkedHashSet&lt;Class&gt;();</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * only supposed to be called at startup time</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">registerClass</span><span class="params">(Class clazz)</span> </span>{</span><br /><span class="line">        registrations.add(clazz);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Set&lt;Class&gt; <span class="title">getRegisteredClasses</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> registrations;</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>#registerClass(clazz)</code>&nbsp;<strong>静态</strong>方法，注册。在&nbsp;<code>SerializationOptimizer#getSerializableClasses()</code>方法，获得的类的集合，会注册到 SerializableClassRegistry 中。</li>
+<li><code>#getRegisteredClasses()</code>&nbsp;<strong>静态</strong>方法，获得。在 Kryo 、FST 中，调用该方法，获得需要使用优化的类的集合。</li>
+</ul>
+<h3 id="2-5-3-初始化序列化优化器">2.5.3 初始化序列化优化器</h3>
+<p>在&nbsp;<code>DubboProtocol#optimizeSerialization()</code>&nbsp;方法中，初始化序列化优化器。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 已初始化的 SerializationOptimizer 实现类名的集合</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Set&lt;String&gt; optimizers = <span class="keyword">new</span> ConcurrentHashSet&lt;String&gt;();</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">optimizeSerialization</span><span class="params">(URL url)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line">    <span class="comment">// 获得 `"optimizer"` 配置项</span></span><br /><span class="line">    String className = url.getParameter(Constants.OPTIMIZER_KEY, <span class="string">""</span>);</span><br /><span class="line">    <span class="keyword">if</span> (StringUtils.isEmpty(className) || optimizers.contains(className)) { <span class="comment">// 已注册</span></span><br /><span class="line">        <span class="keyword">return</span>;</span><br /><span class="line">    }</span><br /><br /><span class="line">    logger.info(<span class="string">"Optimizing the serialization process for Kryo, FST, etc..."</span>);</span><br /><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        <span class="comment">// 加载 SerializationOptimizer 实现类</span></span><br /><span class="line">        Class clazz = Thread.currentThread().getContextClassLoader().loadClass(className);</span><br /><span class="line">        <span class="keyword">if</span> (!SerializationOptimizer.class.isAssignableFrom(clazz)) {</span><br /><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"The serialization optimizer "</span> + className + <span class="string">" isn't an instance of "</span> + SerializationOptimizer.class.getName());</span><br /><span class="line">        }</span><br /><br /><span class="line">        <span class="comment">// 创建 SerializationOptimizer 对象</span></span><br /><span class="line">        SerializationOptimizer optimizer = (SerializationOptimizer) clazz.newInstance();</span><br /><span class="line">        <span class="keyword">if</span> (optimizer.getSerializableClasses() == <span class="keyword">null</span>) {</span><br /><span class="line">            <span class="keyword">return</span>;</span><br /><span class="line">        }</span><br /><br /><span class="line">        <span class="comment">// 注册到 SerializableClassRegistry 中</span></span><br /><span class="line">        <span class="keyword">for</span> (Class c : optimizer.getSerializableClasses()) {</span><br /><span class="line">            SerializableClassRegistry.registerClass(c);</span><br /><span class="line">        }</span><br /><br /><span class="line">        <span class="comment">// 添加到 optimizers 中</span></span><br /><span class="line">        optimizers.add(className);</span><br /><span class="line">    } <span class="keyword">catch</span> (ClassNotFoundException e) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Cannot find the serialization optimizer class: "</span> + className, e);</span><br /><span class="line">    } <span class="keyword">catch</span> (InstantiationException e) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Cannot instantiate the serialization optimizer class: "</span> + className, e);</span><br /><span class="line">    } <span class="keyword">catch</span> (IllegalAccessException e) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> RpcException(<span class="string">"Cannot instantiate the serialization optimizer class: "</span> + className, e);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>🙂 胖友，直接看代码注释。</li>
+</ul>
+<h1 id="3-Dubbo-实现">3. Dubbo 实现</h1>
+<p>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-2-dubbo?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 序列化（二）之 Dubbo 实现》</a>&nbsp;中，详细解析。</p>
+<h1 id="4-Kryo-实现">4. Kryo 实现</h1>
+<p>在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-3-kryo?self">《精尽 Dubbo 源码分析 &mdash;&mdash; 序列化（三）之 Kryo 实现》</a>&nbsp;中，详细解析。</p>
+<h1 id="5-FST-实现">5. FST 实现</h1>
+<blockquote>
+<p>FST fast-serialization 是重新实现的 Java 快速对象序列化的开发包。序列化速度更快（2-10倍）、体积更小，而且兼容 JDK 原生的序列化。要求 JDK 1.7 支持。</p>
+</blockquote>
+<p>🙂 文末，有<strong>性能</strong>相关测试的分享。</p>
+<h2 id="4-1-FstFactory">4.1 FstFactory</h2>
+<p><code>com.alibaba.dubbo.common.serialize.support.fst.FstFactory</code>&nbsp;，FST 工厂。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">FstFactory</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 单例</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> FstFactory factory = <span class="keyword">new</span> FstFactory();</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 配置对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> FSTConfiguration conf = FSTConfiguration.createDefaultConfiguration();</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> FstFactory <span class="title">getDefaultFactory</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> factory;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">FstFactory</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="comment">// 注册</span></span><br /><span class="line">        <span class="keyword">for</span> (Class clazz : SerializableClassRegistry.getRegisteredClasses()) {</span><br /><span class="line">            conf.registerClass(clazz);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> FSTObjectOutput <span class="title">getObjectOutput</span><span class="params">(OutputStream outputStream)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> conf.getObjectOutput(outputStream);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> FSTObjectInput <span class="title">getObjectInput</span><span class="params">(InputStream inputStream)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> conf.getObjectInput(inputStream);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>factory</code>&nbsp;<strong>静态</strong>属性，单例。</li>
+<li>
+<p><code>conf</code>&nbsp;属性，FST 配置对象。在<strong>构造方法</strong>中，将 SerializableClassRegistry 注册表需要使用<strong>优化</strong>的类，注册到 FSTConfiguration 中。<code>SerializableClassRegistry#registerClass(Class ... c)</code>&nbsp;方法，注释如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * Preregister a class (use at init time). This avoids having to write class names.</span></span><br /><span class="line"><span class="comment"> * Its a very simple and effective optimization (frequently &gt; 2 times faster for small objects).</span></span><br /><span class="line"><span class="comment"> * 预注册一个类(在初始化时使用)。这样可以避免编写类名。</span></span><br /><span class="line"><span class="comment"> * 它是一种非常简单有效的优化(对于小对象来说，通常是&gt;的2倍)。</span></span><br /><span class="line"><span class="comment"> *  </span></span><br /><span class="line"><span class="comment"> * Read and write side need to have classes preregistered in the exact same order.</span></span><br /><span class="line"><span class="comment"> * 客户端和服务端需要预先以完全相同的顺序注册。</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * </span></span><br /><span class="line"><span class="comment"> * The list does not have to be complete. Just add your most frequently serialized classes here</span></span><br /><span class="line"><span class="comment"> * to get significant gains in speed and smaller serialized representation size.</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * 这个列表并不一定要完整。只需在这里添加最常见的序列化类，以获得速度和较小的序列化表示大小的显著提高。</span></span><br /><span class="line"><span class="comment"> */</span></span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p><code>#getObjectOutput()</code>&nbsp;方法，获得&nbsp;<code>org.nustaq.serialization.FSTObjectOutput</code>&nbsp;对象，被 FstObjectOutput 调用。</p>
+</li>
+<li><code>#getObjectInput()</code>&nbsp;方法，获得&nbsp;<code>org.nustaq.serialization.FSTObjectInput</code>&nbsp;对象，被 FstObjectInput 调用。</li>
+</ul>
+<h2 id="4-2-FstSerialization">4.2 FstSerialization</h2>
+<p><code>com.alibaba.dubbo.common.serialize.support.fst.FstSerialization</code>&nbsp;，实现 Serialization 接口，FST&nbsp;<strong>序列化</strong>实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">FstSerialization</span> <span class="keyword">implements</span> <span class="title">Serialization</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">byte</span> <span class="title">getContentTypeId</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="number">9</span>;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">getContentType</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="string">"x-application/fst"</span>;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> ObjectOutput <span class="title">serialize</span><span class="params">(URL url, OutputStream out)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> FstObjectOutput(out);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> ObjectInput <span class="title">deserialize</span><span class="params">(URL url, InputStream is)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> FstObjectInput(is);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>"x-application/fst"</code>&nbsp;，类似 HTTP 协议 的&nbsp;<strong>Content-Types</strong>&nbsp;的 Header 。在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-1-all/">『6. JSON 实现』</a>&nbsp;类中，返回的是&nbsp;<code>"text/json"</code>&nbsp;。</li>
+</ul>
+<h2 id="4-3-FstObjectInput">4.3 FstObjectInput</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/fst/FstObjectInput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.fst.FstObjectInput</code></a>&nbsp;，实现 ObjectInput 接口，FST 对象<strong>输入</strong>实现类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> FSTObjectInput input;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">FstObjectInput</span><span class="params">(InputStream inputStream)</span> </span>{</span><br /><span class="line">    input = FstFactory.getDefaultFactory().getObjectInput(inputStream);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>input</code>&nbsp;属性，调用&nbsp;<code>FstFactory#getObjectInput(inputStream)</code>&nbsp;方法，获得。</li>
+</ul>
+<p><strong>实现方法</strong></p>
+<p>每个实现方法，直接调用 FSTObjectInput 对应的方法。比较特殊的是，<code>#readBytes()</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="keyword">public</span> <span class="keyword">byte</span>[] readBytes() <span class="keyword">throws</span> IOException {</span><br /><span class="line">    <span class="keyword">int</span> len = input.readInt();</span><br /><span class="line">    <span class="comment">// 数组为空</span></span><br /><span class="line">    <span class="keyword">if</span> (len &lt; <span class="number">0</span>) {</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line">    <span class="comment">// 数组为零</span></span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (len == <span class="number">0</span>) {</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> <span class="keyword">byte</span>[]{};</span><br /><span class="line">    <span class="comment">// 数组 &gt; 0</span></span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        <span class="keyword">byte</span>[] b = <span class="keyword">new</span> <span class="keyword">byte</span>[len];</span><br /><span class="line">        input.readFully(b);</span><br /><span class="line">        <span class="keyword">return</span> b;</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>[ 字节数组长度, 字节数组内容 ]</li>
+</ul>
+<h2 id="4-4-FstObjectOutput">4.4 FstObjectOutput</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/fst/FstObjectOutput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.fst.FstObjectOutput</code></a>&nbsp;，实现 ObjectOutput 接口，FST 对象<strong>输出</strong>实现类。</p>
+<p><strong>构造方法</strong></p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">private</span> FSTObjectOutput output;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">FstObjectOutput</span><span class="params">(OutputStream outputStream)</span> </span>{</span><br /><span class="line">    output = FstFactory.getDefaultFactory().getObjectOutput(outputStream);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>output</code>&nbsp;属性，调用&nbsp;<code>FstFactory#getObjectInput(outputStream)</code>&nbsp;方法，获得。</li>
+</ul>
+<p><strong>实现方法</strong></p>
+<p>每个实现方法，直接调用 FSTObjectInput 对应的方法。比较特殊的是，<code>#writeBytes(byte[] v)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">writeBytes</span><span class="params">(<span class="keyword">byte</span>[] v)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    <span class="comment">// 空，写入 -1</span></span><br /><span class="line">    <span class="keyword">if</span> (v == <span class="keyword">null</span>) {</span><br /><span class="line">        output.writeInt(-<span class="number">1</span>);</span><br /><span class="line">    <span class="comment">// 有数组</span></span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        writeBytes(v, <span class="number">0</span>, v.length);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>[ 字节数组长度, 字节数组内容 ]</li>
+</ul>
+<h1 id="6-JSON-实现">6. JSON 实现</h1>
+<p>基于 FastJSON 实现。</p>
+<blockquote>
+<p>fastjson 是一个性能很好的 Java 语言实现的 JSON 解析器和生成器，来自阿里巴巴的工程师开发。</p>
+<p>主要特点：</p>
+<ul>
+<li>快速FAST (比其它任何基于Java的解析器和生成器更快，包括&nbsp;<a href="https://www.oschina.net/p/jackson" target="_blank" rel="external nofollow noopener noreferrer">jackson</a>）</li>
+<li>强大（支持普通JDK类包括任意Java Bean Class、Collection、Map、Date 或 enum）</li>
+<li>零依赖（没有依赖其它任何类库除了JDK）</li>
+</ul>
+</blockquote>
+<p>代码比较简单，和&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-1-all/">『5. FST 实现』</a>&nbsp;类似，胖友自己查看：</p>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/json/FastJsonSerialization.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.json.FastJsonSerialization</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/json/FastJsonObjectInput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.json.FastJsonObjectInput</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/json/FastJsonObjectOutput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.json.FastJsonObjectOutput</code></a></li>
+</ul>
+<p>需要注意的是，<code>FastJsonObjectOutput#writeObject(Object)</code>&nbsp;方法的实现，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">writeObject</span><span class="params">(Object obj)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    SerializeWriter out = <span class="keyword">new</span> SerializeWriter();</span><br /><span class="line">    <span class="comment">// 序列化，写入对象</span></span><br /><span class="line">    JSONSerializer serializer = <span class="keyword">new</span> JSONSerializer(out);</span><br /><span class="line">    serializer.config(SerializerFeature.WriteEnumUsingToString, <span class="keyword">true</span>); <span class="comment">// 枚举转字符串</span></span><br /><span class="line">    serializer.write(obj);</span><br /><span class="line">    <span class="comment">// 写到，输出流</span></span><br /><span class="line">    out.writeTo(writer);</span><br /><span class="line">    out.close(); <span class="comment">// for reuse SerializeWriter buf</span></span><br /><span class="line">    writer.println(); <span class="comment">// 换行</span></span><br /><span class="line">    writer.flush();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="7-Hessian2-实现">7. Hessian2 实现</h1>
+<blockquote>
+<p>和其他 Web 服务的实现框架不同的是，Hessian 是一个使用二进制 Web 服务协议的框架，它的好处在于免除了一大堆附加的API包，例如 XML 的处理之类的 jar 包，这也就是为什么说它是一个轻量级的 Web 服务实现框架的原因，这个原因还在于手机上的应用程序可以通过 Hessian 提供的 API 很方便的访问 Hessian 的 Web 服务。</p>
+</blockquote>
+<p>从介绍中，我们可以看到，Hessian 自己有自己的<strong>序列化</strong>的实现。但是，Hessian 在实现上，存在一些 Bug 和需要性能优化的点。例如：</p>
+<blockquote>
+<p><strong>BigDecimal 的反序列化</strong></p>
+<p>使用 Hessian 序列化包含 BigDecimal 字段的对象时会导致其值一直为0，不注意这个bug会导致很大的问题，在最新的4.0.51版本仍然可以复现。解决方案也很简单，指定 BigDecimal 的序列化器即可。</p>
+</blockquote>
+<p>所以 Dubbo 维护了自己的&nbsp;<a href="https://github.com/alibaba/dubbo/tree/4bbc0ddddacc915ddc8ff292dd28745bbc0031fd/hessian-lite" target="_blank" rel="external nofollow noopener noreferrer"><code>hessian-lite</code></a>&nbsp;，对&nbsp;<a href="http://hessian.caucho.com/" target="_blank" rel="external nofollow noopener noreferrer">Hessian 2</a>&nbsp;的&nbsp;<strong>序列化</strong>&nbsp;部分的精简、改进、BugFix 。<br />提交历史如下：<br /><img src="http://static2.iocoder.cn/images/Dubbo/2018_01_04/23.png" alt="hessian-lite 提交历史" /></p>
+<p>代码比较简单，和&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-1-all/">『5. FST 实现』</a>&nbsp;类似，胖友自己查看：</p>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/hessian/Hessian2SerializerFactory.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.hessian.Hessian2SerializerFactory</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/hessian/Hessian2Serialization.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.hessian.Hessian2Serialization</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/hessian/Hessian2ObjectInput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.hessian.Hessian2ObjectInput</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/hessian/Hessian2ObjectOutput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.hessian.Hessian2ObjectOutput</code></a></li>
+</ul>
+<h1 id="8-NativeJava-实现">8. NativeJava 实现</h1>
+<blockquote>
+<p>旁白君：由于艿艿对 Java 原生的序列化，了解的比较粗浅，本小节更多的是把代码梳理干净。</p>
+</blockquote>
+<p><code>nativejava</code>&nbsp;，基于 Java&nbsp;<strong>原生</strong>( 自带 )的 Java 序列化实现，即使用&nbsp;<code>java.io.ObjectInputStream</code>&nbsp;和&nbsp;<code>java.io.ObjectOutputStream</code>&nbsp;进行序列化和反序列化。</p>
+<p>代码比较简单，和&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-1-all/">『5. FST 实现』</a>&nbsp;类似，胖友自己查看：</p>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/nativejava/NativeJavaSerialization.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.nativejava.NativeJavaSerialization</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/nativejava/NativeJavaObjectInput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.nativejava.NativeJavaObjectInput</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/nativejava/NativeJavaObjectOutput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.nativejava.NativeJavaObjectOutput</code></a></li>
+</ul>
+<h2 id="8-1-Java-实现">8.1 Java 实现</h2>
+<p><code>java</code>&nbsp;，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-1-all/">『8. NativeJava 实现』</a>&nbsp;的基础上，实现了对空字符串和空对象的处理。如下是 JavaObjectOutput 对空字符串和空对象的序列化，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// 【注意】JavaObjectOutput extends NativeJavaObjectOutput ！！！</span></span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">writeUTF</span><span class="params">(String v)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    <span class="keyword">if</span> (v == <span class="keyword">null</span>) { <span class="comment">// 空字符串</span></span><br /><span class="line">        getObjectOutputStream().writeInt(-<span class="number">1</span>);</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        getObjectOutputStream().writeInt(v.length()); <span class="comment">// 长度</span></span><br /><span class="line">        getObjectOutputStream().writeUTF(v); <span class="comment">// 字符串</span></span><br /><span class="line">    }</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">writeObject</span><span class="params">(Object obj)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    <span class="keyword">if</span> (obj == <span class="keyword">null</span>) { <span class="comment">// 空</span></span><br /><span class="line">        getObjectOutputStream().writeByte(<span class="number">0</span>); <span class="comment">// 空</span></span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        getObjectOutputStream().writeByte(<span class="number">1</span>); <span class="comment">// 非空</span></span><br /><span class="line">        getObjectOutputStream().writeObject(obj); <span class="comment">// 对象</span></span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>代码比较简单，和&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-1-all/">『NativeJava 实现』</a>&nbsp;类似，胖友自己查看：</p>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/java/JavaSerialization.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.java.JavaSerialization</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/java/JavaObjectInput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.java.JavaObjectInput</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/java/JavaObjectOutput.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.java.JavaObjectOutput</code></a></li>
+</ul>
+<h2 id="8-2-CompactedJava">8.2 CompactedJava</h2>
+<p><code>compactedjava</code>&nbsp;，在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/serialize-1-all/">『8.1 Java 实现』</a>&nbsp;的基础上，实现了对&nbsp;<strong>ClassDescriptor</strong>&nbsp;的处理。如下是 CompactedObjectOutputStream 对&nbsp;<strong>ClassDescriptor</strong>&nbsp;的写入，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// 【注意】CompactedObjectOutputStream extends ObjectOutputStream ！！！</span></span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">writeClassDescriptor</span><span class="params">(ObjectStreamClass desc)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    Class&lt;?&gt; clazz = desc.forClass();</span><br /><span class="line">    <span class="keyword">if</span> (clazz.isPrimitive() || clazz.isArray()) {</span><br /><span class="line">        write(<span class="number">0</span>);</span><br /><span class="line">        <span class="keyword">super</span>.writeClassDescriptor(desc);</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        write(<span class="number">1</span>);</span><br /><span class="line">        writeUTF(desc.getName());</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>在 JavaObjectOutput 的创建时，根据&nbsp;<code>compact = true</code>&nbsp;时，使用 CompactedObjectOutputStream 输出流。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">JavaObjectOutput</span><span class="params">(OutputStream os, <span class="keyword">boolean</span> compact)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    <span class="keyword">super</span>(compact ? <span class="keyword">new</span> CompactedObjectOutputStream(os) : <span class="keyword">new</span> ObjectOutputStream(os));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<p>代码比较简单，胖友自己查看：</p>
+<ul>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/java/CompactedJavaSerialization.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.java.CompactedJavaSerialization</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/java/CompactedObjectInputStream.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.java.CompactedObjectInputStream</code></a></li>
+<li><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-common/src/main/java/com/alibaba/dubbo/common/serialize/support/java/CompactedObjectOutputStream.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.common.serialize.support.java.CompactedObjectOutputStream</code></a></li>
+</ul>
+</div>

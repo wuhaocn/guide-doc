@@ -1,0 +1,330 @@
+<header class="article-header">
+<h1 class="article-title">过滤器（十一）之 ValidationFilter</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文分享&nbsp;<code>dubbo-filter-validation</code>&nbsp;项目的 ValidationFilter 过滤器，用于服务<strong>消费者</strong>和<strong>提供者</strong>中，提供&nbsp;<strong>参数验证</strong>&nbsp;的功能。在&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/demos/parameter-validation.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; 参数验证》</a>&nbsp;定义如下：</p>
+<blockquote>
+<p>参数验证功能，是基于&nbsp;<a href="https://jcp.org/en/jsr/detail?id=303" target="_blank" rel="external nofollow noopener noreferrer">JSR303</a>&nbsp;Bean Validation 实现的，用户只需标识 JSR303 标准的验证 annotation，并通过声明 filter 来实现验证。</p>
+</blockquote>
+<ul>
+<li><strong>配置</strong>和<strong>示例</strong>，官方文档已经写的很齐全，笔者就不多哔哔了。</li>
+<li>
+<p>如下是新版本的 Maven 依赖的例子：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line">&lt;!-- JSR <span class="number">303</span> - Bean Validation begin --&gt;</span><br /><span class="line">&lt;dependency&gt;</span><br /><span class="line">    &lt;groupId&gt;javax.validation&lt;/groupId&gt;</span><br /><span class="line">    &lt;artifactId&gt;validation-api&lt;/artifactId&gt;</span><br /><span class="line">    &lt;version&gt;1.1.0.Final&lt;/version&gt;</span><br /><span class="line">&lt;/dependency&gt;</span><br /><span class="line">&lt;dependency&gt;</span><br /><span class="line">    &lt;groupId&gt;org.hibernate&lt;/groupId&gt;</span><br /><span class="line">    &lt;artifactId&gt;hibernate-validator&lt;/artifactId&gt;</span><br /><span class="line">    &lt;version&gt;5.3.4.Final&lt;/version&gt;</span><br /><span class="line">&lt;/dependency&gt;</span><br /><span class="line">&lt;dependency&gt;</span><br /><span class="line">    &lt;groupId&gt;javax.el&lt;/groupId&gt;</span><br /><span class="line">    &lt;artifactId&gt;javax.el-api&lt;/artifactId&gt;</span><br /><span class="line">    &lt;version&gt;2.2.4&lt;/version&gt;</span><br /><span class="line">&lt;/dependency&gt;</span><br /><span class="line">&lt;dependency&gt;</span><br /><span class="line">    &lt;groupId&gt;org.glassfish.web&lt;/groupId&gt;</span><br /><span class="line">    &lt;artifactId&gt;javax.el&lt;/artifactId&gt;</span><br /><span class="line">    &lt;version&gt;2.2.4&lt;/version&gt;</span><br /><span class="line">&lt;/dependency&gt;</span><br /><span class="line">&lt;!-- JSR <span class="number">303</span> - Bean Validation end --&gt;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<p>本文涉及的类，如下图所示：<img src="http://static2.iocoder.cn/images/Dubbo/2018_11_22/02.png" alt="类图" /></p>
+<h1 id="2-ValidationFilter">2. ValidationFilter</h1>
+<p><code>com.alibaba.dubbo.validation.filter.ValidationFilter</code>&nbsp;，实现 Filter 接口，参数验证过滤器实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Activate</span>(group = {Constants.CONSUMER, Constants.PROVIDER}, value = Constants.VALIDATION_KEY, order = <span class="number">10000</span>)</span><br /><span class="line"> <span class="number">2</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ValidationFilter</span> <span class="keyword">implements</span> <span class="title">Filter</span> </span>{</span><br /><span class="line"> <span class="number">3</span>: </span><br /><span class="line"> <span class="number">4</span>:     <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 5:      * Validation$Adaptive 对象</span></span><br /><span class="line"><span class="comment"> 6:      *</span></span><br /><span class="line"><span class="comment"> 7:      * 通过 Dubbo SPI 机制，调用 {<span class="doctag">@link</span> #setValidation(Validation)} 方法，进行注入</span></span><br /><span class="line"><span class="comment"> 8:      */</span></span><br /><span class="line"> <span class="number">9</span>:     <span class="keyword">private</span> Validation validation;</span><br /><span class="line"><span class="number">10</span>: </span><br /><span class="line"><span class="number">11</span>:     <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setValidation</span><span class="params">(Validation validation)</span> </span>{</span><br /><span class="line"><span class="number">12</span>:         <span class="keyword">this</span>.validation = validation;</span><br /><span class="line"><span class="number">13</span>:     }</span><br /><span class="line"><span class="number">14</span>: </span><br /><span class="line"><span class="number">15</span>:     <span class="meta">@Override</span></span><br /><span class="line"><span class="number">16</span>:     <span class="function"><span class="keyword">public</span> Result <span class="title">invoke</span><span class="params">(Invoker&lt;?&gt; invoker, Invocation invocation)</span> <span class="keyword">throws</span> RpcException </span>{</span><br /><span class="line"><span class="number">17</span>:         <span class="keyword">if</span> (validation != <span class="keyword">null</span> &amp;&amp; !invocation.getMethodName().startsWith(<span class="string">"$"</span>) <span class="comment">// 非泛化调用和回音调用等方法</span></span><br /><span class="line"><span class="number">18</span>:                 &amp;&amp; ConfigUtils.isNotEmpty(invoker.getUrl().getMethodParameter(invocation.getMethodName(), Constants.VALIDATION_KEY))) { <span class="comment">// 方法开启 Validation 功能</span></span><br /><span class="line"><span class="number">19</span>:             <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">20</span>:                 <span class="comment">// 获得 Validator 对象</span></span><br /><span class="line"><span class="number">21</span>:                 Validator validator = validation.getValidator(invoker.getUrl());</span><br /><span class="line"><span class="number">22</span>:                 <span class="comment">// 使用 Validator ，验证方法参数。若不合法，抛出异常。</span></span><br /><span class="line"><span class="number">23</span>:                 <span class="keyword">if</span> (validator != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">24</span>:                     validator.validate(invocation.getMethodName(), invocation.getParameterTypes(), invocation.getArguments());</span><br /><span class="line"><span class="number">25</span>:                 }</span><br /><span class="line"><span class="number">26</span>:             } <span class="keyword">catch</span> (RpcException e) {</span><br /><span class="line"><span class="number">27</span>:                 <span class="keyword">throw</span> e;</span><br /><span class="line"><span class="number">28</span>:             } <span class="keyword">catch</span> (Throwable t) {</span><br /><span class="line"><span class="number">29</span>:                 <span class="keyword">return</span> <span class="keyword">new</span> RpcResult(t);</span><br /><span class="line"><span class="number">30</span>:             }</span><br /><span class="line"><span class="number">31</span>:         }</span><br /><span class="line"><span class="number">32</span>:         <span class="comment">// 服务调用</span></span><br /><span class="line"><span class="number">33</span>:         <span class="keyword">return</span> invoker.invoke(invocation);</span><br /><span class="line"><span class="number">34</span>:     }</span><br /><span class="line"><span class="number">35</span>: </span><br /><span class="line"><span class="number">36</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 17 行：非泛化调用和回音调用等方法。</li>
+<li>第 18 行：判断方法<strong>开启</strong>&nbsp;Validation 功能。因为，一个服务里，可能只有<strong>部分</strong>方法开启了 Validation 功能。</li>
+<li>第 21 行：调用&nbsp;<code>Validation$Adaptive#getValidator(url)</code>&nbsp;方法，基于&nbsp;<strong>URL</strong>&nbsp;为维度，获得 Validator 对象。</li>
+<li>第 22 至 25 行：调用&nbsp;<code>Validator#validate(String methodName, Class&lt;?&gt;[] parameterTypes, Object[] arguments)</code>&nbsp;方法，方法参数验证。若不合法，抛出异常。</li>
+<li>第 33 行：调用&nbsp;<code>Invoker#invoke(invocation)</code>&nbsp;方法，服务调用。</li>
+</ul>
+<h1 id="3-API-定义">3. API 定义</h1>
+<h2 id="3-1-Validator">3.1 Validator</h2>
+<p><code>com.alibaba.dubbo.validation.Validator</code>&nbsp;，验证器接口。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Validator</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 方法参数验证</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> methodName 方法名</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> parameterTypes 参数类型数组</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> arguments 参数值数组</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@throws</span> Exception 当发生异常时</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">validate</span><span class="params">(String methodName, Class&lt;?&gt;[] parameterTypes, Object[] arguments)</span> <span class="keyword">throws</span> Exception</span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="3-2-Validation">3.2 Validation</h2>
+<p><code>com.alibaba.dubbo.validation.Validation</code>&nbsp;，Validator 工厂<strong>接口</strong>。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span>(<span class="string">"jvalidation"</span>)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Validation</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 获得 Validator 对象</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url URL</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> Validator</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span>(Constants.VALIDATION_KEY)</span><br /><span class="line">    <span class="function">Validator <span class="title">getValidator</span><span class="params">(URL url)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>@SPI("jvalidation")</code>&nbsp;注解，Dubbo SPI&nbsp;<strong>拓展点</strong>，默认为&nbsp;<code>"jvalidation"</code>&nbsp;。</li>
+<li><code>@Adaptive("validation")</code>&nbsp;注解，基于 Dubbo SPI Adaptive 机制，加载对应的 Validator 实现，使用&nbsp;<code>URL.validation</code>&nbsp;属性。</li>
+</ul>
+<h3 id="3-2-1-AbstractValidation">3.2.1 AbstractValidation</h3>
+<p><code>com.alibaba.dubbo.validation.support.AbstractValidation</code>&nbsp;，实现 Validation 接口，Validator 工厂<strong>抽象类</strong>。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">AbstractValidation</span> <span class="keyword">implements</span> <span class="title">Validation</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Validator 集合</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * key：URL</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentMap&lt;String, Validator&gt; validators = <span class="keyword">new</span> ConcurrentHashMap&lt;String, Validator&gt;();</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> Validator <span class="title">getValidator</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="comment">// 获得 Validator 对象</span></span><br /><span class="line">        String key = url.toFullString();</span><br /><span class="line">        Validator validator = validators.get(key);</span><br /><span class="line">        <span class="comment">// 不存在，创建 Validator 对象，并缓存</span></span><br /><span class="line">        <span class="keyword">if</span> (validator == <span class="keyword">null</span>) {</span><br /><span class="line">            validators.put(key, createValidator(url));</span><br /><span class="line">            validator = validators.get(key);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">return</span> validator;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 创建 Validator 对象</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url URL</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> Validator 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> Validator <span class="title">createValidator</span><span class="params">(URL url)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="3-3-MethodValidated">3.3 @MethodValidated</h1>
+<p><code>com.alibaba.dubbo.validation.@MethodValidated</code>&nbsp;，方法分组验证<strong>注解</strong>。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Target</span>({ElementType.METHOD})</span><br /><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.RUNTIME)</span><br /><span class="line"><span class="meta">@Documented</span></span><br /><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> MethodValidated {</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> 分组集合</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    Class&lt;?&gt;[] value() <span class="keyword">default</span> {};</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>使用场景：当调用某个方法时，需要检查多个分组，可以在接口方法上加上该注解。</li>
+<li>
+<p>用法：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@MethodValidated</span>({Save.class, Update.class})</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">relatedQuery</span><span class="params">(ValidationParameter parameter)</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>在接口方法上增加注解，表示&nbsp;<code>#relatedQuery(ValidationParameter)</code>&nbsp;这个方法，需要同时检查 Save 和 Update 这两个分组。</li>
+<li>如果胖友对 Java Bean Validation 分组不熟悉，可以理解起来比较绕。可以跑下官方提供的&nbsp;<a href="https://github.com/YunaiV/dubbo/tree/f4216485f5641ea5cf406d1e58503c5651f86432/dubbo-config/dubbo-config-api/src/test/java/com/alibaba/dubbo/config/validation" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.config.validation</code></a>&nbsp;的立足。<img src="http://static2.iocoder.cn/images/Dubbo/2018_11_22/01.png" alt="relatedQuery" /></li>
+</ul>
+</li>
+</ul>
+<h1 id="4-JSR303-实现">4. JSR303 实现</h1>
+<p>基于&nbsp;<a href="https://jcp.org/en/jsr/detail?id=303" target="_blank" rel="external nofollow noopener noreferrer">JSR303</a>&nbsp;Bean Validation 实现的，用户只需标识 JSR303 标准的验证 annotation 。</p>
+<h2 id="4-1-JValidator">4.1 JValidator</h2>
+<p><code>com.alibaba.dubbo.validation.support.jvalidation.JValidator</code>&nbsp;，实现 Validator 接口，基于&nbsp;<a href="https://jcp.org/en/jsr/detail?id=303" target="_blank" rel="external nofollow noopener noreferrer">JSR303</a>&nbsp;的验证器实现类。</p>
+<h3 id="4-1-1-构造方法">4.1.1 构造方法</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 服务接口类</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Class&lt;?&gt; clazz;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Validator 对象</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> javax.validation.Validator validator;</span><br /><br /><span class="line"><span class="meta">@SuppressWarnings</span>({<span class="string">"unchecked"</span>, <span class="string">"rawtypes"</span>})</span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">JValidator</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">    <span class="comment">// 获得服务接口类</span></span><br /><span class="line">    <span class="keyword">this</span>.clazz = ReflectUtils.forName(url.getServiceInterface());</span><br /><span class="line">    <span class="comment">// 获得 `"jvalidation"` 配置项</span></span><br /><span class="line">    String jvalidation = url.getParameter(<span class="string">"jvalidation"</span>);</span><br /><span class="line">    <span class="comment">// 获得 ValidatorFactory 对象</span></span><br /><span class="line">    ValidatorFactory factory;</span><br /><span class="line">    <span class="keyword">if</span> (jvalidation != <span class="keyword">null</span> &amp;&amp; jvalidation.length() &gt; <span class="number">0</span>) { <span class="comment">// 指定实现</span></span><br /><span class="line">        factory = Validation.byProvider((Class) ReflectUtils.forName(jvalidation)).configure().buildValidatorFactory();</span><br /><span class="line">    } <span class="keyword">else</span> { <span class="comment">// 默认</span></span><br /><span class="line">        factory = Validation.buildDefaultValidatorFactory();</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 获得 javax Validator 对象</span></span><br /><span class="line">    <span class="keyword">this</span>.validator = factory.getValidator();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>"jvalidation"</code>&nbsp;配置项，可<strong>指定</strong>具体的 JSR303 的实现类。</li>
+<li>如果我们<strong>未配置</strong>，并且引入 Hibernate Validator ，则使用的是 HibernateValidatorFactory 。</li>
+</ul>
+<h3 id="4-1-2-validate">4.1.2 validate</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="meta">@Override</span></span><br /><span class="line"> <span class="number">2</span>: <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">validate</span><span class="params">(String methodName, Class&lt;?&gt;[] parameterTypes, Object[] arguments)</span> <span class="keyword">throws</span> Exception </span>{</span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">// 验证分组集合</span></span><br /><span class="line"> <span class="number">4</span>:     List&lt;Class&lt;?&gt;&gt; groups = <span class="keyword">new</span> ArrayList&lt;Class&lt;?&gt;&gt;();</span><br /><span class="line"> <span class="number">5</span>:     <span class="comment">// 【第一种】添加以方法命名的内部接口，作为验证分组。例如 `ValidationService#save(...)` 方法，对应 `ValidationService.Save` 接口。</span></span><br /><span class="line"> <span class="number">6</span>:     String methodClassName = clazz.getName() + <span class="string">"$"</span> + toUpperMethodName(methodName);</span><br /><span class="line"> <span class="number">7</span>:     Class&lt;?&gt; methodClass;</span><br /><span class="line"> <span class="number">8</span>:     <span class="keyword">try</span> {</span><br /><span class="line"> <span class="number">9</span>:         methodClass = Class.forName(methodClassName, <span class="keyword">false</span>, Thread.currentThread().getContextClassLoader());</span><br /><span class="line"><span class="number">10</span>:         groups.add(methodClass);</span><br /><span class="line"><span class="number">11</span>:     } <span class="keyword">catch</span> (ClassNotFoundException e) {</span><br /><span class="line"><span class="number">12</span>:     }</span><br /><span class="line"><span class="number">13</span>:     <span class="comment">// 【第二种】添加方法的 @MethodValidated 注解的值对应的类，作为验证分组。</span></span><br /><span class="line"><span class="number">14</span>:     Method method = clazz.getMethod(methodName, parameterTypes);</span><br /><span class="line"><span class="number">15</span>:     Class&lt;?&gt;[] methodClasses;</span><br /><span class="line"><span class="number">16</span>:     <span class="keyword">if</span> (method.isAnnotationPresent(MethodValidated.class)){</span><br /><span class="line"><span class="number">17</span>:         methodClasses = method.getAnnotation(MethodValidated.class).value();</span><br /><span class="line"><span class="number">18</span>:         groups.addAll(Arrays.asList(methodClasses));</span><br /><span class="line"><span class="number">19</span>:     }</span><br /><span class="line"><span class="number">20</span>:     <span class="comment">// 【第三种】添加 Default.class 类，作为验证分组。在 JSR 303 中，未设置分组的验证注解，使用 Default.class 。</span></span><br /><span class="line"><span class="number">21</span>:     <span class="comment">// add into default group</span></span><br /><span class="line"><span class="number">22</span>:     groups.add(<span class="number">0</span>, Default.class);</span><br /><span class="line"><span class="number">23</span>:     <span class="comment">// 【第四种】添加服务接口类，作为验证分组。</span></span><br /><span class="line"><span class="number">24</span>:     groups.add(<span class="number">1</span>, clazz);</span><br /><span class="line"><span class="number">25</span>:     <span class="comment">// convert list to array</span></span><br /><span class="line"><span class="number">26</span>:     Class&lt;?&gt;[] classGroups = groups.toArray(<span class="keyword">new</span> Class[<span class="number">0</span>]);</span><br /><span class="line"><span class="number">27</span>: </span><br /><span class="line"><span class="number">28</span>:     <span class="comment">// 验证错误集合</span></span><br /><span class="line"><span class="number">29</span>:     Set&lt;ConstraintViolation&lt;?&gt;&gt; violations = <span class="keyword">new</span> HashSet&lt;ConstraintViolation&lt;?&gt;&gt;();</span><br /><span class="line"><span class="number">30</span>:     <span class="comment">// 【第一步】获得方法参数的 Bean 对象。因为，JSR 303 是 Java Bean Validation ，以 Bean 为维度。</span></span><br /><span class="line"><span class="number">31</span>:     Object parameterBean = getMethodParameterBean(clazz, method, arguments);</span><br /><span class="line"><span class="number">32</span>:     <span class="comment">// 【第一步】验证 Bean 对象。</span></span><br /><span class="line"><span class="number">33</span>:     <span class="keyword">if</span> (parameterBean != <span class="keyword">null</span>) {</span><br /><span class="line"><span class="number">34</span>:         violations.addAll(validator.validate(parameterBean, classGroups));</span><br /><span class="line"><span class="number">35</span>:     }</span><br /><span class="line"><span class="number">36</span>:     <span class="comment">// 【第二步】验证集合参数</span></span><br /><span class="line"><span class="number">37</span>:     <span class="keyword">for</span> (Object arg : arguments) {</span><br /><span class="line"><span class="number">38</span>:         validate(violations, arg, classGroups);</span><br /><span class="line"><span class="number">39</span>:     }</span><br /><span class="line"><span class="number">40</span>:     <span class="comment">// 若有错误，抛出 ConstraintViolationException 异常。</span></span><br /><span class="line"><span class="number">41</span>:     <span class="keyword">if</span> (!violations.isEmpty()) {</span><br /><span class="line"><span class="number">42</span>:         logger.error(<span class="string">"Failed to validate service: "</span> + clazz.getName() + <span class="string">", method: "</span> + methodName + <span class="string">", cause: "</span> + violations);</span><br /><span class="line"><span class="number">43</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> ConstraintViolationException(<span class="string">"Failed to validate service: "</span> + clazz.getName() + <span class="string">", method: "</span> + methodName + <span class="string">", cause: "</span> + violations, violations);</span><br /><span class="line"><span class="number">44</span>:     }</span><br /><span class="line"><span class="number">45</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>============ 【第一步】获得验证分组集合 ============</li>
+<li>第 4 行：验证分组集合&nbsp;<code>group</code>&nbsp;，目前有四种来源。</li>
+<li>【第一种】第 5 至 12 行：添加以方法命名的内部接口，作为验证分组。例如&nbsp;<code>ValidationService#save(...)</code>&nbsp;方法，对应&nbsp;<code>ValidationService.Save</code>&nbsp;接口。</li>
+<li>【第二种】第 13 至 19 行：添加方法的&nbsp;<code>@MethodValidated</code>&nbsp;注解的值对应的类，作为验证分组。</li>
+<li>【第三种】第 22 行：添加 Default.class 类，作为验证分组。在 JSR 303 中，未设置分组的验证注解，使用 Default.class 。</li>
+<li>【第四种】第 24 行：添加服务接口类&nbsp;<code>clazz</code>&nbsp;，作为验证分组。</li>
+<li>最终生成的验证分组集合的顺序为：【第三种】》【第四种】》【第一种】》【第二种】。</li>
+<li>============ 【第二步】验证方法参数 ============</li>
+<li>第 29 行：验证错误集合&nbsp;<code>violations</code>&nbsp;。</li>
+<li>【第一步】调用&nbsp;<code>#getMethodParameterBean(Class&lt;?&gt; clazz, Method method, Object[] args)</code>&nbsp;方法，获得方法参数的 Bean 对象。因为，JSR 303 是 Java Bean Validation ，以 Bean 为维度。具体的实现，我们在&nbsp;<a href="http://svip.iocoder.cn/Dubbo/filter-validation-filter/">「4.1.3 getMethodParameterBean」</a>&nbsp;中，详细解析。</li>
+<li>【第一步】调用&nbsp;<code>Validator#validate(T object, Class&lt;?&gt;... groups)</code>&nbsp;方法，验证&nbsp;<strong>Bean</strong>&nbsp;对象。</li>
+<li>
+<p>【第二步】循环方法参数，调用&nbsp;<code>#validate(violations, arg, classGroups)</code>&nbsp;方法，验证<strong>集合</strong>参数。<strong>为什么会有这一步</strong>？因为，在【第一步】中，校验的是 Constraint 注解的参数( 例如&nbsp;<code>@NotNull</code>&nbsp;) ，但是呢，若是集合参数，<strong>不会校验集合中的每个元素</strong>。我们来举个例子：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">saves</span><span class="params">(@NotNull(message = <span class="string">"至少需要保存一个用户"</span>)</span> User[] users)</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>【第一步】校验&nbsp;<code>users</code>&nbsp;参数的&nbsp;<code>@NotNull</code>&nbsp;约束。</li>
+<li>【第二步】校验&nbsp;<code>users</code>&nbsp;参数中的<strong>每个 User</strong>&nbsp;的约束。</li>
+</ul>
+</li>
+<li>
+<p>第 40 至 44 行：若有验证错误，抛出 ConstraintViolationException 异常。</p>
+</li>
+</ul>
+<hr />
+<p><code>#validate(Set&lt;ConstraintViolation&lt;?&gt;&gt; violations, Object arg, Class&lt;?&gt;... groups)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 验证集合参数</span></span><br /><span class="line"><span class="comment"> 3:  *</span></span><br /><span class="line"><span class="comment"> 4:  * <span class="doctag">@param</span> violations 验证错误集合</span></span><br /><span class="line"><span class="comment"> 5:  * <span class="doctag">@param</span> arg 参数</span></span><br /><span class="line"><span class="comment"> 6:  * <span class="doctag">@param</span> groups 验证分组集合</span></span><br /><span class="line"><span class="comment"> 7:  */</span></span><br /><span class="line"> <span class="number">8</span>: <span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">validate</span><span class="params">(Set&lt;ConstraintViolation&lt;?&gt;&gt; violations, Object arg, Class&lt;?&gt;... groups)</span> </span>{</span><br /><span class="line"> <span class="number">9</span>:     <span class="keyword">if</span> (arg != <span class="keyword">null</span> &amp;&amp; !isPrimitives(arg.getClass())) {</span><br /><span class="line"><span class="number">10</span>:         <span class="comment">// [] 数组</span></span><br /><span class="line"><span class="number">11</span>:         <span class="keyword">if</span> (Object[].class.isInstance(arg)) {</span><br /><span class="line"><span class="number">12</span>:             <span class="keyword">for</span> (Object item : (Object[]) arg) {</span><br /><span class="line"><span class="number">13</span>:                 validate(violations, item, groups); <span class="comment">// 单个元素</span></span><br /><span class="line"><span class="number">14</span>:             }</span><br /><span class="line"><span class="number">15</span>:         <span class="comment">// Collection</span></span><br /><span class="line"><span class="number">16</span>:         } <span class="keyword">else</span> <span class="keyword">if</span> (Collection.class.isInstance(arg)) {</span><br /><span class="line"><span class="number">17</span>:             <span class="keyword">for</span> (Object item : (Collection&lt;?&gt;) arg) {</span><br /><span class="line"><span class="number">18</span>:                 validate(violations, item, groups); <span class="comment">// 单个元素</span></span><br /><span class="line"><span class="number">19</span>:             }</span><br /><span class="line"><span class="number">20</span>:         <span class="comment">// Map</span></span><br /><span class="line"><span class="number">21</span>:         } <span class="keyword">else</span> <span class="keyword">if</span> (Map.class.isInstance(arg)) {</span><br /><span class="line"><span class="number">22</span>:             <span class="keyword">for</span> (Map.Entry&lt;?, ?&gt; entry : ((Map&lt;?, ?&gt;) arg).entrySet()) {</span><br /><span class="line"><span class="number">23</span>:                 validate(violations, entry.getKey(), groups); <span class="comment">// 单个元素</span></span><br /><span class="line"><span class="number">24</span>:                 validate(violations, entry.getValue(), groups); <span class="comment">// 单个元素</span></span><br /><span class="line"><span class="number">25</span>:             }</span><br /><span class="line"><span class="number">26</span>:         <span class="comment">// 单个元素</span></span><br /><span class="line"><span class="number">27</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">28</span>:             violations.addAll(validator.validate(arg, groups));</span><br /><span class="line"><span class="number">29</span>:         }</span><br /><span class="line"><span class="number">30</span>:     }</span><br /><span class="line"><span class="number">31</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 9 行：调用&nbsp;<code>#isPrimitives(Class&lt;?&gt; cls)</code>&nbsp;方法，判断是否为<strong>基本类型</strong>。若是基本类型，已经被【<strong>第一步</strong>】给验证了，避免重复验证。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">isPrimitives</span><span class="params">(Class&lt;?&gt; cls)</span> </span>{</span><br /><span class="line">    <span class="comment">// [] 数组，使用内部的类来判断</span></span><br /><span class="line">    <span class="keyword">if</span> (cls.isArray()) {</span><br /><span class="line">        <span class="keyword">return</span> isPrimitive(cls.getComponentType());</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 直接判断</span></span><br /><span class="line">    <span class="keyword">return</span> isPrimitive(cls);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">isPrimitive</span><span class="params">(Class&lt;?&gt; cls)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> cls.isPrimitive() || cls == String.class || cls == Boolean.class || cls == Character.class</span><br /><span class="line">            || Number.class.isAssignableFrom(cls) || Date.class.isAssignableFrom(cls);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 10 至 14 行：验证&nbsp;<code>[ ]</code>&nbsp;数组参数，循环调用【第 26 至 29】的验证。</p>
+</li>
+<li>第 15 至 19 行：验证 Collection 参数，循环调用【第 26 至 29】的验证。</li>
+<li>第 20 至 25 行：验证 Map 参数，循环调用【第 26 至 29】的验证。</li>
+<li><strong>第 26 至 29 行</strong>：验证<strong>单个</strong>参数。</li>
+</ul>
+<h3 id="4-1-3-getMethodParameterBean">4.1.3 getMethodParameterBean</h3>
+<p>在看&nbsp;<code>#getMethodParameterBean(Class&lt;?&gt; clazz, Method method, Object[] args)</code>&nbsp;的具体实现代码之前，我们来看下它，根据方法，<strong>自动生成</strong>&nbsp;Bean 类的例子。</p>
+<ul>
+<li>
+<p>接口方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">demo</span><span class="params">(@NotNull(message = <span class="string">"名字不能为空"</span>)</span> @<span class="title">Min</span><span class="params">(value = <span class="number">6</span>, message = <span class="string">"昵称不能太短"</span>)</span> String name,</span></span><br /><span class="line"><span class="function">          String password, <span class="comment">// 不校验</span></span></span><br /><span class="line"><span class="function">          @<span class="title">NotNull</span><span class="params">(message = <span class="string">"至少需要保存一个用户"</span>)</span> User user)</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>生成 Bean 类，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">package</span> com.alibaba.dubbo.demo.DemoService_DemoParameter_java.lang.String_java.lang.String_com.alibaba.dubbo.demo.entity;</span><br /><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">User</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@NotNull</span>(message = <span class="string">"名字不能为空"</span>) </span><br /><span class="line">    <span class="meta">@Min</span>(value = <span class="number">6</span>, message = <span class="string">"昵称不能太短"</span>)</span><br /><span class="line">    <span class="keyword">public</span> java.lang.String name;</span><br />    <br /><span class="line">    <span class="keyword">public</span> java.lang.String password;</span><br />    <br /><span class="line">    <span class="meta">@NotNull</span>(message = <span class="string">"至少需要保存一个用户"</span>)</span><br /><span class="line">    <span class="keyword">public</span> com.alibaba.dubbo.demo.entity.User user;</span><br />    <br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">User</span><span class="params">()</span> </span>{}</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>😈 Javassist 生成的类，使用 JD-GUI 反编译一直报错。所以，该类是笔者，<strong>手工</strong>生成的。哈哈哈，意思能达到就好。</li>
+</ul>
+</li>
+</ul>
+<hr />
+<p><code>#getMethodParameterBean(Class&lt;?&gt; clazz, Method method, Object[] args)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 使用方法参数，创建 Bean 对象。</span></span><br /><span class="line"><span class="comment"> 3:  *</span></span><br /><span class="line"><span class="comment"> 4:  * 因为该 Bean 对象，实际不存在对应类，使用 Javassist 动态编译生成。</span></span><br /><span class="line"><span class="comment"> 5:  *</span></span><br /><span class="line"><span class="comment"> 6:  * <span class="doctag">@param</span> clazz 服务接口类</span></span><br /><span class="line"><span class="comment"> 7:  * <span class="doctag">@param</span> method 方法</span></span><br /><span class="line"><span class="comment"> 8:  * <span class="doctag">@param</span> args 参数数组</span></span><br /><span class="line"><span class="comment"> 9:  * <span class="doctag">@return</span> Bean 对象</span></span><br /><span class="line"><span class="comment">10:  */</span></span><br /><span class="line"><span class="number">11</span>: <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> Object <span class="title">getMethodParameterBean</span><span class="params">(Class&lt;?&gt; clazz, Method method, Object[] args)</span> </span>{</span><br /><span class="line"><span class="number">12</span>:     <span class="comment">// 无 Constraint 注解的方法参数，无需创建 Bean 对象。</span></span><br /><span class="line"><span class="number">13</span>:     <span class="keyword">if</span> (!hasConstraintParameter(method)) {</span><br /><span class="line"><span class="number">14</span>:         <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line"><span class="number">15</span>:     }</span><br /><span class="line"><span class="number">16</span>:     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">17</span>:         <span class="comment">// 获得 Bean 类名</span></span><br /><span class="line"><span class="number">18</span>:         String parameterClassName = generateMethodParameterClassName(clazz, method);</span><br /><span class="line"><span class="number">19</span>:         Class&lt;?&gt; parameterClass;</span><br /><span class="line"><span class="number">20</span>:         <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">21</span>:             <span class="comment">// 获得 Bean 类</span></span><br /><span class="line"><span class="number">22</span>:             parameterClass = Class.forName(parameterClassName, <span class="keyword">true</span>, clazz.getClassLoader());</span><br /><span class="line"><span class="number">23</span>:         } <span class="keyword">catch</span> (ClassNotFoundException e) { <span class="comment">// 类不存在，使用 Javassist 动态编译生成</span></span><br /><span class="line"><span class="number">24</span>:             <span class="comment">// 创建 ClassPool 对象</span></span><br /><span class="line"><span class="number">25</span>:             ClassPool pool = ClassGenerator.getClassPool(clazz.getClassLoader());</span><br /><span class="line"><span class="number">26</span>:             <span class="comment">// 创建 CtClass 对象</span></span><br /><span class="line"><span class="number">27</span>:             CtClass ctClass = pool.makeClass(parameterClassName);</span><br /><span class="line"><span class="number">28</span>:             <span class="comment">// 设置 Java 版本为 5</span></span><br /><span class="line"><span class="number">29</span>:             ClassFile classFile = ctClass.getClassFile();</span><br /><span class="line"><span class="number">30</span>:             classFile.setVersionToJava5();</span><br /><span class="line"><span class="number">31</span>:             <span class="comment">// 添加默认构造方法</span></span><br /><span class="line"><span class="number">32</span>:             ctClass.addConstructor(CtNewConstructor.defaultConstructor(pool.getCtClass(parameterClassName)));</span><br /><span class="line"><span class="number">33</span>:             <span class="comment">// 循环每个方法参数，生成对应的类的属性</span></span><br /><span class="line"><span class="number">34</span>:             <span class="comment">// parameter fields</span></span><br /><span class="line"><span class="number">35</span>:             Class&lt;?&gt;[] parameterTypes = method.getParameterTypes();</span><br /><span class="line"><span class="number">36</span>:             Annotation[][] parameterAnnotations = method.getParameterAnnotations();</span><br /><span class="line"><span class="number">37</span>:             <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; parameterTypes.length; i++) {</span><br /><span class="line"><span class="number">38</span>:                 Class&lt;?&gt; type = parameterTypes[i];</span><br /><span class="line"><span class="number">39</span>:                 Annotation[] annotations = parameterAnnotations[i];</span><br /><span class="line"><span class="number">40</span>:                 <span class="comment">// 创建注解属性</span></span><br /><span class="line"><span class="number">41</span>:                 AnnotationsAttribute attribute = <span class="keyword">new</span> AnnotationsAttribute(classFile.getConstPool(), AnnotationsAttribute.visibleTag);</span><br /><span class="line"><span class="number">42</span>:                 <span class="comment">// 循环每个方法参数的每个注解</span></span><br /><span class="line"><span class="number">43</span>:                 <span class="keyword">for</span> (Annotation annotation : annotations) {</span><br /><span class="line"><span class="number">44</span>:                     <span class="keyword">if</span> (annotation.annotationType().isAnnotationPresent(Constraint.class)) { <span class="comment">// 约束条件的注解，例如 @NotNull</span></span><br /><span class="line"><span class="number">45</span>:                         javassist.bytecode.annotation.Annotation ja = <span class="keyword">new</span> javassist.bytecode.annotation.Annotation(</span><br /><span class="line"><span class="number">46</span>:                                 classFile.getConstPool(), pool.getCtClass(annotation.annotationType().getName()));</span><br /><span class="line"><span class="number">47</span>:                         <span class="comment">// 循环注解的每个方法</span></span><br /><span class="line"><span class="number">48</span>:                         Method[] members = annotation.annotationType().getMethods();</span><br /><span class="line"><span class="number">49</span>:                         <span class="keyword">for</span> (Method member : members) {</span><br /><span class="line"><span class="number">50</span>:                             <span class="keyword">if</span> (Modifier.isPublic(member.getModifiers())</span><br /><span class="line"><span class="number">51</span>:                                     &amp;&amp; member.getParameterTypes().length == <span class="number">0</span></span><br /><span class="line"><span class="number">52</span>:                                     &amp;&amp; member.getDeclaringClass() == annotation.annotationType()) {</span><br /><span class="line"><span class="number">53</span>:                                 <span class="comment">// 将注解，添加到类的属性上</span></span><br /><span class="line"><span class="number">54</span>:                                 Object value = member.invoke(annotation);</span><br /><span class="line"><span class="number">55</span>:                                 <span class="keyword">if</span> (<span class="keyword">null</span> != value) {</span><br /><span class="line"><span class="number">56</span>:                                     MemberValue memberValue = createMemberValue(</span><br /><span class="line"><span class="number">57</span>:                                             classFile.getConstPool(), pool.get(member.getReturnType().getName()), value);</span><br /><span class="line"><span class="number">58</span>:                                     ja.addMemberValue(member.getName(), memberValue);</span><br /><span class="line"><span class="number">59</span>:                                 }</span><br /><span class="line"><span class="number">60</span>:                             }</span><br /><span class="line"><span class="number">61</span>:                         }</span><br /><span class="line"><span class="number">62</span>:                         attribute.addAnnotation(ja);</span><br /><span class="line"><span class="number">63</span>:                     }</span><br /><span class="line"><span class="number">64</span>:                 }</span><br /><span class="line"><span class="number">65</span>:                 <span class="comment">// 创建属性</span></span><br /><span class="line"><span class="number">66</span>:                 String fieldName = method.getName() + <span class="string">"Argument"</span> + i;</span><br /><span class="line"><span class="number">67</span>:                 CtField ctField = CtField.make(<span class="string">"public "</span> + type.getCanonicalName() + <span class="string">" "</span> + fieldName + <span class="string">";"</span>, pool.getCtClass(parameterClassName));</span><br /><span class="line"><span class="number">68</span>:                 ctField.getFieldInfo().addAttribute(attribute);</span><br /><span class="line"><span class="number">69</span>:                 <span class="comment">// 添加属性</span></span><br /><span class="line"><span class="number">70</span>:                 ctClass.addField(ctField);</span><br /><span class="line"><span class="number">71</span>:             }</span><br /><span class="line"><span class="number">72</span>:             <span class="comment">// 生成类</span></span><br /><span class="line"><span class="number">73</span>:             parameterClass = ctClass.toClass(clazz.getClassLoader(), <span class="keyword">null</span>);</span><br /><span class="line"><span class="number">74</span>:         }</span><br /><span class="line"><span class="number">75</span>:         <span class="comment">// 创建 Bean 对象</span></span><br /><span class="line"><span class="number">76</span>:         Object parameterBean = parameterClass.newInstance();</span><br /><span class="line"><span class="number">77</span>:         <span class="comment">// 设置 Bean 对象的每个属性的值</span></span><br /><span class="line"><span class="number">78</span>:         <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; args.length; i++) {</span><br /><span class="line"><span class="number">79</span>:             Field field = parameterClass.getField(method.getName() + <span class="string">"Argument"</span> + i);</span><br /><span class="line"><span class="number">80</span>:             field.set(parameterBean, args[i]);</span><br /><span class="line"><span class="number">81</span>:         }</span><br /><span class="line"><span class="number">82</span>:         <span class="keyword">return</span> parameterBean;</span><br /><span class="line"><span class="number">83</span>:     } <span class="keyword">catch</span> (Throwable e) {</span><br /><span class="line"><span class="number">84</span>:         logger.warn(e.getMessage(), e);</span><br /><span class="line"><span class="number">85</span>:         <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line"><span class="number">86</span>:     }</span><br /><span class="line"><span class="number">87</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>第 13 至 15 行：调用&nbsp;<code>#hasConstraintParameter(method)</code>&nbsp;方法，判断是否有&nbsp;<strong>Constraint</strong>&nbsp;注解( 例如，<code>@NotNull</code>&nbsp;)的方法参数。若没有，则无需创建 Bean 对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">hasConstraintParameter</span><span class="params">(Method method)</span> </span>{</span><br /><span class="line">    Annotation[][] parameterAnnotations = method.getParameterAnnotations();</span><br /><span class="line">    <span class="comment">// 循环所有方法参数的注解</span></span><br /><span class="line">    <span class="keyword">if</span> (parameterAnnotations != <span class="keyword">null</span> &amp;&amp; parameterAnnotations.length &gt; <span class="number">0</span>) {</span><br /><span class="line">        <span class="comment">// 循环每个方法参数的注解数组</span></span><br /><span class="line">        <span class="keyword">for</span> (Annotation[] annotations : parameterAnnotations) {</span><br /><span class="line">            <span class="comment">// 是否有 Constraint 注解</span></span><br /><span class="line">            <span class="keyword">for</span> (Annotation annotation : annotations) {</span><br /><span class="line">                <span class="keyword">if</span> (annotation.annotationType().isAnnotationPresent(Constraint.class)) {</span><br /><span class="line">                    <span class="keyword">return</span> <span class="keyword">true</span>;</span><br /><span class="line">                }</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> <span class="keyword">false</span>;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 17 至 22 行：获得 Bean 类。</p>
+</li>
+<li>
+<p>第 23 至 73 行：若 Bean 类<strong>不存在</strong>，使用 Javassist 动态编译生成。🙂 代码比较简单，已经添加详细注释，胖友耐心看看哈。其中，<code>#createMemberValue(ConstPool cp, CtClass type, Object value)</code>&nbsp;方法，获得注解<strong>每个属性的值</strong>，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// Copy from javassist.bytecode.annotation.Annotation.createMemberValue(ConstPool, CtClass);</span></span><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> MemberValue <span class="title">createMemberValue</span><span class="params">(ConstPool cp, CtClass type, Object value)</span> <span class="keyword">throws</span> NotFoundException </span>{</span><br /><span class="line">    MemberValue memberValue = javassist.bytecode.annotation.Annotation.createMemberValue(cp, type);</span><br /><span class="line">    <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> BooleanMemberValue) <span class="comment">// Boolean</span></span><br /><span class="line">        ((BooleanMemberValue) memberValue).setValue((Boolean) value);</span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> ByteMemberValue) <span class="comment">// Byte</span></span><br /><span class="line">        ((ByteMemberValue) memberValue).setValue((Byte) value);</span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> CharMemberValue) <span class="comment">// Char</span></span><br /><span class="line">        ((CharMemberValue) memberValue).setValue((Character) value);</span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> ShortMemberValue) <span class="comment">// Short</span></span><br /><span class="line">        ((ShortMemberValue) memberValue).setValue((Short) value);</span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> IntegerMemberValue) <span class="comment">// Integer</span></span><br /><span class="line">        ((IntegerMemberValue) memberValue).setValue((Integer) value);</span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> LongMemberValue) <span class="comment">// Long</span></span><br /><span class="line">        ((LongMemberValue) memberValue).setValue((Long) value);</span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> FloatMemberValue) <span class="comment">// Float</span></span><br /><span class="line">        ((FloatMemberValue) memberValue).setValue((Float) value);</span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> DoubleMemberValue)</span><br /><span class="line">        ((DoubleMemberValue) memberValue).setValue((Double) value);</span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> ClassMemberValue) <span class="comment">// Class</span></span><br /><span class="line">        ((ClassMemberValue) memberValue).setValue(((Class&lt;?&gt;) value).getName());</span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> StringMemberValue) <span class="comment">// String</span></span><br /><span class="line">        ((StringMemberValue) memberValue).setValue((String) value);</span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> EnumMemberValue) <span class="comment">// Enum</span></span><br /><span class="line">        ((EnumMemberValue) memberValue).setValue(((Enum&lt;?&gt;) value).name());</span><br /><span class="line">    <span class="comment">/* else if (memberValue instanceof AnnotationMemberValue) */</span></span><br /><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (memberValue <span class="keyword">instanceof</span> ArrayMemberValue) { <span class="comment">// 数组</span></span><br /><span class="line">        CtClass arrayType = type.getComponentType();</span><br /><span class="line">        <span class="keyword">int</span> len = Array.getLength(value);</span><br /><span class="line">        <span class="comment">// 循环，递归</span></span><br /><span class="line">        MemberValue[] members = <span class="keyword">new</span> MemberValue[len];</span><br /><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; len; i++) {</span><br /><span class="line">            members[i] = createMemberValue(cp, arrayType, Array.get(value, i));</span><br /><span class="line">        }</span><br /><span class="line">        ((ArrayMemberValue) memberValue).setValue(members);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> memberValue;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p>第 75 至 81 行：创建 Bean 对象，<strong>设置 Bean 对象的每个属性的值</strong>。</p>
+</li>
+</ul>
+<p>😈 又是一处，使用 Javassist 动态编译类的代码。好用！！！</p>
+<h2 id="4-2-JValidation">4.2 JValidation</h2>
+<p><code>com.alibaba.dubbo.validation.support.jvalidation.JValidation</code>&nbsp;，实现 AbstractValidation 抽象类，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">JValidation</span> <span class="keyword">extends</span> <span class="title">AbstractValidation</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">protected</span> Validator <span class="title">createValidator</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> JValidator(url);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="666-彩蛋">666. 彩蛋</h1>
+<p>🙂 美滋滋，终于弄懂，为什么 JSR303 是 Java Bean Validation ，结果接口方法上，每个参数都添加 Constraint 的注解，结果也可以做校验。</p>
+</div>

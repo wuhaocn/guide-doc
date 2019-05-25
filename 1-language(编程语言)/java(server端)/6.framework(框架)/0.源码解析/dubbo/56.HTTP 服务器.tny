@@ -1,0 +1,271 @@
+<header class="article-header">
+<h1 class="article-title">HTTP 服务器</h1>
+</header>
+<div class="article-entry">
+<blockquote>
+<p>本文基于 Dubbo 2.6.1 版本，望知悉。</p>
+</blockquote>
+<h1 id="1-概述">1. 概述</h1>
+<p>本文，我们来分享 Dubbo 的 HTTP 服务器，在&nbsp;<code>dubbo-remoting-http</code>&nbsp;模块中实现，使用在&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/http.html" target="_blank" rel="external nofollow noopener noreferrer"><code>http://</code></a>、&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/rest.html" target="_blank" rel="external nofollow noopener noreferrer"><code>rest://</code></a>、<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/hessian.html" target="_blank" rel="external nofollow noopener noreferrer"><code>hessian://</code></a>、<br /><a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/webservice.html" target="_blank" rel="external nofollow noopener noreferrer"><code>webservice://</code></a><br />协议上。</p>
+<p><code>dubbo-remoting-http</code>&nbsp;<strong>只提供 Server 部分</strong>，不同于前面分享的 Dubbo 的 NIO 服务器(&nbsp;<code>dubbo-remoting-api</code>&nbsp;)，提供 Client 和 Server 。代码结构如下：<img src="http://static2.iocoder.cn/images/Dubbo/2019_02_01/02.png" alt="代码结构" /></p>
+<ul>
+<li>API 层：
+<ul>
+<li>最外层：API 定义。</li>
+<li><code>support</code>&nbsp;包： 公用实现。</li>
+</ul>
+</li>
+<li>实现层：
+<ul>
+<li><code>jetty</code>&nbsp;包：基于<strong>内嵌的</strong>&nbsp;Jetty 实现，版本为&nbsp;<code>6.x</code>&nbsp;。</li>
+<li><code>tomcat</code>&nbsp;包：基于<strong>内嵌的</strong>&nbsp;Tomcat 实现，版本为&nbsp;<code>8.x</code>&nbsp;。</li>
+<li><code>servlet</code>&nbsp;包：基于 Servlet Bridge Server 实现。简单的说，使用&nbsp;<code>war</code>&nbsp;包，部署在<strong>外部的</strong>&nbsp;Tomcat 、Jetty 等 Servlet 容器。</li>
+</ul>
+</li>
+</ul>
+<p>在&nbsp;<a href="http://dubbo.apache.org/zh-cn/docs/user/references/protocol/http.html" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 用户指南 &mdash;&mdash; http://》</a>&nbsp;文档中，分享了具体的配置方式。这块的文档，写的比较简略，如果看不太明白的胖友，可以看看&nbsp;<a href="https://blog.csdn.net/hdu09075340/article/details/71636972" target="_blank" rel="external nofollow noopener noreferrer">《Dubbo 组成原理 - http服务消费端如何调用》</a>&nbsp;作为补充。</p>
+<p>另外，文档中推荐使用 Servlet Bridge Server 的部署方式，可能是文档写的比较早，现在主流是的&nbsp;<strong>Fat Jar</strong>的方式，所以实际使用时，<code>jetty</code>&nbsp;或&nbsp;<code>tomcat</code>&nbsp;方式更为适合。</p>
+<p>当然，能够方便的通过配置的方式，切换具体的 HTTP 服务的拓展，依托于 Dubbo SPI 的机制。</p>
+<h1 id="2-原理">2. 原理</h1>
+<p><code>dubbo-remoting-http</code>&nbsp;模块，<strong>类图</strong>如下：</p>
+<p><img src="http://static2.iocoder.cn/images/Dubbo/2019_02_01/01.jpeg" alt="代码结构" /></p>
+<ul>
+<li>HttpBinder ，负责创建对应的 HttpServer 对象。</li>
+<li>不同的 Protocol ，实现各自的 HttpHandler 类。并且，暴露服务时，启动 HttpServer 的同时，创建对应的 HttpHandler 对象，以&nbsp;<strong>port</strong>&nbsp;为键，注册到 DispatcherServlet 上。</li>
+<li>DispatcherServlet ，<strong>核心</strong>，调度请求，到对应的 HttpHandler 中。</li>
+</ul>
+<p><strong>整体流程</strong>如下：<img src="http://static2.iocoder.cn/images/Dubbo/2019_02_01/03.png" alt="流程" /></p>
+<h1 id="3-API">3. API</h1>
+<h2 id="3-1-HttpServer">3.1 HttpServer</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-http/src/main/java/com/alibaba/dubbo/remoting/http/HttpServer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.http.HttpServer</code></a>&nbsp;，实现 Resetable 接口，HTTP&nbsp;<strong>服务器</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// 处理器</span></span><br /><span class="line"><span class="function">HttpHandler <span class="title">getHttpHandler</span><span class="params">()</span></span>;</span><br /><br /><span class="line"><span class="comment">// 【属性相关】</span></span><br /><span class="line"><span class="function">URL <span class="title">getUrl</span><span class="params">()</span></span>;</span><br /><span class="line"><span class="function">InetSocketAddress <span class="title">getLocalAddress</span><span class="params">()</span></span>;</span><br /><br /><span class="line"><span class="comment">// 【状态相关】</span></span><br /><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">isBound</span><span class="params">()</span></span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">close</span><span class="params">()</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">close</span><span class="params">(<span class="keyword">int</span> timeout)</span></span>;</span><br /><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">isClosed</span><span class="params">()</span></span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h3 id="3-1-1-AbstractHttpServer">3.1.1 AbstractHttpServer</h3>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-http/src/main/java/com/alibaba/dubbo/remoting/http/AbstractHttpServer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.http.AbstractHttpServer</code></a>&nbsp;，实现 HttpServer 接口，HTTP 服务器抽象类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="keyword">public</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">AbstractHttpServer</span> <span class="keyword">implements</span> <span class="title">HttpServer</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * URL 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> URL url;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 处理器</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> HttpHandler handler;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 是否关闭</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">boolean</span> closed;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">AbstractHttpServer</span><span class="params">(URL url, HttpHandler handler)</span> </span>{</span><br /><span class="line">        <span class="keyword">if</span> (url == <span class="keyword">null</span>) {</span><br /><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"url == null"</span>);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">if</span> (handler == <span class="keyword">null</span>) {</span><br /><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"handler == null"</span>);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">this</span>.url = url;</span><br /><span class="line">        <span class="keyword">this</span>.handler = handler;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> HttpHandler <span class="title">getHttpHandler</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> handler;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> URL <span class="title">getUrl</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> url;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">reset</span><span class="params">(URL url)</span> </span>{</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">isBound</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">true</span>;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> InetSocketAddress <span class="title">getLocalAddress</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> url.toInetSocketAddress();</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">close</span><span class="params">()</span> </span>{</span><br /><span class="line">        closed = <span class="keyword">true</span>;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">close</span><span class="params">(<span class="keyword">int</span> timeout)</span> </span>{</span><br /><span class="line">        close();</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">isClosed</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> closed;</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="3-2-HttpHandler">3.2 HttpHandler</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-http/src/main/java/com/alibaba/dubbo/remoting/http/HttpHandler.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.http.HttpHandler</code></a>&nbsp;，HTTP&nbsp;<strong>处理器</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * invoke.</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * 处理器请求</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> request  request. 请求</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@param</span> response response. 响应</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@throws</span> IOException 当 IO 发生异常</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@throws</span> ServletException 当 Servlet 发生异常</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">handle</span><span class="params">(HttpServletRequest request, HttpServletResponse response)</span> <span class="keyword">throws</span> IOException, ServletException</span>;</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="3-3-HttpBinder">3.3 HttpBinder</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-http/src/main/java/com/alibaba/dubbo/remoting/http/HttpBinder.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.http.HttpBinder</code></a>&nbsp;，HTTP&nbsp;<strong>绑定器</strong>接口。方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@SPI</span>(<span class="string">"jetty"</span>)</span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">HttpBinder</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * bind the server.</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> url server url.</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> server.</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="meta">@Adaptive</span>({Constants.SERVER_KEY})</span><br /><span class="line">    <span class="function">HttpServer <span class="title">bind</span><span class="params">(URL url, HttpHandler handler)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>@SPI("jetty")</code>&nbsp;注解，Dubbo SPI&nbsp;<strong>拓展点</strong>，默认为&nbsp;<code>"jetty"</code>&nbsp;，即未配置情况下，使用 Jetty Server 。</li>
+<li><code>@Adaptive({Constants.SERVER_KEY})</code>&nbsp;注解，基于 Dubbo SPI Adaptive 机制，加载对应的 Server 实现，使用&nbsp;<code>URL.server</code>&nbsp;属性。</li>
+</ul>
+<h2 id="3-4-DispatcherServlet">3.4 DispatcherServlet</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-http/src/main/java/com/alibaba/dubbo/remoting/http/servlet/DispatcherServlet.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.http.serlvet.DispatcherServlet</code></a>&nbsp;，实现&nbsp;<code>javax.servlet.http.HttpServlet</code>&nbsp;接口，服务请求<strong>调度</strong>&nbsp;Servlet。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DispatcherServlet</span> <span class="keyword">extends</span> <span class="title">HttpServlet</span> </span>{</span><br /><span class="line"> <span class="number">2</span>: </span><br /><span class="line"> <span class="number">3</span>:     <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 4:      * 处理器集合</span></span><br /><span class="line"><span class="comment"> 5:      *</span></span><br /><span class="line"><span class="comment"> 6:      * key：服务器端口</span></span><br /><span class="line"><span class="comment"> 7:      */</span></span><br /><span class="line"> <span class="number">8</span>:     <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Map&lt;Integer, HttpHandler&gt; handlers = <span class="keyword">new</span> ConcurrentHashMap&lt;Integer, HttpHandler&gt;();</span><br /><span class="line"> <span class="number">9</span>:     <span class="comment">/**</span></span><br /><span class="line"><span class="comment">10:      * 单例</span></span><br /><span class="line"><span class="comment">11:      */</span></span><br /><span class="line"><span class="number">12</span>:     <span class="keyword">private</span> <span class="keyword">static</span> DispatcherServlet INSTANCE;</span><br /><span class="line"><span class="number">13</span>: </span><br /><span class="line"><span class="number">14</span>:     <span class="function"><span class="keyword">public</span> <span class="title">DispatcherServlet</span><span class="params">()</span> </span>{</span><br /><span class="line"><span class="number">15</span>:         DispatcherServlet.INSTANCE = <span class="keyword">this</span>;</span><br /><span class="line"><span class="number">16</span>:     }</span><br /><span class="line"><span class="number">17</span>: </span><br /><span class="line"><span class="number">18</span>:     <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> DispatcherServlet <span class="title">getInstance</span><span class="params">()</span> </span>{</span><br /><span class="line"><span class="number">19</span>:         <span class="keyword">return</span> INSTANCE;</span><br /><span class="line"><span class="number">20</span>:     }</span><br /><span class="line"><span class="number">21</span>: </span><br /><span class="line"><span class="number">22</span>:     <span class="comment">/**</span></span><br /><span class="line"><span class="comment">23:      * 添加处理器</span></span><br /><span class="line"><span class="comment">24:      *</span></span><br /><span class="line"><span class="comment">25:      * <span class="doctag">@param</span> port 服务器端口</span></span><br /><span class="line"><span class="comment">26:      * <span class="doctag">@param</span> processor 处理器</span></span><br /><span class="line"><span class="comment">27:      */</span></span><br /><span class="line"><span class="number">28</span>:     <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">addHttpHandler</span><span class="params">(<span class="keyword">int</span> port, HttpHandler processor)</span> </span>{</span><br /><span class="line"><span class="number">29</span>:         handlers.put(port, processor);</span><br /><span class="line"><span class="number">30</span>:     }</span><br /><span class="line"><span class="number">31</span>: </span><br /><span class="line"><span class="number">32</span>:     <span class="comment">/**</span></span><br /><span class="line"><span class="comment">33:      * 移除处理器</span></span><br /><span class="line"><span class="comment">34:      *</span></span><br /><span class="line"><span class="comment">35:      * <span class="doctag">@param</span> port 服务器端口</span></span><br /><span class="line"><span class="comment">36:      */</span></span><br /><span class="line"><span class="number">37</span>:     <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">removeHttpHandler</span><span class="params">(<span class="keyword">int</span> port)</span> </span>{</span><br /><span class="line"><span class="number">38</span>:         handlers.remove(port);</span><br /><span class="line"><span class="number">39</span>:     }</span><br /><span class="line"><span class="number">40</span>: </span><br /><span class="line"><span class="number">41</span>:     <span class="meta">@Override</span></span><br /><span class="line"><span class="number">42</span>:     <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">service</span><span class="params">(HttpServletRequest request, HttpServletResponse response)</span></span></span><br /><span class="line"><span class="function">43:             <span class="keyword">throws</span> ServletException, IOException </span>{</span><br /><span class="line"><span class="number">44</span>:         <span class="comment">// 获得处理器</span></span><br /><span class="line"><span class="number">45</span>:         HttpHandler handler = handlers.get(request.getLocalPort());</span><br /><span class="line"><span class="number">46</span>:         <span class="comment">// 处理器不存在，报错</span></span><br /><span class="line"><span class="number">47</span>:         <span class="keyword">if</span> (handler == <span class="keyword">null</span>) {<span class="comment">// service not found.</span></span><br /><span class="line"><span class="number">48</span>:             response.sendError(HttpServletResponse.SC_NOT_FOUND, <span class="string">"Service not found."</span>);</span><br /><span class="line"><span class="number">49</span>:         <span class="comment">// 处理请求</span></span><br /><span class="line"><span class="number">50</span>:         } <span class="keyword">else</span> {</span><br /><span class="line"><span class="number">51</span>:             handler.handle(request, response);</span><br /><span class="line"><span class="number">52</span>:         }</span><br /><span class="line"><span class="number">53</span>:     }</span><br /><span class="line"><span class="number">54</span>: </span><br /><span class="line"><span class="number">55</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>handlers</code>&nbsp;<strong>静态</strong>属性，处理器集合。
+<ul>
+<li><code>#addHttpHandler(port, HttpHandler)</code>&nbsp;方法，注册处理器。</li>
+<li><code>#removeHttpHandler(port)</code>&nbsp;方法，取消处理器。</li>
+</ul>
+</li>
+<li><code>#service(request, response)</code>&nbsp;<strong>实现</strong>方法，调度请求。
+<ul>
+<li>第 45 行：基于端口，获得处理器。</li>
+<li>第 46 至 48 行：处理器不存在，返回 500 报错。</li>
+<li>第 49 至 52 行：调用&nbsp;<code>HttpHandler#handle(request, response)</code>&nbsp;方法，处理请求，从而调度到 Service 的对应的方法。</li>
+</ul>
+</li>
+</ul>
+<h2 id="3-5-ServletManager">3.5 ServletManager</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-http/src/main/java/com/alibaba/dubbo/remoting/http/servlet/ServletManager.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.http.serlvet.ServletManager</code></a>&nbsp;，Servlet 管理器，负责管理 ServletContext ，目前仅有&nbsp;<code>dubbo-rpc-rest</code>&nbsp;模块，需要使用到这个类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ServletManager</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 外部服务器端口，用于 `servlet` 的服务器端口</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> EXTERNAL_SERVER_PORT = -<span class="number">1234</span>;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 单例</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ServletManager instance = <span class="keyword">new</span> ServletManager();</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * ServletContext 集合</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Map&lt;Integer, ServletContext&gt; contextMap = <span class="keyword">new</span> ConcurrentHashMap&lt;Integer, ServletContext&gt;();</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> ServletManager <span class="title">getInstance</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> instance;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 添加 ServletContext 对象</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> port 服务器端口</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> servletContext ServletContext 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">addServletContext</span><span class="params">(<span class="keyword">int</span> port, ServletContext servletContext)</span> </span>{</span><br /><span class="line">        contextMap.put(port, servletContext);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 移除 ServletContext 对象</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> port 服务器端口</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">removeServletContext</span><span class="params">(<span class="keyword">int</span> port)</span> </span>{</span><br /><span class="line">        contextMap.remove(port);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 获得 ServletContext 对象</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@param</span> port 服务器端口</span></span><br /><span class="line"><span class="comment">     * <span class="doctag">@return</span> ServletContext 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> ServletContext <span class="title">getServletContext</span><span class="params">(<span class="keyword">int</span> port)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> contextMap.get(port);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>EXTERNAL_SERVER_PORT</code>&nbsp;<strong>静态</strong>属性，<strong>外部</strong>服务器端口，用于&nbsp;<code>servlet</code>&nbsp;的服务器端口。</li>
+<li><code>contextMap</code>&nbsp;<strong>静态</strong>属性，ServletContext 集合。
+<ul>
+<li><code>#addServletContext(port, ServletContext)</code>&nbsp;方法，添加。</li>
+<li><code>#removeServletContext(port)</code>&nbsp;方法，移除。</li>
+<li><code>#getServletContext(port)</code>&nbsp;方法，查询。</li>
+</ul>
+</li>
+</ul>
+<h1 id="4-Tomcat-实现">4. Tomcat 实现</h1>
+<h2 id="4-1-TomcatHttpServer">4.1 TomcatHttpServer</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-http/src/main/java/com/alibaba/dubbo/remoting/http/tomcat/TomcatHttpServer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.http.tomcat.TomcatHttpServer</code></a>&nbsp;，实现 AbstractHttpServer 抽象类，基于 Tomcat 的 HTTP 服务器实现类。</p>
+<h3 id="4-1-1-构造方法">4.1.1 构造方法</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"> <span class="number">1</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 2:  * 内嵌的 Tomcat 对象</span></span><br /><span class="line"><span class="comment"> 3:  */</span></span><br /><span class="line"> <span class="number">4</span>: <span class="keyword">private</span> <span class="keyword">final</span> Tomcat tomcat;</span><br /><span class="line"> <span class="number">5</span>: <span class="comment">/**</span></span><br /><span class="line"><span class="comment"> 6:  * URL 对象</span></span><br /><span class="line"><span class="comment"> 7:  */</span></span><br /><span class="line"> <span class="number">8</span>: <span class="keyword">private</span> <span class="keyword">final</span> URL url;</span><br /><span class="line"> <span class="number">9</span>: </span><br /><span class="line"><span class="number">10</span>: <span class="function"><span class="keyword">public</span> <span class="title">TomcatHttpServer</span><span class="params">(URL url, <span class="keyword">final</span> HttpHandler handler)</span> </span>{</span><br /><span class="line"><span class="number">11</span>:     <span class="keyword">super</span>(url, handler);</span><br /><span class="line"><span class="number">12</span>:     <span class="keyword">this</span>.url = url;</span><br /><span class="line"><span class="number">13</span>: </span><br /><span class="line"><span class="number">14</span>:     <span class="comment">// 注册 HttpHandler 到 DispatcherServlet 中</span></span><br /><span class="line"><span class="number">15</span>:     DispatcherServlet.addHttpHandler(url.getPort(), handler);</span><br /><span class="line"><span class="number">16</span>: </span><br /><span class="line"><span class="number">17</span>:     <span class="comment">// 创建内嵌的 Tomcat 对象</span></span><br /><span class="line"><span class="number">18</span>:     String baseDir = <span class="keyword">new</span> File(System.getProperty(<span class="string">"java.io.tmpdir"</span>)).getAbsolutePath();</span><br /><span class="line"><span class="number">19</span>:     tomcat = <span class="keyword">new</span> Tomcat();</span><br /><span class="line"><span class="number">20</span>:     tomcat.setBaseDir(baseDir);</span><br /><span class="line"><span class="number">21</span>:     tomcat.setPort(url.getPort());</span><br /><span class="line"><span class="number">22</span>:     tomcat.getConnector().setProperty(<span class="string">"maxThreads"</span>, String.valueOf(url.getParameter(Constants.THREADS_KEY, Constants.DEFAULT_THREADS))); <span class="comment">// 最大线程数</span></span><br /><span class="line"><span class="number">23</span>: <span class="comment">//    tomcat.getConnector().setProperty(</span></span><br /><span class="line"><span class="number">24</span>: <span class="comment">//            "minSpareThreads", String.valueOf(url.getParameter(Constants.THREADS_KEY, Constants.DEFAULT_THREADS)));</span></span><br /><span class="line"><span class="number">25</span>:     tomcat.getConnector().setProperty(<span class="string">"maxConnections"</span>, String.valueOf(url.getParameter(Constants.ACCEPTS_KEY, -<span class="number">1</span>))); <span class="comment">// 最大连接池</span></span><br /><span class="line"><span class="number">26</span>:     tomcat.getConnector().setProperty(<span class="string">"URIEncoding"</span>, <span class="string">"UTF-8"</span>); <span class="comment">// 编码为 UTF-8</span></span><br /><span class="line"><span class="number">27</span>:     tomcat.getConnector().setProperty(<span class="string">"connectionTimeout"</span>, <span class="string">"60000"</span>); <span class="comment">// 连接超时，60 秒</span></span><br /><span class="line"><span class="number">28</span>:     tomcat.getConnector().setProperty(<span class="string">"maxKeepAliveRequests"</span>, <span class="string">"-1"</span>);</span><br /><span class="line"><span class="number">29</span>:     tomcat.getConnector().setProtocol(<span class="string">"org.apache.coyote.http11.Http11NioProtocol"</span>);</span><br /><span class="line"><span class="number">30</span>: </span><br /><span class="line"><span class="number">31</span>:     <span class="comment">// 添加 DispatcherServlet 到 Tomcat 中</span></span><br /><span class="line"><span class="number">32</span>:     Context context = tomcat.addContext(<span class="string">"/"</span>, baseDir);</span><br /><span class="line"><span class="number">33</span>:     Tomcat.addServlet(context, <span class="string">"dispatcher"</span>, <span class="keyword">new</span> DispatcherServlet());</span><br /><span class="line"><span class="number">34</span>:     context.addServletMapping(<span class="string">"/*"</span>, <span class="string">"dispatcher"</span>);</span><br /><span class="line"><span class="number">35</span>: </span><br /><span class="line"><span class="number">36</span>:     <span class="comment">// 添加 ServletContext 对象，到 ServletManager 中</span></span><br /><span class="line"><span class="number">37</span>:     ServletManager.getInstance().addServletContext(url.getPort(), context.getServletContext());</span><br /><span class="line"><span class="number">38</span>: </span><br /><span class="line"><span class="number">39</span>:     <span class="comment">// 启动 Tomcat</span></span><br /><span class="line"><span class="number">40</span>:     <span class="keyword">try</span> {</span><br /><span class="line"><span class="number">41</span>:         tomcat.start();</span><br /><span class="line"><span class="number">42</span>:     } <span class="keyword">catch</span> (LifecycleException e) {</span><br /><span class="line"><span class="number">43</span>:         <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Failed to start tomcat server at "</span> + url.getAddress(), e);</span><br /><span class="line"><span class="number">44</span>:     }</span><br /><span class="line"><span class="number">45</span>: }</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>第 15 行：调用&nbsp;<code>DispatcherServlet#addHttpHandler(port, handler)</code>&nbsp;方法，注册 HttpHandler 到 DispatcherServlet 中。</li>
+<li>第 17 至 29 行：<strong>创建</strong>内嵌的 Tomcat 对象。</li>
+<li>第 31 至 34 行：<strong>创建</strong>并添加 DispatcherServlet 对象，到 Tomcat 中。</li>
+<li>第 37 行：调用&nbsp;<code>ServletManager#addServletContext(port, ServletContext)</code>&nbsp;方法，添加 DispatcherServlet 对象，到 ServletManager 中。</li>
+<li>第 39 至 44 行：调用&nbsp;<code>Tomcat#start()</code>&nbsp;方法，<strong>启动</strong>&nbsp;Tomcat 。</li>
+</ul>
+<h3 id="4-1-2-关闭">4.1.2 关闭</h3>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">close</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="comment">// 标记关闭</span></span><br /><span class="line">    <span class="keyword">super</span>.close();</span><br /><br /><span class="line">    <span class="comment">// 移除 ServletContext 对象</span></span><br /><span class="line">    ServletManager.getInstance().removeServletContext(url.getPort());</span><br /><br /><span class="line">    <span class="comment">// 关闭 Tomcat</span></span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        tomcat.stop();</span><br /><span class="line">    } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line">        logger.warn(e.getMessage(), e);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><strong>缺少</strong>，调用&nbsp;<code>DispacherServlet#remove(port)</code>&nbsp;方法，将 HttpHandler 对象，移除出 DispatcherServlet 。</li>
+</ul>
+<h2 id="4-2-TomcatHttpBinder">4.2 TomcatHttpBinder</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-http/src/main/java/com/alibaba/dubbo/remoting/http/tomcat/TomcatHttpBinder.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.http.tomcat.TomcatHttpBinder</code></a>&nbsp;，TomcatHttpServer 绑定器实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TomcatHttpBinder</span> <span class="keyword">implements</span> <span class="title">HttpBinder</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> HttpServer <span class="title">bind</span><span class="params">(URL url, HttpHandler handler)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> TomcatHttpServer(url, handler);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="5-Jetty-实现">5. Jetty 实现</h1>
+<blockquote>
+<p><code>jetty</code>&nbsp;和&nbsp;<code>tomcat</code>&nbsp;包的实现，差不多，主要差异在 Tomcat 和 Jetty 的 API 不同。</p>
+<p>所以，下面我们就贴贴代码啦，当然，还是有中文详细注释的。</p>
+</blockquote>
+<h2 id="5-1-JettyHttpServer">5.1 JettyHttpServer</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">JettyHttpServer</span> <span class="keyword">extends</span> <span class="title">AbstractHttpServer</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Logger logger = LoggerFactory.getLogger(JettyHttpServer.class);</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 内嵌的 Jetty 服务器</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> Server server;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * URL 对象</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> URL url;</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">JettyHttpServer</span><span class="params">(URL url, <span class="keyword">final</span> HttpHandler handler)</span> </span>{</span><br /><span class="line">        <span class="keyword">super</span>(url, handler);</span><br /><span class="line">        <span class="keyword">this</span>.url = url;</span><br /><br /><span class="line">        <span class="comment">// 设置日志的配置</span></span><br /><span class="line">        <span class="comment">// TODO we should leave this setting to slf4j</span></span><br /><span class="line">        <span class="comment">// we must disable the debug logging for production use</span></span><br /><span class="line">        Log.setLog(<span class="keyword">new</span> StdErrLog());</span><br /><span class="line">        Log.getLog().setDebugEnabled(<span class="keyword">false</span>);</span><br /><br /><span class="line">        <span class="comment">// 注册 HttpHandler 到 DispatcherServlet 中</span></span><br /><span class="line">        DispatcherServlet.addHttpHandler(url.getParameter(Constants.BIND_PORT_KEY, url.getPort()), handler);</span><br /><br /><span class="line">        <span class="comment">// 创建线程池</span></span><br /><span class="line">        <span class="keyword">int</span> threads = url.getParameter(Constants.THREADS_KEY, Constants.DEFAULT_THREADS);</span><br /><span class="line">        QueuedThreadPool threadPool = <span class="keyword">new</span> QueuedThreadPool();</span><br /><span class="line">        threadPool.setDaemon(<span class="keyword">true</span>);</span><br /><span class="line">        threadPool.setMaxThreads(threads);</span><br /><span class="line">        threadPool.setMinThreads(threads);</span><br /><br /><span class="line">        <span class="comment">// 创建 Jetty Connector 对象</span></span><br /><span class="line">        SelectChannelConnector connector = <span class="keyword">new</span> SelectChannelConnector();</span><br /><span class="line">        String bindIp = url.getParameter(Constants.BIND_IP_KEY, url.getHost());</span><br /><span class="line">        <span class="keyword">if</span> (!url.isAnyHost() &amp;&amp; NetUtils.isValidLocalHost(bindIp)) {</span><br /><span class="line">            connector.setHost(bindIp);</span><br /><span class="line">        }</span><br /><span class="line">        connector.setPort(url.getParameter(Constants.BIND_PORT_KEY, url.getPort()));</span><br /><br /><span class="line">        <span class="comment">// 创建内嵌的 Jetty 对象</span></span><br /><span class="line">        server = <span class="keyword">new</span> Server();</span><br /><span class="line">        server.setThreadPool(threadPool);</span><br /><span class="line">        server.addConnector(connector);</span><br /><br /><span class="line">        <span class="comment">// 添加 DispatcherServlet 到 Jetty 中</span></span><br /><span class="line">        ServletHandler servletHandler = <span class="keyword">new</span> ServletHandler();</span><br /><span class="line">        ServletHolder servletHolder = servletHandler.addServletWithMapping(DispatcherServlet.class, <span class="string">"/*"</span>);</span><br /><span class="line">        servletHolder.setInitOrder(<span class="number">2</span>);</span><br /><br /><span class="line">        <span class="comment">// 添加 ServletContext 对象，到 ServletManager 中</span></span><br /><span class="line">        <span class="comment">// dubbo's original impl can't support the use of ServletContext</span></span><br /><span class="line"><span class="comment">//        server.addHandler(servletHandler);</span></span><br /><span class="line">        <span class="comment">// TODO Context.SESSIONS is the best option here?</span></span><br /><span class="line">        Context context = <span class="keyword">new</span> Context(server, <span class="string">"/"</span>, Context.SESSIONS);</span><br /><span class="line">        context.setServletHandler(servletHandler);</span><br /><span class="line">        ServletManager.getInstance().addServletContext(url.getParameter(Constants.BIND_PORT_KEY, url.getPort()), context.getServletContext());</span><br /><br /><span class="line">        <span class="comment">// 启动 Jetty</span></span><br /><span class="line">        <span class="keyword">try</span> {</span><br /><span class="line">            server.start();</span><br /><span class="line">        } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Failed to start jetty server on "</span> + url.getParameter(Constants.BIND_IP_KEY) + <span class="string">":"</span> + url.getParameter(Constants.BIND_PORT_KEY) + <span class="string">", cause: "</span></span><br /><span class="line">                    + e.getMessage(), e);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">close</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="comment">// 标记关闭</span></span><br /><span class="line">        <span class="keyword">super</span>.close();</span><br /><br /><span class="line">        <span class="comment">// 移除 ServletContext 对象</span></span><br /><span class="line">        ServletManager.getInstance().removeServletContext(url.getParameter(Constants.BIND_PORT_KEY, url.getPort()));</span><br /><br /><span class="line">        <span class="comment">// 关闭 Jetty</span></span><br /><span class="line">        <span class="keyword">if</span> (server != <span class="keyword">null</span>) {</span><br /><span class="line">            <span class="keyword">try</span> {</span><br /><span class="line">                server.stop();</span><br /><span class="line">            } <span class="keyword">catch</span> (Exception e) {</span><br /><span class="line">                logger.warn(e.getMessage(), e);</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="5-2-JettyHttpBinder">5.2 JettyHttpBinder</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">JettyHttpBinder</span> <span class="keyword">implements</span> <span class="title">HttpBinder</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> HttpServer <span class="title">bind</span><span class="params">(URL url, HttpHandler handler)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> JettyHttpServer(url, handler);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="6-Servlet-Bridge-实现">6. Servlet Bridge 实现</h1>
+<h2 id="6-1-ServletHttpServer">6.1 ServletHttpServer</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-http/src/main/java/com/alibaba/dubbo/remoting/http/servlet/ServletHttpServer.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.http.servlet.ServletHttpServer</code></a>&nbsp;，实现 AbstractHttpServer 抽象类， 基于 Servlet 的服务器实现类。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ServletHttpServer</span> <span class="keyword">extends</span> <span class="title">AbstractHttpServer</span> </span>{</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">ServletHttpServer</span><span class="params">(URL url, HttpHandler handler)</span> </span>{</span><br /><span class="line">        <span class="keyword">super</span>(url, handler);</span><br /><br /><span class="line">        <span class="comment">// 注册 HttpHandler 到 DispatcherServlet 中</span></span><br /><span class="line">        DispatcherServlet.addHttpHandler(url.getParameter(Constants.BIND_PORT_KEY, <span class="number">8080</span>), handler);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><strong>注意</strong>，在&nbsp;<code>&lt;dubbo:protocol /&gt;</code>&nbsp;配置的<strong>端口</strong>，和外部的 Servlet 容器的<strong>端口</strong>，<strong>保持一致</strong>。</li>
+<li>需要配置 DispatcherServlet 到&nbsp;<code>web.xml</code>&nbsp;中。通过这样的方式，让外部的 Servlet 容器，可以进行转发。</li>
+</ul>
+<h2 id="6-2-ServletHttpBinder">6.2 ServletHttpBinder</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ServletHttpBinder</span> <span class="keyword">implements</span> <span class="title">HttpBinder</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Adaptive</span>()</span><br /><span class="line">    <span class="function"><span class="keyword">public</span> HttpServer <span class="title">bind</span><span class="params">(URL url, HttpHandler handler)</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> ServletHttpServer(url, handler);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="6-3-BootstrapListener">6.3 BootstrapListener</h2>
+<p><a href="https://github.com/YunaiV/dubbo/blob/master/dubbo-remoting/dubbo-remoting-http/src/main/java/com/alibaba/dubbo/remoting/http/servlet/BootstrapListener.java" target="_blank" rel="external nofollow noopener noreferrer"><code>com.alibaba.dubbo.remoting.http.servlet.BootstrapListener</code></a>&nbsp;，实现 ServletContextListener 接口， 启动监听器。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">BootstrapListener</span> <span class="keyword">implements</span> <span class="title">ServletContextListener</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">contextInitialized</span><span class="params">(ServletContextEvent servletContextEvent)</span> </span>{</span><br /><span class="line">        ServletManager.getInstance().addServletContext(ServletManager.EXTERNAL_SERVER_PORT, servletContextEvent.getServletContext());</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">contextDestroyed</span><span class="params">(ServletContextEvent servletContextEvent)</span> </span>{</span><br /><span class="line">        ServletManager.getInstance().removeServletContext(ServletManager.EXTERNAL_SERVER_PORT);</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>需要配置 BootstrapListener 到&nbsp;<code>web.xml</code>&nbsp;中。通过这样的方式，让外部的 ServletContext 对象，添加到 ServletManager 中。</li>
+</ul>
+</div>
