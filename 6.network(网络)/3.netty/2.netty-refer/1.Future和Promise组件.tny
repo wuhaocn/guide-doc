@@ -1,0 +1,188 @@
+<h1 class="postTitle"><a id="cb_post_title_url" class="postTitle2" href="https://www.cnblogs.com/wade-luffy/p/6229410.html">Future和Promise</a></h1>
+<div class="clear">&nbsp;</div>
+<div class="postBody">
+<div id="cnblogs_post_body" class="blogpost-body">
+<div id="navCategory">
+<p><strong>目录</strong></p>
+<ul>
+<li><a href="https://www.cnblogs.com/wade-luffy/p/6229410.html#_label0">Future</a>
+<ul>
+<li><a href="https://www.cnblogs.com/wade-luffy/p/6229410.html#_label0_0">ChannelFuture源码分析</a></li>
+</ul>
+</li>
+<li><a href="https://www.cnblogs.com/wade-luffy/p/6229410.html#_label1">Promise</a>
+<ul>
+<li><a href="https://www.cnblogs.com/wade-luffy/p/6229410.html#_label1_0">Promise源码分析</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<hr />
+<p>Future用于获取异步操作的结果，而Promise则比较抽象，无法直接猜测出其功能。</p>
+<div><a href="https://www.cnblogs.com/wade-luffy/p/6229410.html#_labelTop">回到顶部</a></div>
+<h2 id="blogTitle0" class="ext_bold ext_color_31859b">Future</h2>
+<p>Future最早来源于JDK的java.util.concurrent.Future，它用于代表异步操作的结果。</p>
+<p class=" ">可以通过get方法获取操作结果，如果操作尚未完成，则会同步阻塞当前调用的线程；如果不允许阻塞太长时间或者无限期阻塞，可以通过带超时时间的get方法获取结果；如果到达超时时间操作仍然没有完成，则抛出TimeoutException。通过isDone()方法可以判断当前的异步操作是否完成，如果完成，无论成功与否，都返回true，否则返回false。通过cancel可以尝试取消异步操作，它的结果是未知的，如果操作已经完成，或者发生其他未知的原因拒绝取消，取消操作将会失败。</p>
+<p>由于Netty的Future都是与异步I/O操作相关的，因此，命名为ChannelFuture，代表它与Channel操作相关。</p>
+<p><img src="https://images2015.cnblogs.com/blog/990532/201612/990532-20161228142712414-32581088.png" alt="" /></p>
+<p><img src="https://images2015.cnblogs.com/blog/990532/201612/990532-20161228142723007-850221174.png" alt="" /></p>
+<p class=" ">在Netty中，所有的I/O操作都是异步的，这意味着任何I/O调用都会立即返回，而不是像传统BIO那样同步等待操作完成。异步操作会带来一个问题：调用者如何获取异步操作的结果？ChannelFuture就是为了解决这个问题而专门设计的。</p>
+<p class=" ">ChannelFuture有两种状态：uncompleted和completed。当开始一个I/O操作时，一个新的ChannelFuture被创建，此时它处于uncompleted状态&mdash;&mdash;非失败、非成功、非取消，因为I/O操作此时还没有完成。一旦I/O操作完成，ChannelFuture将会被设置成completed，它的结果有如下三种可能。</p>
+<ol>
+<li class=" ">操作成功；</li>
+<li class=" ">操作失败；</li>
+<li class=" ">操作被取消。</li>
+</ol>
+<p>&nbsp;<img src="https://images2015.cnblogs.com/blog/990532/201612/990532-20161228142931461-1307875676.png" alt="" /></p>
+<p>ChannelFuture提供了一系列新的API，用于获取操作结果、添加事件监听器、取消I/O操作、同步等待等。</p>
+<p>Netty强烈建议直接通过添加监听器的方式获取I/O操作结果，或者进行后续的相关操作。</p>
+<p>ChannelFuture可以同时增加一个或者多个GenericFutureListener，也可以通过remove方法删除GenericFutureListener。</p>
+<p class=" ">当I/O操作完成之后，I/O线程会回调ChannelFuture中GenericFutureListener的operationComplete方法，并把ChannelFuture对象当作方法的入参。如果用户需要做上下文相关的操作，需要将上下文信息保存到对应的ChannelFuture中。</p>
+<p class=" ">推荐通过GenericFutureListener代替ChannelFuture的get等方法的原因是：当我们进行异步I/O操作时，完成的时间是无法预测的，如果不设置超时时间，它会导致调用线程长时间被阻塞，甚至挂死。而设置超时时间，时间又无法精确预测。利用异步通知机制回调GenericFutureListener是最佳的解决方案，它的性能最优。</p>
+<p class=" ">ps：不要在ChannelHandler中调用ChannelFuture的await()方法，这会导致死锁。原因是发起I/O操作之后，由I/O线程负责异步通知发起I/O操作的用户线程，如果I/O线程和用户线程是同一个线程，就会导致I/O线程等待自己通知操作完成，这就导致了死锁，这跟经典的两个线程互等待死锁不同，属于自己把自己挂死。</p>
+<p>&nbsp;<img src="https://images2015.cnblogs.com/blog/990532/201612/990532-20161228143508132-1278221141.png" alt="" /></p>
+<p>异步I/O操作有两类超时：一个是TCP层面的I/O超时，另一个是业务逻辑层面的操作超时。两者没有必然的联系，但是通常情况下业务逻辑超时时间应该大于I/O超时时间，它们两者是包含的关系。</p>
+<p><img src="https://images2015.cnblogs.com/blog/990532/201612/990532-20161228143619179-1357533990.png" alt="" /></p>
+<p><img src="https://images2015.cnblogs.com/blog/990532/201612/990532-20161228143628523-991524472.png" alt="" /></p>
+<p>ps：ChannelFuture超时并不代表I/O超时，这意味着ChannelFuture超时后，如果没有关闭连接资源，随后连接依旧可能会成功，这会导致严重的问题。所以通常情况下，必须要考虑究竟是设置I/O超时还是ChannelFuture超时。</p>
+<h3 id="blogTitle1" class="ext_bold ext_color_31859b">ChannelFuture源码分析</h3>
+<p class=" ">AbstractFuture实现Future接口，它不允许I/O操作被取消。</p>
+<div class="cnblogs_code">
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a title="复制代码"><img src="https://common.cnblogs.com/images/copycode.gif" alt="复制代码" /></a></span></div>
+<pre>    @Override
+    public V get() throws InterruptedException, ExecutionException {
+        //调用await()方法进行无限期阻塞，当I/O操作完成后会被notify()。
+        await();
+        Throwable cause = cause();
+        //程序继续向下执行，检查I/O操作是否发生了异常
+        if (cause == null) {
+            //如果没有异常，则通过getNow()方法获取结果并返回。
+            return getNow();
+        }
+        //否则，将异常堆栈进行包装，抛出ExecutionException。
+        throw new ExecutionException(cause);
+    }
+
+    @Override
+    public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+        //调用await(long timeout, TimeUnit unit)方法即可
+        if (await(timeout, unit)) {
+            Throwable cause = cause();
+            //如果没有超时，则依次判断是否发生了I/O异常等情况
+            if (cause == null) {
+                //操作与无参数的get方法相同。
+                return getNow();
+            }
+            throw new ExecutionException(cause);
+        }
+        //如果超时，则抛出TimeoutException。
+        throw new TimeoutException();
+    }</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a title="复制代码"><img src="https://common.cnblogs.com/images/copycode.gif" alt="复制代码" /></a></span></div>
+</div>
+<div><a href="https://www.cnblogs.com/wade-luffy/p/6229410.html#_labelTop">回到顶部</a></div>
+<h2 id="blogTitle2" class="ext_bold ext_color_31859b">Promise</h2>
+<p>Promise是可写的Future，Future自身并没有写操作相关的接口，Netty通过Promise对Future进行扩展，用于设置I/O操作的结果。</p>
+<p>Promise相关的写操作接口定义如图:</p>
+<p><img src="https://images2015.cnblogs.com/blog/990532/201612/990532-20161228184625523-1792022693.png" alt="" /></p>
+<p>Netty发起I/O操作的时候，会创建一个新的Promise对象，例如调用ChannelHandlerContext的write(Object object)方法时，会创建一个新的ChannelPromise。</p>
+<div class="cnblogs_code">
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a title="复制代码"><img src="https://common.cnblogs.com/images/copycode.gif" alt="复制代码" /></a></span></div>
+<pre>    @Override
+    public ChannelFuture write(Object msg) {
+        return write(msg, newPromise());
+    }
+    @Override
+    public ChannelFuture write(Object msg, ChannelPromise promise) {
+        DefaultChannelHandlerContext next = findContextOutbound(MASK_WRITE);
+        next.invoker.invokeWrite(next, msg, promise);
+        return promise;
+    }
+    @Override
+    public ChannelPromise newPromise() {
+        return new DefaultChannelPromise(channel(), executor());
+    }</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a title="复制代码"><img src="https://common.cnblogs.com/images/copycode.gif" alt="复制代码" /></a></span></div>
+</div>
+<h3 id="blogTitle3" class="ext_bold ext_color_31859b">Promise源码分析</h3>
+<p>分析一个它的实现子类的源码DefaultPromise&nbsp;。</p>
+<h4>setSuccess方法的实现</h4>
+<div class="cnblogs_code">
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a title="复制代码"><img src="https://common.cnblogs.com/images/copycode.gif" alt="复制代码" /></a></span></div>
+<pre>    @Override
+    public Promise&lt;V&gt; setSuccess(V result) {
+        //调用setSuccess0方法并对其操作结果进行判断，如果操作成功，则调用notifyListeners方法通知listener。
+        if (setSuccess0(result)) {
+            notifyListeners();
+            return this;
+        }
+        throw new IllegalStateException("complete already: " + this);
+    }
+    private boolean setSuccess0(V result) {
+        //首先判断当前Promise的操作结果是否已经被设置，如果已经被设置，则不允许重复设置，返回设置失败。
+        if (isDone()) {
+            return false;
+        }
+        //由于可能存在I/O线程和用户线程同时操作Promise，所以设置操作结果的时候需要加锁保护，防止并发操作。
+        synchronized (this) {
+            //对操作结果是否被设置进行二次判断（为了提升并发性能的二次判断），如果已经被设置，则返回操作失败。
+            if (isDone()) {
+                return false;
+            }
+            //对操作结果result进行判断，如果为空，说明仅仅需要notify在等待的业务线程，不包含具体的业务逻辑对象。
+            //因此，将result设置为系统默认的SUCCESS。
+            if (result == null) {
+                this.result = SUCCESS;
+            } else {
+                //如果操作结果非空，将结果设置为result。
+                this.result = result;
+            }
+            //如果有正在等待异步I/O操作完成的用户线程或者其他系统线程
+            if (hasWaiters()) {
+                //调用notifyAll方法唤醒所有正在等待的线程。注意，notifyAll和wait方法都必须在同步块内使用。
+                notifyAll();
+            }
+        }
+        return true;
+    }</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a title="复制代码"><img src="https://common.cnblogs.com/images/copycode.gif" alt="复制代码" /></a></span></div>
+</div>
+<h4>await方法的实现</h4>
+<div class="cnblogs_code">
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a title="复制代码"><img src="https://common.cnblogs.com/images/copycode.gif" alt="复制代码" /></a></span></div>
+<pre>    @Override
+    public Promise&lt;V&gt; await() throws InterruptedException {
+        //如果当前的Promise已经被设置，则直接返回。
+        if (isDone()) {
+            return this;
+        }
+        //如果线程已经被中断，则抛出中断异常。
+        if (Thread.interrupted()) {
+            throw new InterruptedException(toString());
+        }
+        //通过同步关键字锁定当前Promise对象
+        synchronized (this) {
+            //使用循环判断对isDone结果进行判断，进行循环判断的原因是防止线程被意外唤醒导致的功能异常。
+            while (!isDone()) {
+                checkDeadLock();
+                incWaiters();
+                try {
+                    wait();
+                } finally {
+                    decWaiters();
+                }
+            }
+        }
+        return this;
+    }</pre>
+<div class="cnblogs_code_toolbar"><span class="cnblogs_code_copy"><a title="复制代码"><img src="https://common.cnblogs.com/images/copycode.gif" alt="复制代码" /></a></span></div>
+</div>
+<p>由于在I/O线程中调用Promise的await或者sync方法会导致死锁，所以在循环体中需要对死锁进行保护性校验，防止I/O线程被挂死，最后调用java.lang.Object.wait()方法进行无限期等待，直到I/O线程调用setSuccess方法、trySuccess方法、setFailure或者tryFailure方法。</p>
+</div>
+<p>参考：</p>
+<p><a href="https://www.cnblogs.com/wade-luffy/p/6229410.html">https://www.cnblogs.com/wade-luffy/p/6229410.html</a></p>
+<div id="cnblogs_post_body" class="blogpost-body">
+<p>&nbsp;</p>
+</div>
+</div>

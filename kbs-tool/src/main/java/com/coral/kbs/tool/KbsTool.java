@@ -1,9 +1,12 @@
 package com.coral.kbs.tool;
 
+import com.coral.kbs.tool.sort.DocIndexUtils;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 
 /**
  * Created by Administrator on 2019/4/3.
@@ -13,30 +16,27 @@ public class KbsTool {
 
     public static void main(String[] args) throws IOException {
         File file = new File("./");
-        findAnrWrite(file, 0, true);
-        findAnrWrite(file, 0, false);
+        findAnrWrite(file, 0, true, "");
+        findAnrWrite(file, 0, false, "");
         getFileStream().close();
     }
 
-    private static void findAnrWrite(File file, int level, boolean guide) throws IOException {
-        int index = 1;
-        if (file.getName().startsWith(".") && level != 0){
-            return;
+    private static boolean findAnrWrite(File file, int level, boolean guide, String index) throws IOException {
+        //是否需要跳过
+        if (DocIndexUtils.isIgnoreFile(file.getName(), level)){
+            return false;
         }
-        if (file.getName().endsWith("jpg") || file.getName().endsWith("png") ){
-            return;
-        }
+
+        String fileName = "" + file.getName();
+
         if (file.isDirectory()) {
-            if (file.getName().endsWith("kbs-tool")){
-                return;
-            }
-            if (level == 0){
+            List<File> fileList = DocIndexUtils.sortFile(file.listFiles());
+            if (level == 0 && guide){
                 getFileStream().write("* [知识库目录](#)\n".getBytes());
                 getFileStream().flush();
             } else {
                 StringBuilder sb = new StringBuilder();
                 //dir
-
                 if (guide){
                     for (int i = 0; i < level; i++){
                         sb.append("     ");
@@ -48,24 +48,28 @@ public class KbsTool {
                     }
                 }
                 String pathNoWin =  file.getPath().replace("\\", "/");
-                String paths[] = pathNoWin.split("/");
-                sb.append(" [").append(paths[paths.length -1]).append("](");
+                sb.append(" [").append(fileName).append("](");
                 sb.append(pathNoWin);
                 sb.append(")\n");
                 getFileStream().write(sb.toString().getBytes());
                 getFileStream().flush();
             }
 
+            int subIndex = 1;
             //write file
-            for (File fileItem : file.listFiles()) {
-                findAnrWrite(fileItem, level + 1, guide);
+            for (File fileItem : fileList) {
+                String subIndexStr = index + subIndex + ".";
+                if (findAnrWrite(fileItem, level + 1, guide, subIndexStr)){
+                    subIndex ++;
+                }
             }
         } else if (!guide){
             StringBuilder sb = new StringBuilder();
-            sb.append("    ").append(file.getName()).append("\n");
+            sb.append("    ").append(fileName).append("\n");
             getFileStream().write(sb.toString().getBytes());
             getFileStream().flush();
         }
+        return true;
     }
 
     private static FileOutputStream getFileStream() throws IOException {
