@@ -15,15 +15,15 @@ public class KbsTool {
     static FileOutputStream fileStream = null;
 
     public static void main(String[] args) throws IOException {
-        File file = new File("./");
-        findAnrWrite(file, 0, true, "");
-        findAnrWrite(file, 0, false, "");
+        File file = new File("/Users/wuhao/data/code/github/framework/incubator-dubbo/dubbo-common/src/main/resources/META-INF/dubbo/internal");
+        findAnrWrite(file, 0, false, "", false, 5);
+        //findAnrWrite(file, 0, false, "", true);
         getFileStream().close();
     }
 
-    private static boolean findAnrWrite(File file, int level, boolean guide, String index) throws IOException {
+    private static boolean findAnrWrite(File file, int level, boolean guide, String index, boolean referIndex, int maxLevel) throws IOException {
         //是否需要跳过
-        if (DocIndexUtils.isIgnoreFile(file.getName(), level)){
+        if (DocIndexUtils.isIgnoreFile(file, level, maxLevel, referIndex)){
             return false;
         }
 
@@ -41,16 +41,29 @@ public class KbsTool {
                     for (int i = 0; i < level; i++){
                         sb.append("     ");
                     }
-                    sb.append("*");
+                    sb.append(" ");
                 } else {
                     for (int i = 0; i < level; i++){
                         sb.append("#");
                     }
                 }
                 String pathNoWin =  file.getPath().replace("\\", "/");
-                sb.append(" [").append(fileName).append("](");
-                sb.append(pathNoWin);
-                sb.append(")\n");
+                if (DocIndexUtils.containUrl){
+                    sb.append(" [");
+                } else {
+                    sb.append(" ");
+                }
+
+
+                sb.append(fileName);
+                if (DocIndexUtils.containUrl){
+                    sb.append("](");
+                    sb.append(pathNoWin);
+                    sb.append(")\n");
+                }else {
+                    sb.append("\n");
+                }
+
                 getFileStream().write(sb.toString().getBytes());
                 getFileStream().flush();
             }
@@ -59,7 +72,7 @@ public class KbsTool {
             //write file
             for (File fileItem : fileList) {
                 String subIndexStr = index + subIndex + ".";
-                if (findAnrWrite(fileItem, level + 1, guide, subIndexStr)){
+                if (findAnrWrite(fileItem, level + 1, guide, subIndexStr, referIndex, maxLevel)){
                     subIndex ++;
                 }
             }

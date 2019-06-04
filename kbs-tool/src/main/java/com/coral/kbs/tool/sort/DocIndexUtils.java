@@ -8,6 +8,8 @@ import java.util.List;
 
 public class DocIndexUtils {
 
+    public static boolean containUrl = false;
+
     public static List<String> sort(String[] unSortStringArray) {
         List<String> unSortStringList = Arrays.asList(unSortStringArray);
         return sort(unSortStringList);
@@ -75,8 +77,35 @@ public class DocIndexUtils {
         }
     }
 
-    public static boolean isIgnoreFile(String name, int level) {
-        if (!isIndex(name) && level != 0){
+    public static boolean isTmp(String name) {
+        try {
+            for (String ignoreFile: ignoreFiles) {
+                if (name.startsWith(ignoreFile)){
+                    return true;
+                }
+            }
+
+            return false;
+        } catch (Exception e){
+            return false;
+        }
+    }
+    public static boolean isIgnoreFile(File file, int level) {
+        return isIgnoreFile(file, level, 999, true);
+    }
+    public static boolean isIgnoreFile(File file, int level, int maxLevel, boolean referIndex) {
+
+        if (maxLevel <level){
+            return true;
+        }
+
+        String name = file.getName();
+        if (referIndex){
+            if (!isIndex(name) && level != 0){
+                return true;
+            }
+        }
+        if (isTmp(name)){
             return true;
         }
         if (name.endsWith("jpg") || name.endsWith("png") ){
@@ -88,4 +117,5 @@ public class DocIndexUtils {
         return false;
     }
 
+    final static String[] ignoreFiles = new String[]{".", "build", "tmp" , "out", "src", "target", "gradle"};
 }
