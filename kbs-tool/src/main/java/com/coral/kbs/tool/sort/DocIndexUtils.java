@@ -117,5 +117,5 @@ public class DocIndexUtils {
         return false;
     }
 
-    final static String[] ignoreFiles = new String[]{".", "build", "tmp" , "out", "src", "target", "gradle"};
+    final static String[] ignoreFiles = new String[]{"build", "tmp" , "out", "src", "target", "gradle"};
 }

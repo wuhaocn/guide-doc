@@ -1,0 +1,1145 @@
+<header class="article-header">
+<h1 class="article-title">配置加载</h1>
+</header>
+<div class="article-entry">
+<h1 id="1-概述">1. 概述</h1>
+<p>在使用 Spring Boot 时，我们可以很方便的在&nbsp;<code>application.properties</code>&nbsp;或&nbsp;<code>application.yml</code>&nbsp;配置文件中，添加相应的应用所需的配置。那么，究竟 Spring Boot 是如何实现该功能的呢，今儿我们就通过 Spring Boot 的源码，一探究竟！</p>
+<blockquote>
+<p>艿艿的高能提示：这篇会非常长，建议胖友保持耐心。另外，最好边调试边看~</p>
+</blockquote>
+<h1 id="2-Profiles">2. Profiles</h1>
+<p>在讲配置加载之前，不得不先提下 Spring Profiles 功能。</p>
+<ul>
+<li>如果不熟悉的胖友，先看看&nbsp;<a href="https://www.jianshu.com/p/948c303b2253" target="_blank" rel="external nofollow noopener noreferrer">《详解 Spring 中的 Profile》</a>&nbsp;文章。</li>
+<li>关于这一块，之前在&nbsp;<a href="http://svip.iocoder.cn/Spring/PropertySource-and-Environment-and-Profile/">《【死磕 Spring】&mdash;&mdash; 环境 &amp; 属性：PropertySource、Environment、Profile》</a>&nbsp;中，已经有详细的源码解析。</li>
+</ul>
+<p>😈 Spring Boot 在 Spring Framework 的基础之上，可以手动附加新的 Profile 。在&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/SpringApplication/">《精尽 Spring Boot 源码分析 &mdash;&mdash; SpringApplication》</a>&nbsp;的&nbsp;<code>#</code>&nbsp;。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SpringApplication.java</span></span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 附加的 profiles 的数组</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Set&lt;String&gt; additionalProfiles = <span class="keyword">new</span> HashSet&lt;&gt;();</span><br /><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">configureProfiles</span><span class="params">(ConfigurableEnvironment environment, String[] args)</span> </span>{</span><br /><span class="line">    environment.getActiveProfiles(); <span class="comment">// ensure they are initialized 保证已经被初始化</span></span><br /><span class="line">    <span class="comment">// But these ones should go first (last wins in a property key clash)</span></span><br /><span class="line">    Set&lt;String&gt; profiles = <span class="keyword">new</span> LinkedHashSet&lt;&gt;(<span class="keyword">this</span>.additionalProfiles);</span><br /><span class="line">    profiles.addAll(Arrays.asList(environment.getActiveProfiles())); <span class="comment">// &lt;X&gt;</span></span><br /><span class="line">    <span class="comment">// 设置 activeProfiles</span></span><br /><span class="line">    environment.setActiveProfiles(StringUtils.toStringArray(profiles));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>additionalProfiles</code>&nbsp;属性，可以设置创建的 SpringApplication 可以附加的&nbsp;<code>additionalProfiles</code>&nbsp;属性。</li>
+<li><code>&lt;X&gt;</code>&nbsp;处，在原有 Spring Framework 中设置的 String Profiles 的基础上，又附加上了&nbsp;<code>SpringApplication.additionalProfiles</code>&nbsp;配置的。</li>
+</ul>
+<blockquote>
+<p>艿艿：这个小节，讲的有点绕，胖友辛苦理解下~</p>
+</blockquote>
+<h1 id="3-ConfigFileApplicationListener">3. ConfigFileApplicationListener</h1>
+<p>Spring Boot 实现&nbsp;<code>application.properties</code>&nbsp;或&nbsp;<code>application.yml</code>&nbsp;配置文件的加载，关键在于 ConfigFileApplicationListener 类。在&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/ApplicationListener/">《精尽 Spring Boot 源码分析 &mdash;&mdash; ApplicationListener》</a>&nbsp;中，我们已经简单介绍过它：</p>
+<blockquote>
+<p><code>org.springframework.boot.context.config.ConfigFileApplicationListener</code>&nbsp;，实现 SmartApplicationListener、Ordered、EnvironmentPostProcessor 接口，实现 Spring Boot 配置文件的加载。</p>
+</blockquote>
+<ul>
+<li>注意哟，ConfigFileApplicationListener 即是一个 SmartApplicationListener 实现类，又是一个 EnvironmentPostProcessor 实现类。</li>
+</ul>
+<h2 id="3-1-onApplicationEvent">3.1 onApplicationEvent</h2>
+<p>实现&nbsp;<code>#onApplicationEvent(ApplicationEvent event)</code>&nbsp;方法，分别对 ApplicationEnvironmentPreparedEvent、ApplicationPreparedEvent 事件进行处理。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener.java</span></span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">supportsEventType</span><span class="params">(Class&lt;? extends ApplicationEvent&gt; eventType)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> ApplicationEnvironmentPreparedEvent.class.isAssignableFrom(eventType)</span><br /><span class="line">            || ApplicationPreparedEvent.class.isAssignableFrom(eventType);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onApplicationEvent</span><span class="params">(ApplicationEvent event)</span> </span>{</span><br /><span class="line">    <span class="comment">// &lt;1&gt; 如果是 ApplicationEnvironmentPreparedEvent 事件，说明 Spring 环境准备好了，则执行相应的处理</span></span><br /><span class="line">    <span class="keyword">if</span> (event <span class="keyword">instanceof</span> ApplicationEnvironmentPreparedEvent) {</span><br /><span class="line">        onApplicationEnvironmentPreparedEvent((ApplicationEnvironmentPreparedEvent) event);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// &lt;2&gt; 如果是 ApplicationPreparedEvent 事件，说明 Spring 容器初始化好了，则进行相应的处理。</span></span><br /><span class="line">    <span class="keyword">if</span> (event <span class="keyword">instanceof</span> ApplicationPreparedEvent) {</span><br /><span class="line">        onApplicationPreparedEvent(event);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，如果是 ApplicationEnvironmentPreparedEvent 事件，说明 Spring 环境准备好了，则调用&nbsp;<code>#onApplicationEnvironmentPreparedEvent(ApplicationEnvironmentPreparedEvent)</code>&nbsp;方法，执行相应的处理。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「3.2 onApplicationEnvironmentPreparedEvent」</a>&nbsp;。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，如果是 ApplicationPreparedEvent 事件，说明 Spring 容器初始化好了，则调用&nbsp;<code>#onApplicationPreparedEvent(ApplicationPreparedEvent)</code>&nbsp;方法，进行相应的处理。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「3.3 onApplicationPreparedEvent」</a>&nbsp;。</li>
+</ul>
+<h2 id="3-2-onApplicationEnvironmentPreparedEvent">3.2 onApplicationEnvironmentPreparedEvent</h2>
+<p><code>#onApplicationEnvironmentPreparedEvent(ApplicationEnvironmentPreparedEvent)</code>&nbsp;方法，处理 ApplicationEnvironmentPreparedEvent 事件。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">onApplicationEnvironmentPreparedEvent</span><span class="params">(ApplicationEnvironmentPreparedEvent event)</span> </span>{</span><br /><span class="line">    <span class="comment">// &lt;1.1&gt; 加载指定类型 EnvironmentPostProcessor 对应的，在 `META-INF/spring.factories` 里的类名的数组</span></span><br /><span class="line">    List&lt;EnvironmentPostProcessor&gt; postProcessors = loadPostProcessors();</span><br /><span class="line">    <span class="comment">// 加入自己</span></span><br /><span class="line">    postProcessors.add(<span class="keyword">this</span>);</span><br /><span class="line">    <span class="comment">// 排序 postProcessors 数组</span></span><br /><span class="line">    AnnotationAwareOrderComparator.sort(postProcessors);</span><br /><span class="line">    <span class="comment">// 遍历 postProcessors 数组，逐个执行。</span></span><br /><span class="line">    <span class="keyword">for</span> (EnvironmentPostProcessor postProcessor : postProcessors) {</span><br /><span class="line">        postProcessor.postProcessEnvironment(event.getEnvironment(), event.getSpringApplication());</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><code>&lt;1.1&gt;</code>&nbsp;处，调用&nbsp;<code>#loadPostProcessors()</code>&nbsp;方法，加载指定类型 EnvironmentPostProcessor 对应的，在&nbsp;<code>META-INF/spring.factories</code>&nbsp;里的类名的数组。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener.java</span></span><br /><br /><span class="line"><span class="function">List&lt;EnvironmentPostProcessor&gt; <span class="title">loadPostProcessors</span><span class="params">()</span> </span>{</span><br /><span class="line">	<span class="keyword">return</span> SpringFactoriesLoader.loadFactories(EnvironmentPostProcessor.class, getClass().getClassLoader());</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>默认情况下，返回的是 SystemEnvironmentPropertySourceEnvironmentPostProcessor、SpringApplicationJsonEnvironmentPostProcessor、CloudFoundryVcapEnvironmentPostProcessor 类。</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;1.2&gt;</code>&nbsp;处，加入自己，到&nbsp;<code>postProcessors</code>&nbsp;数组中。因为自己也是一个 EnvironmentPostProcessor 实现类。</p>
+</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，排序&nbsp;<code>postProcessors</code>&nbsp;数组。</li>
+<li><code>&lt;3&gt;</code>&nbsp;处，遍历&nbsp;<code>postProcessors</code>&nbsp;数组，调用&nbsp;<code>EnvironmentPostProcessor#postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application)</code>&nbsp;方法，逐个执行。</li>
+</ul>
+<p>那么，我们开始来逐个看看每个 EnvironmentPostProcessor 实现类。考虑到 EnvironmentPostProcessor 应有的独立性（尊严!），我们单独开了&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4. EnvironmentPostProcessor」</a>&nbsp;小节，所以胖友先一起跳过来看看。</p>
+<blockquote>
+<p>艿艿：这块涉及的逻辑非常多。本文的 4、5、6、7 小节，都和&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「3.2 onApplicationEnvironmentPreparedEvent」</a>&nbsp;有关。</p>
+</blockquote>
+<h2 id="3-3-onApplicationPreparedEvent">3.3 onApplicationPreparedEvent</h2>
+<p><code>#onApplicationPreparedEvent(ApplicationEvent event)</code>&nbsp;方法，处理 ApplicationPreparedEvent 事件。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">onApplicationPreparedEvent</span><span class="params">(ApplicationEvent event)</span> </span>{</span><br /><span class="line">    <span class="comment">// 修改 logger 文件，暂时可以无视。</span></span><br /><span class="line">    <span class="keyword">this</span>.logger.switchTo(ConfigFileApplicationListener.class);</span><br /><span class="line">    <span class="comment">// 添加 PropertySourceOrderingPostProcessor 处理器</span></span><br /><span class="line">    addPostProcessors(((ApplicationPreparedEvent) event).getApplicationContext());</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">addPostProcessors</span><span class="params">(ConfigurableApplicationContext context)</span> </span>{</span><br /><span class="line">    context.addBeanFactoryPostProcessor(<span class="keyword">new</span> PropertySourceOrderingPostProcessor(context));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>添加 PropertySourceOrderingPostProcessor 处理器。关于 PropertySourceOrderingPostProcessor 类，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「3.3.1 PropertySourceOrderingPostProcessor」</a>&nbsp;中。</li>
+</ul>
+<h3 id="3-3-1-PropertySourceOrderingPostProcessor">3.3.1 PropertySourceOrderingPostProcessor</h3>
+<p>PropertySourceOrderingPostProcessor ，是 ConfigFileApplicationListener 内部类，实现 BeanFactoryPostProcessor、Ordered 接口，将&nbsp;<code>DEFAULT_PROPERTIES</code>&nbsp;的 PropertySource 属性源，添加到&nbsp;<code>environment</code>&nbsp;的尾部。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener.java</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String DEFAULT_PROPERTIES = <span class="string">"defaultProperties"</span>;</span><br /><br /><span class="line"><span class="comment">// ConfigFileApplicationListener#PropertySourceOrderingPostProcessor.java</span></span><br /><br /><span class="line"><span class="keyword">private</span> <span class="class"><span class="keyword">class</span> <span class="title">PropertySourceOrderingPostProcessor</span> <span class="keyword">implements</span> <span class="title">BeanFactoryPostProcessor</span>, <span class="title">Ordered</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> ConfigurableApplicationContext context;</span><br /><br /><span class="line">    PropertySourceOrderingPostProcessor(ConfigurableApplicationContext context) {</span><br /><span class="line">        <span class="keyword">this</span>.context = context;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">getOrder</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> Ordered.HIGHEST_PRECEDENCE;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">postProcessBeanFactory</span><span class="params">(ConfigurableListableBeanFactory beanFactory)</span> <span class="keyword">throws</span> BeansException </span>{</span><br /><span class="line">        reorderSources(<span class="keyword">this</span>.context.getEnvironment());</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">reorderSources</span><span class="params">(ConfigurableEnvironment environment)</span> </span>{</span><br /><span class="line">        <span class="comment">// 移除 DEFAULT_PROPERTIES 的属性源</span></span><br /><span class="line">        PropertySource&lt;?&gt; defaultProperties = environment.getPropertySources().remove(DEFAULT_PROPERTIES);</span><br /><span class="line">        <span class="comment">// 添加到 environment 尾部</span></span><br /><span class="line">        <span class="keyword">if</span> (defaultProperties != <span class="keyword">null</span>) {</span><br /><span class="line">            environment.getPropertySources().addLast(defaultProperties);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>那么&nbsp;<code>DEFAULT_PROPERTIES</code>&nbsp;对应的 PropertySource 属性源，究竟是哪里来的呢？答案见&nbsp;<code>SpringApplication.defaultProperties</code>&nbsp;相关，代码如下：</li>
+</ul>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SpringApplication.java </span></span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 默认的属性集合</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> Map&lt;String, Object&gt; defaultProperties;</span><br /><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">configurePropertySources</span><span class="params">(ConfigurableEnvironment environment, String[] args)</span> </span>{</span><br /><span class="line">	MutablePropertySources sources = environment.getPropertySources();</span><br /><span class="line">	<span class="comment">// 配置的 defaultProperties</span></span><br /><span class="line">	<span class="keyword">if</span> (<span class="keyword">this</span>.defaultProperties != <span class="keyword">null</span> &amp;&amp; !<span class="keyword">this</span>.defaultProperties.isEmpty()) {</span><br /><span class="line">		sources.addLast(<span class="keyword">new</span> MapPropertySource(<span class="string">"defaultProperties"</span>, <span class="keyword">this</span>.defaultProperties));</span><br /><span class="line">	}</span><br />	<br /><span class="line">	<span class="comment">// ... 省略无关代码</span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h1 id="4-EnvironmentPostProcessor">4. EnvironmentPostProcessor</h1>
+<p><code>org.springframework.boot.context.config.EnvironmentPostProcessor</code>&nbsp;接口，在 Environment 加载完成之后，如果我们需要对其进行一些配置、增加一些自己的处理逻辑，那么请使用 EnvironmentPostProcessor 。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// EnvironmentPostProcessor.java</span></span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Allows for customization of the application's {<span class="doctag">@link</span> Environment} prior to the</span></span><br /><span class="line"><span class="comment"> * application context being refreshed.</span></span><br /><span class="line"><span class="comment"> * &lt;p&gt;</span></span><br /><span class="line"><span class="comment"> * EnvironmentPostProcessor implementations have to be registered in</span></span><br /><span class="line"><span class="comment"> * {<span class="doctag">@code</span> META-INF/spring.factories}, using the fully qualified name of this class as the</span></span><br /><span class="line"><span class="comment"> * key.</span></span><br /><span class="line"><span class="comment"> * &lt;p&gt;</span></span><br /><span class="line"><span class="comment"> * {<span class="doctag">@code</span> EnvironmentPostProcessor} processors are encouraged to detect whether Spring's</span></span><br /><span class="line"><span class="comment"> * {<span class="doctag">@link</span> org.springframework.core.Ordered Ordered} interface has been implemented or if</span></span><br /><span class="line"><span class="comment"> * the {<span class="doctag">@link</span> org.springframework.core.annotation.Order <span class="doctag">@Order</span>} annotation is present and</span></span><br /><span class="line"><span class="comment"> * to sort instances accordingly if so prior to invocation.</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@author</span> Andy Wilkinson</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@author</span> Stephane Nicoll</span></span><br /><span class="line"><span class="comment"> * <span class="doctag">@since</span> 1.3.0</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="meta">@FunctionalInterface</span></span><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">EnvironmentPostProcessor</span> </span>{</span><br /><br /><span class="line">	<span class="comment">/**</span></span><br /><span class="line"><span class="comment">	 * Post-process the given {<span class="doctag">@code</span> environment}.</span></span><br /><span class="line"><span class="comment">	 * <span class="doctag">@param</span> environment the environment to post-process</span></span><br /><span class="line"><span class="comment">	 * <span class="doctag">@param</span> application the application to which the environment belongs</span></span><br /><span class="line"><span class="comment">	 */</span></span><br /><span class="line">	<span class="function"><span class="keyword">void</span> <span class="title">postProcessEnvironment</span><span class="params">(ConfigurableEnvironment environment, SpringApplication application)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>从实现上和作用上来说，和&nbsp;<a href="http://svip.iocoder.cn/Spring/IoC-BeanPostProcessor/">《【死磕 Spring】&mdash;&mdash; IoC 之深入分析 BeanPostProcessor》</a>&nbsp;都是非常类似的。</p>
+<p>EnvironmentPostProcessor 的实现类，如下图所示：<img src="http://static2.iocoder.cn/images/Spring-Boot/2021-01-28/01.jpg" alt="EnvironmentPostProcessor 实现类" /></p>
+<h2 id="4-1-CloudFoundryVcapEnvironmentPostProcessor">4.1 CloudFoundryVcapEnvironmentPostProcessor</h2>
+<p><code>org.springframework.boot.cloud.CloudFoundryVcapEnvironmentPostProcessor</code>&nbsp;，实现 EnvironmentPostProcessor、Ordered 接口，实现对&nbsp;<a href="https://www.cloudfoundry.org/" target="_blank" rel="external nofollow noopener noreferrer">Cloud Foundry</a>&nbsp;的支持。因为我们不使用 Cloud Foundry ，所以可以跳过对 CloudFoundryVcapEnvironmentPostProcessor 源码的了解。感兴趣的胖友，可以结合&nbsp;<a href="https://segmentfault.com/a/1190000015088555" target="_blank" rel="external nofollow noopener noreferrer">《Spring Boot 参考指南（部署到云）》</a>&nbsp;文章，对源码进行研究。</p>
+<h2 id="4-2-SystemEnvironmentPropertySourceEnvironmentPostProcessor">4.2 SystemEnvironmentPropertySourceEnvironmentPostProcessor</h2>
+<blockquote>
+<p>艿艿：选看~</p>
+</blockquote>
+<p><code>org.springframework.boot.env.SystemEnvironmentPropertySourceEnvironmentPostProcessor</code>&nbsp;，实现 EnvironmentPostProcessor、Ordered 接口，实现将&nbsp;<code>environment</code>&nbsp;中的&nbsp;<code>systemEnvironment</code>&nbsp;对应的 PropertySource 属性源对象，替换成 OriginAwareSystemEnvironmentPropertySource 对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SystemEnvironmentPropertySourceEnvironmentPostProcessor.java</span></span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">postProcessEnvironment</span><span class="params">(ConfigurableEnvironment environment, SpringApplication application)</span> </span>{</span><br /><span class="line">    <span class="comment">// &lt;1&gt; 获得 systemEnvironment 对应的 PropertySource 属性源</span></span><br /><span class="line">    String sourceName = StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME;</span><br /><span class="line">    PropertySource&lt;?&gt; propertySource = environment.getPropertySources().get(sourceName);</span><br /><span class="line">    <span class="comment">// &lt;2&gt; 将原始的 PropertySource 对象，替换成 OriginAwareSystemEnvironmentPropertySource 对象</span></span><br /><span class="line">    <span class="keyword">if</span> (propertySource != <span class="keyword">null</span>) {</span><br /><span class="line">        replacePropertySource(environment, sourceName, propertySource);</span><br /><span class="line">    }</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="meta">@SuppressWarnings</span>(<span class="string">"unchecked"</span>)</span><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">replacePropertySource</span><span class="params">(ConfigurableEnvironment environment, String sourceName, PropertySource&lt;?&gt; propertySource)</span> </span>{</span><br /><span class="line">    Map&lt;String, Object&gt; originalSource = (Map&lt;String, Object&gt;) propertySource.getSource();</span><br /><span class="line">    <span class="comment">// 创建 SystemEnvironmentPropertySource 对象</span></span><br /><span class="line">    SystemEnvironmentPropertySource source = <span class="keyword">new</span> OriginAwareSystemEnvironmentPropertySource(sourceName, originalSource);</span><br /><span class="line">    <span class="comment">// 进行替换</span></span><br /><span class="line">    environment.getPropertySources().replace(sourceName, source);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，获得&nbsp;<code>systemEnvironment</code>&nbsp;对应的 PropertySource 属性源。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，调用&nbsp;<code>#replacePropertySource(...)</code>&nbsp;方法，将原始的 PropertySource 对象，替换成 OriginAwareSystemEnvironmentPropertySource 对象。</li>
+<li>
+<p>其中，OriginAwareSystemEnvironmentPropertySource 是 SystemEnvironmentPropertySourceEnvironmentPostProcessor 内部类，继承 SystemEnvironmentPropertySource 类，实现 OriginLookup 接口，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SystemEnvironmentPropertySourceEnvironmentPostProcessor#OriginAwareSystemEnvironmentPropertySource.java</span></span><br /><span class="line"><span class="keyword">protected</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">OriginAwareSystemEnvironmentPropertySource</span></span></span><br /><span class="line"><span class="class">		<span class="keyword">extends</span> <span class="title">SystemEnvironmentPropertySource</span> <span class="keyword">implements</span> <span class="title">OriginLookup</span>&lt;<span class="title">String</span>&gt; </span>{</span><br /><br /><span class="line">	OriginAwareSystemEnvironmentPropertySource(String name, Map&lt;String, Object&gt; source) {</span><br /><span class="line">		<span class="keyword">super</span>(name, source);</span><br /><span class="line">	}</span><br /><br /><span class="line">	<span class="meta">@Override</span></span><br /><span class="line">	<span class="function"><span class="keyword">public</span> Origin <span class="title">getOrigin</span><span class="params">(String key)</span> </span>{</span><br /><span class="line">	    <span class="comment">// 解析 key 对应的 property</span></span><br /><span class="line">		String property = resolvePropertyName(key);</span><br /><span class="line">		<span class="comment">// 判断是否存在 property 对应的值。如果存在，则返回 SystemEnvironmentOrigin 对象</span></span><br /><span class="line">		<span class="keyword">if</span> (<span class="keyword">super</span>.containsProperty(property)) {</span><br /><span class="line">			<span class="keyword">return</span> <span class="keyword">new</span> SystemEnvironmentOrigin(property);</span><br /><span class="line">		}</span><br /><span class="line">		<span class="comment">// 不存在，则返回 null</span></span><br /><span class="line">		<span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line">	}</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>重心是对&nbsp;<a href="https://github.com/spring-projects/spring-boot/blob/master/spring-boot-project/spring-boot/src/main/java/org/springframework/boot/origin/OriginLookup.java" target="_blank" rel="external nofollow noopener noreferrer"><code>org.springframework.boot.origin.OriginLookup</code></a>&nbsp;接口的&nbsp;<code>#getOrigin(String key)</code>&nbsp;方法的实现，实现查找&nbsp;<code>key</code>&nbsp;对应的真正的&nbsp;<code>property</code>&nbsp;。难道两者还会不同，答案是的。例如说：传入的&nbsp;<code>key=foo.bar.baz</code>&nbsp;，返回的是&nbsp;<code>property=FOO_BAR_BAZ</code>&nbsp;。</li>
+<li>
+<p>答案见&nbsp;<code>SystemEnvironmentPropertySource#checkPropertyName(String name)</code>&nbsp;方法，内部会进行各种灵活的替换&ldquo;查找&rdquo;。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SystemEnvironmentPropertySource.java</span></span><br /><br /><span class="line"><span class="meta">@Nullable</span></span><br /><span class="line"><span class="function"><span class="keyword">private</span> String <span class="title">checkPropertyName</span><span class="params">(String name)</span> </span>{</span><br /><span class="line">	<span class="comment">// Check name as-is</span></span><br /><span class="line">	<span class="keyword">if</span> (containsKey(name)) {</span><br /><span class="line">		<span class="keyword">return</span> name;</span><br /><span class="line">	}</span><br /><span class="line">	<span class="comment">// Check name with just dots replaced</span></span><br /><span class="line">	String noDotName = name.replace(<span class="string">'.'</span>, <span class="string">'_'</span>);</span><br /><span class="line">	<span class="keyword">if</span> (!name.equals(noDotName) &amp;&amp; containsKey(noDotName)) {</span><br /><span class="line">		<span class="keyword">return</span> noDotName;</span><br /><span class="line">	}</span><br /><span class="line">	<span class="comment">// Check name with just hyphens replaced</span></span><br /><span class="line">	String noHyphenName = name.replace(<span class="string">'-'</span>, <span class="string">'_'</span>);</span><br /><span class="line">	<span class="keyword">if</span> (!name.equals(noHyphenName) &amp;&amp; containsKey(noHyphenName)) {</span><br /><span class="line">		<span class="keyword">return</span> noHyphenName;</span><br /><span class="line">	}</span><br /><span class="line">	<span class="comment">// Check name with dots and hyphens replaced</span></span><br /><span class="line">	String noDotNoHyphenName = noDotName.replace(<span class="string">'-'</span>, <span class="string">'_'</span>);</span><br /><span class="line">	<span class="keyword">if</span> (!noDotName.equals(noDotNoHyphenName) &amp;&amp; containsKey(noDotNoHyphenName)) {</span><br /><span class="line">		<span class="keyword">return</span> noDotNoHyphenName;</span><br /><span class="line">	}</span><br /><span class="line">	<span class="comment">// Give up</span></span><br /><span class="line">	<span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>各种符号，转成&nbsp;<code>_</code>&nbsp;来查找对应的属性。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>😈 那么具体有什么样的逻辑上的需要呢？暂时还没怎么看到，嘿嘿。所以，知道就好，暂时先不去深究。</p>
+<h2 id="4-3-SpringApplicationJsonEnvironmentPostProcessor">4.3 SpringApplicationJsonEnvironmentPostProcessor</h2>
+<blockquote>
+<p>艿艿：选看~</p>
+</blockquote>
+<p><code>org.springframework.boot.env.SpringApplicationJsonEnvironmentPostProcessor</code>&nbsp;，实现 EnvironmentPostProcessor、Ordered 接口，解析&nbsp;<code>environment</code>&nbsp;中的&nbsp;<code>spring.application.json</code>&nbsp;或&nbsp;<code>SPRING_APPLICATION_JSON</code>&nbsp;对应的 JSON 格式的属性值，创建新的 PropertySource 对象，添加到其中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SpringApplicationJsonEnvironmentPostProcessor.java</span></span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 默认的 {<span class="doctag">@link</span> #order} 的值</span></span><br /><span class="line"><span class="comment"> *</span></span><br /><span class="line"><span class="comment"> * The default order for the processor.</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> DEFAULT_ORDER = Ordered.HIGHEST_PRECEDENCE + <span class="number">5</span>;</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * 顺序</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">int</span> order = DEFAULT_ORDER;</span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">postProcessEnvironment</span><span class="params">(ConfigurableEnvironment environment, SpringApplication application)</span> </span>{</span><br /><span class="line">	MutablePropertySources propertySources = environment.getPropertySources();</span><br /><span class="line">	propertySources.stream().map(JsonPropertyValue::get).filter(Objects::nonNull)</span><br /><span class="line">			.findFirst().ifPresent((v) -&gt; processJson(environment, v));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><code>map(JsonPropertyValue::get).filter(Objects::nonNull)</code>&nbsp;代码段，调用&nbsp;<code>JsonPropertyValue#get(PropertySource&lt;?&gt; propertySource)</code>&nbsp;方法，<code>environment</code>&nbsp;中的&nbsp;<code>spring.application.json</code>&nbsp;或&nbsp;<code>SPRING_APPLICATION_JSON</code>&nbsp;对应的 JSON 格式的属性值。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SpringApplicationJsonEnvironmentPostProcessor.java</span></span><br /><br /><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String SPRING_APPLICATION_JSON_PROPERTY = <span class="string">"spring.application.json"</span>;</span><br /><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String SPRING_APPLICATION_JSON_ENVIRONMENT_VARIABLE = <span class="string">"SPRING_APPLICATION_JSON"</span>;</span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">JsonPropertyValue</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String[] CANDIDATES = { SPRING_APPLICATION_JSON_PROPERTY, SPRING_APPLICATION_JSON_ENVIRONMENT_VARIABLE };</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> PropertySource&lt;?&gt; propertySource;</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> String propertyName;</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> String json;</span><br /><br /><span class="line">    JsonPropertyValue(PropertySource&lt;?&gt; propertySource, String propertyName, String json) {</span><br /><span class="line">        <span class="keyword">this</span>.propertySource = propertySource;</span><br /><span class="line">        <span class="keyword">this</span>.propertyName = propertyName;</span><br /><span class="line">        <span class="keyword">this</span>.json = json;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">getJson</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>.json;</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> Origin <span class="title">getOrigin</span><span class="params">()</span> </span>{</span><br /><span class="line">        <span class="keyword">return</span> PropertySourceOrigin.get(<span class="keyword">this</span>.propertySource, <span class="keyword">this</span>.propertyName);</span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> JsonPropertyValue <span class="title">get</span><span class="params">(PropertySource&lt;?&gt; propertySource)</span> </span>{</span><br /><span class="line">        <span class="comment">// 遍历 CANDIDATES 数组</span></span><br /><span class="line">        <span class="keyword">for</span> (String candidate : CANDIDATES) {</span><br /><span class="line">            <span class="comment">// 获得 candidate 对应的属性值</span></span><br /><span class="line">            Object value = propertySource.getProperty(candidate);</span><br /><span class="line">            <span class="keyword">if</span> (value <span class="keyword">instanceof</span> String</span><br /><span class="line">                    &amp;&amp; StringUtils.hasLength((String) value)) {</span><br /><span class="line">                <span class="comment">// 创建 JsonPropertyValue 对象，然后返回</span></span><br /><span class="line">                <span class="keyword">return</span> <span class="keyword">new</span> JsonPropertyValue(propertySource, candidate, (String) value);</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>比较简单，胖友看下就明白列。</li>
+</ul>
+</li>
+<li>
+<p>调用&nbsp;<code>#processJson(ConfigurableEnvironment environment, JsonPropertyValue propertyValue)</code>&nbsp;方法，执行处理 JSON 字符串。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.3.1 processJson」</a>&nbsp;。</p>
+</li>
+</ul>
+<h3 id="4-3-1-processJson">4.3.1 processJson</h3>
+<p><code>#processJson(ConfigurableEnvironment environment, JsonPropertyValue propertyValue)</code>&nbsp;方法，执行处理 JSON 字符串。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SpringApplicationJsonEnvironmentPostProcessor.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">processJson</span><span class="params">(ConfigurableEnvironment environment, JsonPropertyValue propertyValue)</span> </span>{</span><br /><span class="line">    <span class="comment">// &lt;1&gt; 解析 json 字符串，成 Map 对象</span></span><br /><span class="line">    JsonParser parser = JsonParserFactory.getJsonParser();</span><br /><span class="line">    Map&lt;String, Object&gt; map = parser.parseMap(propertyValue.getJson());</span><br /><span class="line">    <span class="comment">// &lt;2&gt; 创建 JsonPropertySource 对象，添加到 environment 中</span></span><br /><span class="line">    <span class="keyword">if</span> (!map.isEmpty()) {</span><br /><span class="line">        <span class="comment">// &lt;2.2&gt;</span></span><br /><span class="line">        addJsonPropertySource(environment, <span class="keyword">new</span> JsonPropertySource(propertyValue, flatten(map))); <span class="comment">// &lt;2.1&gt;</span></span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，解析 json 字符串，成 Map 对象。</li>
+<li>
+<p><code>&lt;2&gt;</code>&nbsp;处，创建 JsonPropertySource 对象，添加到&nbsp;<code>environment</code>&nbsp;中。其中，JsonPropertySource 继承 MapPropertySource 类，实现 OriginLookup 接口，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SpringApplicationJsonEnvironmentPostProcessor#JsonPropertySource.java</span></span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">JsonPropertySource</span> <span class="keyword">extends</span> <span class="title">MapPropertySource</span></span></span><br /><span class="line"><span class="class">		<span class="keyword">implements</span> <span class="title">OriginLookup</span>&lt;<span class="title">String</span>&gt; </span>{</span><br /><br /><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> JsonPropertyValue propertyValue;</span><br /><br /><span class="line">	JsonPropertySource(JsonPropertyValue propertyValue, Map&lt;String, Object&gt; source) {</span><br /><span class="line">		<span class="keyword">super</span>(SPRING_APPLICATION_JSON_PROPERTY, source);</span><br /><span class="line">		<span class="keyword">this</span>.propertyValue = propertyValue;</span><br /><span class="line">	}</span><br /><br /><span class="line">	<span class="meta">@Override</span></span><br /><span class="line">	<span class="function"><span class="keyword">public</span> Origin <span class="title">getOrigin</span><span class="params">(String key)</span> </span>{</span><br /><span class="line">		<span class="keyword">return</span> <span class="keyword">this</span>.propertyValue.getOrigin();</span><br /><span class="line">	}</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>使用的&nbsp;<code>name</code>&nbsp;为&nbsp;<code>SPRING_APPLICATION_JSON_PROPERTY=spring.application.json</code>&nbsp;。</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;2.1&gt;</code>&nbsp;处，调用&nbsp;<code>#flatten(String prefix, Map&lt;String, Object&gt; result, Map&lt;String, Object&gt; map)</code>&nbsp;方法，将 JSON 解析后的 Map 可能存在的内嵌的 Map 对象，转换成多条 KV 格式的配置对。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SpringApplicationJsonEnvironmentPostProcessor.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> Map&lt;String, Object&gt; <span class="title">flatten</span><span class="params">(Map&lt;String, Object&gt; map)</span> </span>{</span><br /><span class="line">    Map&lt;String, Object&gt; result = <span class="keyword">new</span> LinkedHashMap&lt;&gt;();</span><br /><span class="line">    flatten(<span class="keyword">null</span>, result, map);</span><br /><span class="line">    <span class="keyword">return</span> result;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">flatten</span><span class="params">(String prefix, Map&lt;String, Object&gt; result, Map&lt;String, Object&gt; map)</span> </span>{</span><br /><span class="line">    String namePrefix = (prefix != <span class="keyword">null</span>) ? prefix + <span class="string">"."</span> : <span class="string">""</span>;</span><br /><span class="line">    map.forEach((key, value) -&gt; extract(namePrefix + key, result, value));</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="meta">@SuppressWarnings</span>(<span class="string">"unchecked"</span>)</span><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">extract</span><span class="params">(String name, Map&lt;String, Object&gt; result, Object value)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (value <span class="keyword">instanceof</span> Map) { <span class="comment">// 内嵌的 Map 格式</span></span><br /><span class="line">        flatten(name, result, (Map&lt;String, Object&gt;) value);</span><br /><span class="line">    } <span class="keyword">else</span> <span class="keyword">if</span> (value <span class="keyword">instanceof</span> Collection) { <span class="comment">// 内嵌的 Collection</span></span><br /><span class="line">        <span class="keyword">int</span> index = <span class="number">0</span>;</span><br /><span class="line">        <span class="keyword">for</span> (Object object : (Collection&lt;Object&gt;) value) {</span><br /><span class="line">            extract(name + <span class="string">"["</span> + index + <span class="string">"]"</span>, result, object);</span><br /><span class="line">            index++;</span><br /><span class="line">        }</span><br /><span class="line">    } <span class="keyword">else</span> { <span class="comment">// 普通格式，添加到 result 中</span></span><br /><span class="line">        result.put(name, value);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p><code>&lt;2.2&gt;</code>&nbsp;处，调用&nbsp;<code>#addJsonPropertySource(ConfigurableEnvironment environment, PropertySource&lt;?&gt; source)</code>&nbsp;方法，添加到&nbsp;<code>environment</code>&nbsp;中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// SpringApplicationJsonEnvironmentPostProcessor.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">addJsonPropertySource</span><span class="params">(ConfigurableEnvironment environment, PropertySource&lt;?&gt; source)</span> </span>{</span><br /><span class="line">    MutablePropertySources sources = environment.getPropertySources();</span><br /><span class="line">    <span class="comment">// 获得需要添加到 source 所在的 PropertySource 之前的名字</span></span><br /><span class="line">    String name = findPropertySource(sources);</span><br /><span class="line">    <span class="comment">// 添加到 environment 的 sources 中。</span></span><br /><span class="line">    <span class="comment">// 这么做的效果是，source 高于 SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME &amp;&amp; JNDI_PROPERTY_SOURCE_NAME 之前</span></span><br /><span class="line">    <span class="keyword">if</span> (sources.contains(name)) {</span><br /><span class="line">        sources.addBefore(name, source);</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        sources.addFirst(source);</span><br /><span class="line">    }</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> String <span class="title">findPropertySource</span><span class="params">(MutablePropertySources sources)</span> </span>{</span><br /><span class="line">    <span class="comment">// 在 Servlet 环境下，且有 JNDI_PROPERTY_SOURCE_NAME 属性，则返回 StandardServletEnvironment.JNDI_PROPERTY_SOURCE_NAME</span></span><br /><span class="line">    <span class="keyword">if</span> (ClassUtils.isPresent(SERVLET_ENVIRONMENT_CLASS, <span class="keyword">null</span>)</span><br /><span class="line">            &amp;&amp; sources.contains(StandardServletEnvironment.JNDI_PROPERTY_SOURCE_NAME)) {</span><br /><span class="line">        <span class="keyword">return</span> StandardServletEnvironment.JNDI_PROPERTY_SOURCE_NAME;</span><br /><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 否则，返回 SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME 属性</span></span><br /><span class="line">    <span class="keyword">return</span> StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<p>😈 当然，因为绝大多数情况下，我们并不会去使用&nbsp;<code>spring.application.json</code>&nbsp;或&nbsp;<code>SPRING_APPLICATION_JSON</code>&nbsp;去进行配置。所以呢，这块逻辑等胖友真的有需要，再来瞅瞅落。</p>
+<h2 id="4-4-ConfigFileApplicationListener">4.4 ConfigFileApplicationListener</h2>
+<blockquote>
+<p>艿艿：真正的重头戏~</p>
+</blockquote>
+<p>实现&nbsp;<code>#addPropertySources(ConfigurableEnvironment environment,ResourceLoader resourceLoader)</code>方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">addPropertySources</span><span class="params">(ConfigurableEnvironment environment,ResourceLoader resourceLoader)</span> </span>{</span><br /><span class="line">    <span class="comment">// &lt;1&gt; 添加 RandomValuePropertySource 到 environment 中</span></span><br /><span class="line">    RandomValuePropertySource.addToEnvironment(environment);</span><br /><span class="line">    <span class="comment">// &lt;2&gt; 创建 Loader 对象，进行加载</span></span><br /><span class="line">    <span class="keyword">new</span> Loader(environment, resourceLoader).load();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，添加 RandomValuePropertySource 到&nbsp;<code>environment</code>&nbsp;中。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「5. RandomValuePropertySource」</a>&nbsp;中。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，创建 Loader 对象，并调用&nbsp;<code>Loader#load()</code>&nbsp;方法，进行加载。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1 Loader」</a>&nbsp;中。</li>
+</ul>
+<h3 id="4-4-1-Loader">4.4.1 Loader</h3>
+<blockquote>
+<p>艿艿：高能预警，关于这一块，内容会比较扎实（很多）！</p>
+</blockquote>
+<p>Loader 是 ConfigFileApplicationListener 的内部类，负责加载指定的配置文件。构造方法如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener.java</span></span><br /><br /><span class="line"><span class="keyword">private</span> <span class="class"><span class="keyword">class</span> <span class="title">Loader</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Log logger = ConfigFileApplicationListener.<span class="keyword">this</span>.logger;</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ConfigurableEnvironment environment;</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> PropertySourcesPlaceholdersResolver placeholdersResolver;</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ResourceLoader resourceLoader;</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> List&lt;PropertySourceLoader&gt; propertySourceLoaders;</span><br /><br /><span class="line">    <span class="keyword">private</span> Deque&lt;Profile&gt; profiles;</span><br /><br /><span class="line">    <span class="keyword">private</span> List&lt;Profile&gt; processedProfiles;</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">boolean</span> activatedProfiles;</span><br /><br /><span class="line">    <span class="keyword">private</span> Map&lt;Profile, MutablePropertySources&gt; loaded;</span><br /><br /><span class="line">    <span class="keyword">private</span> Map&lt;DocumentsCacheKey, List&lt;Document&gt;&gt; loadDocumentsCache = <span class="keyword">new</span> HashMap&lt;&gt;();</span><br /><br /><span class="line">    Loader(ConfigurableEnvironment environment, ResourceLoader resourceLoader) {</span><br /><span class="line">        <span class="keyword">this</span>.environment = environment;</span><br /><span class="line">        <span class="comment">// &lt;1&gt; 创建 PropertySourcesPlaceholdersResolver 对象</span></span><br /><span class="line">        <span class="keyword">this</span>.placeholdersResolver = <span class="keyword">new</span> PropertySourcesPlaceholdersResolver(<span class="keyword">this</span>.environment);</span><br /><span class="line">        <span class="comment">// &lt;2&gt; 创建 DefaultResourceLoader 对象</span></span><br /><span class="line">        <span class="keyword">this</span>.resourceLoader = (resourceLoader != <span class="keyword">null</span>) ? resourceLoader : <span class="keyword">new</span> DefaultResourceLoader();</span><br /><span class="line">        <span class="comment">// &lt;3&gt; 加载指定类型 PropertySourceLoader 对应的，在 `META-INF/spring.factories` 里的类名的数组</span></span><br /><span class="line">        <span class="keyword">this</span>.propertySourceLoaders = SpringFactoriesLoader.loadFactories(PropertySourceLoader.class, getClass().getClassLoader());</span><br /><span class="line">    }</span><br />    <br /><span class="line">    <span class="comment">// ... 省略其它方法</span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，创建 PropertySourcesPlaceholdersResolver 对象。详细解析，胖友可以跳到&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「6. PropertySourcesPlaceholdersResolver」</a>&nbsp;中，瞅一眼，然后继续回到此处。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，创建 DefaultResourceLoader 对象。这个是 Spring Framework 中的类，用于资源的加载。当然，这不是本文的重点，暂时先忽略。</li>
+<li><code>&lt;3&gt;</code>&nbsp;处，加载指定类型 PropertySourceLoader 对应的，在&nbsp;<code>META-INF/spring.factories</code>&nbsp;里的类名的数组。
+<ul>
+<li>默认情况下，返回的是 PropertiesPropertySourceLoader、YamlPropertySourceLoader 类。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「7. PropertySourceLoader」</a>&nbsp;。</li>
+</ul>
+</li>
+</ul>
+<h4 id="4-4-1-1-load">4.4.1.1 load</h4>
+<p><code>#load()</code>&nbsp;方法，加载配置。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">load</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="comment">// &lt;1&gt; 初始化变量</span></span><br /><span class="line">    <span class="keyword">this</span>.profiles = <span class="keyword">new</span> LinkedList&lt;&gt;(); <span class="comment">// 未处理的 Profile 集合</span></span><br /><span class="line">    <span class="keyword">this</span>.processedProfiles = <span class="keyword">new</span> LinkedList&lt;&gt;(); <span class="comment">// 已处理的 Profile 集合</span></span><br /><span class="line">    <span class="keyword">this</span>.activatedProfiles = <span class="keyword">false</span>;</span><br /><span class="line">    <span class="keyword">this</span>.loaded = <span class="keyword">new</span> LinkedHashMap&lt;&gt;();</span><br /><span class="line">    <span class="comment">// &lt;2&gt; 初始化 Spring Profiles 相关</span></span><br /><span class="line">    initializeProfiles();</span><br /><span class="line">    <span class="comment">// &lt;3&gt; 遍历 profiles 数组</span></span><br /><span class="line">    <span class="keyword">while</span> (!<span class="keyword">this</span>.profiles.isEmpty()) {</span><br /><span class="line">        <span class="comment">// 获得 Profile 对象</span></span><br /><span class="line">        Profile profile = <span class="keyword">this</span>.profiles.poll();</span><br /><span class="line">        <span class="comment">// &lt;3.1&gt; 添加 Profile 到 environment 中</span></span><br /><span class="line">        <span class="keyword">if</span> (profile != <span class="keyword">null</span> &amp;&amp; !profile.isDefaultProfile()) {</span><br /><span class="line">            addProfileToEnvironment(profile.getName());</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// &lt;3.2&gt; 加载配置</span></span><br /><span class="line">        load(profile, <span class="keyword">this</span>::getPositiveProfileFilter,</span><br /><span class="line">                addToLoaded(MutablePropertySources::addLast, <span class="keyword">false</span>));</span><br /><span class="line">        <span class="comment">// &lt;3.3&gt; 添加到 processedProfiles 中，表示已处理</span></span><br /><span class="line">        <span class="keyword">this</span>.processedProfiles.add(profile);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// &lt;4&gt; 获得真正加载的 Profile 们，添加到 environment 中。</span></span><br /><span class="line">    resetEnvironmentProfiles(<span class="keyword">this</span>.processedProfiles);</span><br /><span class="line">    <span class="comment">// &lt;5&gt; 加载配置</span></span><br /><span class="line">    load(<span class="keyword">null</span>, <span class="keyword">this</span>::getNegativeProfileFilter,</span><br /><span class="line">            addToLoaded(MutablePropertySources::addFirst, <span class="keyword">true</span>));</span><br /><span class="line">    <span class="comment">// &lt;6&gt; 将加载的配置对应的 MutablePropertySources 到 environment 中</span></span><br /><span class="line">    addLoadedPropertySources();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，初始化变量。每个变量的意思，看代码中的注释。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，初始化 Spring Profiles 相关。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1 initializeProfiles」</a>&nbsp;中。胖友可以先跳过去看一眼，然后回来。</li>
+<li>
+<p><code>&lt;3&gt;</code>&nbsp;处，遍历&nbsp;<code>profiles</code>&nbsp;数组，逐个加载对应的配置文件。</p>
+<ul>
+<li>
+<p><code>&lt;3.1&gt;</code>&nbsp;处，调用&nbsp;<code>#addProfileToEnvironment(String profile)</code>&nbsp;方法，添加到&nbsp;<code>environment.activeProfiles</code>&nbsp;中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">addProfileToEnvironment</span><span class="params">(String profile)</span> </span>{</span><br /><span class="line">    <span class="comment">// 如果已经在 activeProfiles 中，则返回</span></span><br /><span class="line">    <span class="keyword">for</span> (String activeProfile : <span class="keyword">this</span>.environment.getActiveProfiles()) {</span><br /><span class="line">        <span class="keyword">if</span> (activeProfile.equals(profile)) {</span><br /><span class="line">            <span class="keyword">return</span>;</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 如果不在，则添加到 environment 中</span></span><br /><span class="line">    <span class="keyword">this</span>.environment.addActiveProfile(profile);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>~</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;3.2&gt;</code>&nbsp;处，调用&nbsp;<code>#load(Profile profile, DocumentFilterFactory filterFactory, DocumentConsumer consumer)</code>&nbsp;方法，加载配置。这块会比较复杂，晚点再求看&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.2 load」</a>&nbsp;。</p>
+</li>
+<li><code>&lt;3.3&gt;</code>&nbsp;处，添加到&nbsp;<code>processedProfiles</code>&nbsp;中，表示已处理。</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;4&gt;</code>&nbsp;处，调用&nbsp;<code>#resetEnvironmentProfiles(List&lt;Profile&gt; processedProfiles)</code>&nbsp;方法，获得真正加载的 Profile 们，添加到 environment 中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">resetEnvironmentProfiles</span><span class="params">(List&lt;Profile&gt; processedProfiles)</span> </span>{</span><br /><span class="line">    <span class="comment">// 获得真正加载的 Profile 们，添加到 environment 中。</span></span><br /><span class="line">    String[] names = processedProfiles.stream()</span><br /><span class="line">            .filter((profile) -&gt; profile != <span class="keyword">null</span> &amp;&amp; !profile.isDefaultProfile())</span><br /><span class="line">            .map(Profile::getName).toArray(String[]::<span class="keyword">new</span>);</span><br /><span class="line">    <span class="keyword">this</span>.environment.setActiveProfiles(names);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>因为每个 Profile 可能不存在对应的配置文件，只有真正加载到配置文件的 Profile 们，才会设置到&nbsp;<code>environment.activeProfiles</code>&nbsp;属性中。</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;5&gt;</code>&nbsp;处，调用&nbsp;<code>#load(Profile profile, DocumentFilterFactory filterFactory, DocumentConsumer consumer)</code>&nbsp;方法，加载配置。这块会比较复杂，晚点再求看&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.2 load」</a>&nbsp;。</p>
+<ul>
+<li>和&nbsp;<code>&lt;3.2&gt;</code>&nbsp;处，有一些不同，主要差别在于传入的方法参数。</li>
+<li>在补充一点，有点不造怎么解释了。😈&nbsp;<code>&lt;5&gt;</code>&nbsp;处的作用是，将&nbsp;<code>profile=null</code>&nbsp;的情况中，将配置文件里有配置文件<code>spring.profiles</code>&nbsp;内容，且属于基于的 Profile ，也添加到&nbsp;<code>profile=null</code>&nbsp;在&nbsp;<code>Loader.loaded</code>&nbsp;的映射中。具体的，可以看&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「666. 彩蛋」</a>&nbsp;提供的示例。😈 真的是，好绕啊！！！！</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;6&gt;</code>&nbsp;处，调用&nbsp;<code>#addLoadedPropertySources()</code>&nbsp;方法，将加载的配置对应的 MutablePropertySources 到&nbsp;<code>environment</code>&nbsp;中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener.java</span></span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String DEFAULT_PROPERTIES = <span class="string">"defaultProperties"</span>;</span><br /><br /><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">addLoadedPropertySources</span><span class="params">()</span> </span>{</span><br /><span class="line">    MutablePropertySources destination = <span class="keyword">this</span>.environment.getPropertySources();</span><br /><span class="line">    <span class="comment">// 获得当前加载的 MutablePropertySources 集合</span></span><br /><span class="line">    List&lt;MutablePropertySources&gt; loaded = <span class="keyword">new</span> ArrayList&lt;&gt;(<span class="keyword">this</span>.loaded.values());</span><br /><span class="line">    Collections.reverse(loaded); <span class="comment">// &lt;Z&gt;</span></span><br /><span class="line">    <span class="comment">// 声明变量</span></span><br /><span class="line">    String lastAdded = <span class="keyword">null</span>; <span class="comment">// 下面循环，最后找到的 MutablePropertySources 的名字</span></span><br /><span class="line">    Set&lt;String&gt; added = <span class="keyword">new</span> HashSet&lt;&gt;(); <span class="comment">// 已添加到 destination 中的 MutablePropertySources 的名字的集合</span></span><br /><span class="line">    <span class="comment">// &lt;X&gt; 遍历 loaded 数组</span></span><br /><span class="line">    <span class="keyword">for</span> (MutablePropertySources sources : loaded) {</span><br /><span class="line">        <span class="comment">// &lt;Y&gt; 遍历 sources 数组</span></span><br /><span class="line">        <span class="keyword">for</span> (PropertySource&lt;?&gt; source : sources) {</span><br /><span class="line">            <span class="comment">// 添加到 destination 中</span></span><br /><span class="line">            <span class="keyword">if</span> (added.add(source.getName())) {</span><br /><span class="line">                addLoadedPropertySource(destination, lastAdded, source);</span><br /><span class="line">                lastAdded = source.getName();</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">addLoadedPropertySource</span><span class="params">(MutablePropertySources destination, String lastAdded, PropertySource&lt;?&gt; source)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (lastAdded == <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">if</span> (destination.contains(DEFAULT_PROPERTIES)) {</span><br /><span class="line">            destination.addBefore(DEFAULT_PROPERTIES, source);</span><br /><span class="line">        } <span class="keyword">else</span> {</span><br /><span class="line">            destination.addLast(source);</span><br /><span class="line">        }</span><br /><span class="line">    } <span class="keyword">else</span> {</span><br /><span class="line">        destination.addAfter(lastAdded, source);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;X&gt;</code>&nbsp;和&nbsp;<code>&lt;Y&gt;</code>&nbsp;处，为什么是两层遍历呢？因为一个 Profile 可以对应多个配置文件。例如说，Profile 为&nbsp;<code>prod</code>&nbsp;，对应&nbsp;<code>applicaion-prod.properties</code>&nbsp;和&nbsp;<code>application-prod.yml</code>&nbsp;两个配置文件。</li>
+<li>这样，我们就可以从&nbsp;<code>environment</code>&nbsp;中，读取加载到的配置文件。</li>
+<li><code>&lt;Z&gt;</code>&nbsp;处，为什么要反转一下呢？因为，配置在越后面的 Profile ，优先级越高，所以需要进行反转。举个例子&nbsp;<code>spring.profiles.active=prod,dev</code>&nbsp;，那么 Profile 的优先级是&nbsp;<code>dev &gt; prod &gt; null</code>&nbsp;。</li>
+</ul>
+</li>
+</ul>
+<p>下面，我们就可以跳到&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.2 load」</a>&nbsp;小节，看看这个关键的逻辑。</p>
+<blockquote>
+<p>艿艿：逻辑真的有点复杂！目的简单，过程中的逻辑细节比较多。和我一起，保持耐心！！！</p>
+</blockquote>
+<h5 id="4-4-1-1-1-initializeProfiles">4.4.1.1.1 initializeProfiles</h5>
+<p>在&nbsp;<code>#initializeProfiles()</code>&nbsp;方法之前，我们先来看 Profile 类。它是 ConfigFileApplicationListener 的内部类，是 Spring Profiles 的封装对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Profile.java</span></span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * A Spring Profile that can be loaded.</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Profile</span> </span>{</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * Profile 名字</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> String name;</span><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 是否为默认的 Profile</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">boolean</span> defaultProfile;</span><br /><br /><span class="line">    <span class="comment">// ... 省略构造方法、getting 方法、toString 和 hashCode 方法</span></span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>然后，继续来看&nbsp;<code>#initializeProfiles()</code>&nbsp;方法，初始化 Spring Profiles 相关。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">initializeProfiles</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="comment">// The default profile for these purposes is represented as null. We add it</span></span><br /><span class="line">    <span class="comment">// first so that it is processed first and has lowest priority.</span></span><br /><span class="line">    <span class="comment">// &lt;1&gt; 添加 null 到 profiles 中。用于加载默认的配置文件。优先添加到 profiles 中，因为希望默认的配置文件先被处理。</span></span><br /><span class="line">    <span class="keyword">this</span>.profiles.add(<span class="keyword">null</span>);</span><br /><span class="line">    <span class="comment">// &lt;2.1&gt; 获得激活的 Profile 们（从配置中）</span></span><br /><span class="line">    Set&lt;Profile&gt; activatedViaProperty = getProfilesActivatedViaProperty();</span><br /><span class="line">    <span class="comment">// &lt;2.2&gt; 先添加激活的 Profile 们（不在配置中）</span></span><br /><span class="line">    <span class="keyword">this</span>.profiles.addAll(getOtherActiveProfiles(activatedViaProperty));</span><br /><span class="line">    <span class="comment">// Any pre-existing active profiles set via property sources (e.g.</span></span><br /><span class="line">    <span class="comment">// System properties) take precedence over those added in config files.</span></span><br /><span class="line">    <span class="comment">// &lt;2.3&gt; 再添加激活的 Profile 们（在配置中）</span></span><br /><span class="line">    addActiveProfiles(activatedViaProperty);</span><br /><span class="line">    <span class="comment">// &lt;3&gt; 如果没有激活的 Profile 们，则添加默认的 Profile</span></span><br /><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>.profiles.size() == <span class="number">1</span>) { <span class="comment">// only has null profile</span></span><br /><span class="line">        <span class="keyword">for</span> (String defaultProfileName : <span class="keyword">this</span>.environment.getDefaultProfiles()) {</span><br /><span class="line">            Profile defaultProfile = <span class="keyword">new</span> Profile(defaultProfileName, <span class="keyword">true</span>);</span><br /><span class="line">            <span class="keyword">this</span>.profiles.add(defaultProfile);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，添加&nbsp;<code>null</code>&nbsp;到&nbsp;<code>profiles</code>&nbsp;中。用于加载默认的配置文件。优先添加到&nbsp;<code>profiles</code>&nbsp;中，因为希望默认的配置文件先被处理。</li>
+<li>
+<p><code>&lt;2.1&gt;</code>&nbsp;处，调用&nbsp;<code>#getProfilesActivatedViaProperty()</code>&nbsp;方法，获得激活的 Profile 们（从配置中）。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> Set&lt;Profile&gt; <span class="title">getProfilesActivatedViaProperty</span><span class="params">()</span> </span>{</span><br /><span class="line">	<span class="keyword">if</span> (!<span class="keyword">this</span>.environment.containsProperty(ACTIVE_PROFILES_PROPERTY)</span><br /><span class="line">			&amp;&amp; !<span class="keyword">this</span>.environment.containsProperty(INCLUDE_PROFILES_PROPERTY)) {</span><br /><span class="line">		<span class="keyword">return</span> Collections.emptySet();</span><br /><span class="line">	}</span><br /><span class="line">	Binder binder = Binder.get(<span class="keyword">this</span>.environment);</span><br /><span class="line">	Set&lt;Profile&gt; activeProfiles = <span class="keyword">new</span> LinkedHashSet&lt;&gt;();</span><br /><span class="line">	activeProfiles.addAll(getProfiles(binder, INCLUDE_PROFILES_PROPERTY)); <span class="comment">// spring.profiles.include</span></span><br /><span class="line">	activeProfiles.addAll(getProfiles(binder, ACTIVE_PROFILES_PROPERTY)); <span class="comment">// spring.profiles.active</span></span><br /><span class="line">	<span class="keyword">return</span> activeProfiles;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>读取&nbsp;<code>"spring.profiles.include"</code>&nbsp;和&nbsp;<code>"spring.profiles.active"</code>&nbsp;对应的 Profile 们。</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;2.2&gt;</code>&nbsp;处，调用&nbsp;<code>#getOtherActiveProfiles(Set&lt;Profile&gt; activatedViaProperty)</code>&nbsp;方法，先添加激活的 Profile 们（<strong>不在配置中</strong>）到&nbsp;<code>profiles</code>&nbsp;中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> List&lt;Profile&gt; <span class="title">getOtherActiveProfiles</span><span class="params">(Set&lt;Profile&gt; activatedViaProperty)</span> </span>{</span><br /><span class="line">	<span class="keyword">return</span> Arrays.stream(<span class="keyword">this</span>.environment.getActiveProfiles()).map(Profile::<span class="keyword">new</span>)</span><br /><span class="line">			.filter((profile) -&gt; !activatedViaProperty.contains(profile))</span><br /><span class="line">			.collect(Collectors.toList());</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>&ldquo;<strong>不在配置中</strong>&rdquo;，例如说：<code>SpringApplication.additionalProfiles</code>&nbsp;。</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;2.3&gt;</code>&nbsp;处，调用&nbsp;<code>#addActiveProfiles(Set&lt;Profile&gt; profiles)</code>&nbsp;方法，再添加激活的 Profile 们（在配置中）到&nbsp;<code>profiles</code>&nbsp;中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">addActiveProfiles</span><span class="params">(Set&lt;Profile&gt; profiles)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (profiles.isEmpty()) {</span><br /><span class="line">        <span class="keyword">return</span>;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 如果已经标记 activatedProfiles 为 true ，则直接返回</span></span><br /><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>.activatedProfiles) {</span><br /><span class="line">        <span class="keyword">if</span> (<span class="keyword">this</span>.logger.isDebugEnabled()) {</span><br /><span class="line">            <span class="keyword">this</span>.logger.debug(<span class="string">"Profiles already activated, '"</span> + profiles + <span class="string">"' will not be applied"</span>);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">return</span>;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 添加到 profiles 中</span></span><br /><span class="line">    <span class="keyword">this</span>.profiles.addAll(profiles);</span><br /><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>.logger.isDebugEnabled()) {</span><br /><span class="line">        <span class="keyword">this</span>.logger.debug(<span class="string">"Activated activeProfiles "</span> + StringUtils.collectionToCommaDelimitedString(profiles));</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 标记 activatedProfiles 为 true 。</span></span><br /><span class="line">    <span class="keyword">this</span>.activatedProfiles = <span class="keyword">true</span>;</span><br /><span class="line">    <span class="comment">// 移除 profiles 中，默认的配置们。</span></span><br /><span class="line">    removeUnprocessedDefaultProfiles();</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">removeUnprocessedDefaultProfiles</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">this</span>.profiles.removeIf(</span><br /><span class="line">            (profile) -&gt; (profile != <span class="keyword">null</span> &amp;&amp; profile.isDefaultProfile()));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p><code>&lt;3&gt;</code>&nbsp;处，如果没有激活的 Profile 们，则添加默认的 Profile 。此处的&ldquo;默认&rdquo;是，指的是配置文件中的&nbsp;<code>"spring.profiles.default"</code>&nbsp;对应的值。</p>
+</li>
+<li>这块比较绕，胖友最好自己调试下。例如说，我们在 JVM 启动增加&nbsp;<code>--spring.profiles.active=prod</code>&nbsp;，则结果如下图：<img src="http://static2.iocoder.cn/images/Spring-Boot/2021-01-28/02.jpg" alt="&#96;profiles&#96;" /></li>
+</ul>
+<h5 id="4-4-1-1-2-load">4.4.1.1.2 load</h5>
+<p><code>#load(Profile profile, DocumentFilterFactory filterFactory, DocumentConsumer consumer)</code>&nbsp;方法，加载指定 Profile 的配置文件。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">load</span><span class="params">(Profile profile, DocumentFilterFactory filterFactory, DocumentConsumer consumer)</span> </span>{</span><br /><span class="line">    <span class="comment">// &lt;1&gt; 获得要检索配置的路径</span></span><br /><span class="line">    getSearchLocations().forEach((location) -&gt; {</span><br /><span class="line">        <span class="comment">// 判断是否为文件夹</span></span><br /><span class="line">        <span class="keyword">boolean</span> isFolder = location.endsWith(<span class="string">"/"</span>);</span><br /><span class="line">        <span class="comment">// &lt;2&gt; 获得要检索配置的文件名集合</span></span><br /><span class="line">        Set&lt;String&gt; names = isFolder ? getSearchNames() : NO_SEARCH_NAMES;</span><br /><span class="line">        <span class="comment">// &lt;3&gt; 遍历文件名集合，逐个加载配置文件</span></span><br /><span class="line">        names.forEach(</span><br /><span class="line">                (name) -&gt; load(location, name, profile, filterFactory, consumer));</span><br /><span class="line">    });</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p><code>&lt;1&gt;</code>&nbsp;处，调用&nbsp;<code>#getSearchLocations()</code>&nbsp;方法，获得要检索配置的路径们。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener.java</span></span><br /><br /><span class="line"><span class="comment">// Note the order is from least to most specific (last one wins)</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String DEFAULT_SEARCH_LOCATIONS = <span class="string">"classpath:/,classpath:/config/,file:./,file:./config/"</span>;</span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * The "config location" property name.</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String CONFIG_LOCATION_PROPERTY = <span class="string">"spring.config.location"</span>;</span><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * The "config additional location" property name.</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String CONFIG_ADDITIONAL_LOCATION_PROPERTY = <span class="string">"spring.config.additional-location"</span>;</span><br /><br /><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> Set&lt;String&gt; <span class="title">getSearchLocations</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="comment">// 获得 `"spring.config.location"` 对应的配置的值</span></span><br /><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>.environment.containsProperty(CONFIG_LOCATION_PROPERTY)) {</span><br /><span class="line">        <span class="keyword">return</span> getSearchLocations(CONFIG_LOCATION_PROPERTY);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 获得 `"spring.config.additional-location"` 对应的配置的值</span></span><br /><span class="line">    Set&lt;String&gt; locations = getSearchLocations(CONFIG_ADDITIONAL_LOCATION_PROPERTY);</span><br /><span class="line">    <span class="comment">// 添加 searchLocations 到 locations 中</span></span><br /><span class="line">    locations.addAll(asResolvedSet(ConfigFileApplicationListener.<span class="keyword">this</span>.searchLocations, DEFAULT_SEARCH_LOCATIONS));</span><br /><span class="line">    <span class="keyword">return</span> locations;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> Set&lt;String&gt; <span class="title">getSearchLocations</span><span class="params">(String propertyName)</span> </span>{</span><br /><span class="line">    Set&lt;String&gt; locations = <span class="keyword">new</span> LinkedHashSet&lt;&gt;();</span><br /><span class="line">    <span class="comment">// 如果 environment 中存在 propertyName 对应的值</span></span><br /><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>.environment.containsProperty(propertyName)) {</span><br /><span class="line">        <span class="comment">// 读取属性值，进行分割后，然后遍历</span></span><br /><span class="line">        <span class="keyword">for</span> (String path : asResolvedSet(<span class="keyword">this</span>.environment.getProperty(propertyName), <span class="keyword">null</span>)) {</span><br /><span class="line">            <span class="comment">// 处理 path</span></span><br /><span class="line">            <span class="keyword">if</span> (!path.contains(<span class="string">"$"</span>)) {</span><br /><span class="line">                path = StringUtils.cleanPath(path);</span><br /><span class="line">                <span class="keyword">if</span> (!ResourceUtils.isUrl(path)) {</span><br /><span class="line">                    path = ResourceUtils.FILE_URL_PREFIX + path;</span><br /><span class="line">                }</span><br /><span class="line">            }</span><br /><span class="line">            <span class="comment">// 添加到 path 中</span></span><br /><span class="line">            locations.add(path);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> locations;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="comment">// 优先使用 value 。如果 value 为空，则使用 fallback</span></span><br /><span class="line"><span class="function"><span class="keyword">private</span> Set&lt;String&gt; <span class="title">asResolvedSet</span><span class="params">(String value, String fallback)</span> </span>{</span><br /><span class="line">    List&lt;String&gt; list = Arrays.asList(StringUtils.trimArrayElements(</span><br /><span class="line">            StringUtils.commaDelimitedListToStringArray((value != <span class="keyword">null</span>)</span><br /><span class="line">                    ? <span class="keyword">this</span>.environment.resolvePlaceholders(value) : fallback)));</span><br /><span class="line">    Collections.reverse(list);</span><br /><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> LinkedHashSet&lt;&gt;(list);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>看似比较长，逻辑并不复杂。</li>
+<li>如果配置了&nbsp;<code>"spring.config.location"</code>&nbsp;，则使用它的值，作为要检索配置的路径。</li>
+<li>如果配置了&nbsp;<code>"spring.config.additional-location"</code>&nbsp;，则使用它作为<strong>附加</strong>要检索配置的路径。当然，还是会添加默认的&nbsp;<code>DEFAULT_SEARCH_LOCATIONS</code>&nbsp;路径。</li>
+<li>默认情况下，返回的值是&nbsp;<code>DEFAULT_SEARCH_LOCATIONS</code>&nbsp;。因为，绝大数情况，我们并不会做相应的配置。😈 所以，胖友如果懒的看逻辑，就记得这个结论就可以了。</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;2&gt;</code>&nbsp;处，调用&nbsp;<code>#getSearchNames()</code>&nbsp;方法，获得要检索配置的文件名集合。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener.java</span></span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String DEFAULT_NAMES = <span class="string">"application"</span>;</span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Set&lt;String&gt; NO_SEARCH_NAMES = Collections.singleton(<span class="keyword">null</span>);</span><br /><br /><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String CONFIG_NAME_PROPERTY = <span class="string">"spring.config.name"</span>;</span><br /><br /><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> Set&lt;String&gt; <span class="title">getSearchNames</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="comment">// 获得 `"spring.config.name"` 对应的配置的值</span></span><br /><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>.environment.containsProperty(CONFIG_NAME_PROPERTY)) {</span><br /><span class="line">        String property = <span class="keyword">this</span>.environment.getProperty(CONFIG_NAME_PROPERTY);</span><br /><span class="line">        <span class="keyword">return</span> asResolvedSet(property, <span class="keyword">null</span>);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 添加 names or DEFAULT_NAMES 到 locations 中</span></span><br /><span class="line">    <span class="keyword">return</span> asResolvedSet(ConfigFileApplicationListener.<span class="keyword">this</span>.names, DEFAULT_NAMES);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>通过&nbsp;<code>DEFAULT_NAMES</code>&nbsp;静态属性，我们可以知道，默认都去的配置文件名（不考虑后缀）为&nbsp;<code>"application"</code>&nbsp;。</li>
+<li>剩余的逻辑，胖友简单看看即可。</li>
+<li>默认情况下，返回的值是&nbsp;<code>DEFAULT_NAMES</code>&nbsp;。因为，绝大数情况，我们并不会做相应的配置。😈 所以，胖友如果懒的看逻辑，就记得这个结论就可以了。</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;3&gt;</code>&nbsp;处，遍历&nbsp;<code>names</code>&nbsp;数组，逐个调用&nbsp;<code>#load(String location, String name, Profile profile, DocumentFilterFactory filterFactory, DocumentConsumer consumer)</code>&nbsp;方法，逐个加载 Profile 指定的配置文件。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.3 load」</a>&nbsp;。</p>
+</li>
+</ul>
+<h5 id="4-4-1-1-3-load">4.4.1.1.3 load</h5>
+<p><code>#load(String location, String name, Profile profile, DocumentFilterFactory filterFactory, DocumentConsumer consumer)</code>&nbsp;方法，逐个加载 Profile 指定的配置文件。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">load</span><span class="params">(String location, String name, Profile profile, DocumentFilterFactory filterFactory, DocumentConsumer consumer)</span> </span>{</span><br /><span class="line">    <span class="comment">// &lt;1&gt; 这块逻辑先无视，因为我们不会配置 name 为空。</span></span><br /><span class="line">    <span class="comment">// 默认情况下，name 为 DEFAULT_NAMES=application</span></span><br /><span class="line">    <span class="keyword">if</span> (!StringUtils.hasText(name)) {</span><br /><span class="line">        <span class="keyword">for</span> (PropertySourceLoader loader : <span class="keyword">this</span>.propertySourceLoaders) {</span><br /><span class="line">            <span class="keyword">if</span> (canLoadFileExtension(loader, location)) {</span><br /><span class="line">                load(loader, location, profile, filterFactory.getDocumentFilter(profile), consumer);</span><br /><span class="line">                <span class="keyword">return</span>;</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    Set&lt;String&gt; processed = <span class="keyword">new</span> HashSet&lt;&gt;(); <span class="comment">// 已处理的文件后缀集合</span></span><br /><span class="line">    <span class="comment">// &lt;2&gt; 遍历 propertySourceLoaders 数组，逐个使用 PropertySourceLoader 读取配置</span></span><br /><span class="line">    <span class="keyword">for</span> (PropertySourceLoader loader : <span class="keyword">this</span>.propertySourceLoaders) {</span><br /><span class="line">        <span class="comment">// &lt;3&gt; 遍历每个 PropertySourceLoader 可处理的文件后缀集合</span></span><br /><span class="line">        <span class="keyword">for</span> (String fileExtension : loader.getFileExtensions()) {</span><br /><span class="line">            <span class="comment">// &lt;4&gt; 添加到 processed 中，一个文件后缀，有且仅能被一个 PropertySourceLoader 所处理</span></span><br /><span class="line">            <span class="keyword">if</span> (processed.add(fileExtension)) {</span><br /><span class="line">                <span class="comment">// 加载 Profile 指定的配置文件（带后缀）</span></span><br /><span class="line">                loadForFileExtension(loader, location + name, <span class="string">"."</span> + fileExtension,</span><br /><span class="line">                        profile, filterFactory, consumer);</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处的逻辑，可以无视。具体的原因，见我添加的注释。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，遍历&nbsp;<code>propertySourceLoaders</code>&nbsp;数组，逐个使用 PropertySourceLoader 读取配置。</li>
+<li><code>&lt;3&gt;</code>&nbsp;处，遍历每个 PropertySourceLoader 可处理的文件后缀集合。例如说，PropertiesPropertySourceLoader 可处理&nbsp;<code>.properties</code>&nbsp;和&nbsp;<code>.xml</code>&nbsp;后缀，YamlPropertySourceLoader 可处理&nbsp;<code>.yml</code>&nbsp;和&nbsp;<code>.yaml</code>&nbsp;后置。</li>
+<li><code>&lt;4&gt;</code>&nbsp;处，添加到&nbsp;<code>processed</code>&nbsp;中。一个文件后缀，有且仅能被一个 PropertySourceLoader 所处理。</li>
+<li><code>&lt;5&gt;</code>&nbsp;处，调用&nbsp;<code>#loadForFileExtension(PropertySourceLoader loader, String prefix, String fileExtension, Profile profile, DocumentFilterFactory filterFactory, DocumentConsumer consumer)</code>&nbsp;方法，加载 Profile 指定的配置文件（带后缀）。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.7 loadForFileExtension」</a>&nbsp;。</li>
+</ul>
+<h5 id="4-4-1-1-4-Document">4.4.1.1.4 Document</h5>
+<blockquote>
+<p>因为稍后在讲解&nbsp;<code>#loadForFileExtension(...)</code>&nbsp;方法需要用到，所以插播下。</p>
+</blockquote>
+<p>Document ，是 ConfigFileApplicationListener 的内部类，用于封装 PropertySourceLoader 加载配置文件后。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Document.java</span></span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Document</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> PropertySource&lt;?&gt; propertySource;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 对应 `spring.profiles` 属性值</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> String[] profiles;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 对应 `spring.profiles.active` 属性值</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Set&lt;Profile&gt; activeProfiles;</span><br /><br /><span class="line">    <span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 对应 `spring.profiles.include` 属性值</span></span><br /><span class="line"><span class="comment">     */</span></span><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Set&lt;Profile&gt; includeProfiles;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h6 id="4-4-1-1-4-1-DocumentsCacheKey">4.4.1.1.4.1 DocumentsCacheKey</h6>
+<p>DocumentsCacheKey ，是 ConfigFileApplicationListener 的内部类，用于表示加载 Documents 的缓存 KEY 。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#DocumentsCacheKey.java</span></span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Cache key used to save loading the same document multiple times.</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">DocumentsCacheKey</span> </span>{</span><br /><br /><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> PropertySourceLoader loader;</span><br /><br /><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> Resource resource;</span><br /><br /><span class="line">	DocumentsCacheKey(PropertySourceLoader loader, Resource resource) {</span><br /><span class="line">		<span class="keyword">this</span>.loader = loader;</span><br /><span class="line">		<span class="keyword">this</span>.resource = resource;</span><br /><span class="line">	}</span><br /><br /><span class="line">	<span class="meta">@Override</span></span><br /><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">equals</span><span class="params">(Object obj)</span> </span>{</span><br /><span class="line">		<span class="keyword">if</span> (<span class="keyword">this</span> == obj) {</span><br /><span class="line">			<span class="keyword">return</span> <span class="keyword">true</span>;</span><br /><span class="line">		}</span><br /><span class="line">		<span class="keyword">if</span> (obj == <span class="keyword">null</span> || getClass() != obj.getClass()) {</span><br /><span class="line">			<span class="keyword">return</span> <span class="keyword">false</span>;</span><br /><span class="line">		}</span><br /><span class="line">		DocumentsCacheKey other = (DocumentsCacheKey) obj;</span><br /><span class="line">		<span class="keyword">return</span> <span class="keyword">this</span>.loader.equals(other.loader)</span><br /><span class="line">				&amp;&amp; <span class="keyword">this</span>.resource.equals(other.resource);</span><br /><span class="line">	}</span><br /><br /><span class="line">	<span class="meta">@Override</span></span><br /><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">hashCode</span><span class="params">()</span> </span>{</span><br /><span class="line">		<span class="keyword">return</span> <span class="keyword">this</span>.loader.hashCode() * <span class="number">31</span> + <span class="keyword">this</span>.resource.hashCode();</span><br /><span class="line">	}</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>因为一个配置文件在&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.7 loadForFileExtension」</a>&nbsp;方法中，我们会看到可能存在重复加载的情况，所以通过缓存，避免重新读取~</li>
+</ul>
+<h5 id="4-4-1-1-5-DocumentFilterFactory">4.4.1.1.5 DocumentFilterFactory</h5>
+<blockquote>
+<p>因为稍后在讲解&nbsp;<code>#loadForFileExtension(...)</code>&nbsp;方法需要用到，所以插播下。</p>
+</blockquote>
+<p>DocumentFilterFactory ，是 ConfigFileApplicationListener 的内部接口，用于创建 DocumentFilter 对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#DocumentFilterFactory.java</span></span><br /><br /><span class="line"><span class="meta">@FunctionalInterface</span></span><br /><span class="line"><span class="keyword">private</span> <span class="class"><span class="keyword">interface</span> <span class="title">DocumentFilterFactory</span> </span>{</span><br /><br /><span class="line">	<span class="function">DocumentFilter <span class="title">getDocumentFilter</span><span class="params">(Profile profile)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>在&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1 load」</a>&nbsp;中，我们在该方法中，已经看到它的两个匿名实现类，如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line">第一个：<span class="keyword">this</span>::getPositiveProfileFilter</span><br /><span class="line">第二个：<span class="keyword">this</span>::getNegativeProfileFilter</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>它们分别调用对应的方法，创建 DocumentFilter 对象。</li>
+</ul>
+<h6 id="4-4-1-1-5-1-DocumentFilter">4.4.1.1.5.1 DocumentFilter</h6>
+<p>DocumentFilter ，是 ConfigFileApplicationListener 的内部接口，用于匹配配置加载后的 Document 对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#DocumentFilter.java</span></span><br /><br /><span class="line"><span class="meta">@FunctionalInterface</span></span><br /><span class="line"><span class="keyword">private</span> <span class="class"><span class="keyword">interface</span> <span class="title">DocumentFilter</span> </span>{</span><br /><br /><span class="line">	<span class="function"><span class="keyword">boolean</span> <span class="title">match</span><span class="params">(Document document)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>在下面的文章中，我们会看到，加载的配置文件后，返回的是 Document 对象。但是，返回的 Document 对象，需要和 Profile 进行匹配。</li>
+</ul>
+<h6 id="4-4-1-1-5-2-getPositiveProfileFilter">4.4.1.1.5.2 getPositiveProfileFilter</h6>
+<p><code>#getPositiveProfileFilter(Profile profile)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> DocumentFilter <span class="title">getPositiveProfileFilter</span><span class="params">(Profile profile)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> (Document document) -&gt; {</span><br /><span class="line">        <span class="comment">// &lt;1&gt; 当 profile 为空时，document.profiles 也要为空</span></span><br /><span class="line">        <span class="keyword">if</span> (profile == <span class="keyword">null</span>) {</span><br /><span class="line">            <span class="keyword">return</span> ObjectUtils.isEmpty(document.getProfiles());</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// &lt;2&gt; 要求 document.profiles 包含 profile</span></span><br /><span class="line">        <span class="comment">// 并且，environment.activeProfiles 包含 document.profiles</span></span><br /><span class="line">        <span class="comment">// 总结来说，environment.activeProfiles 包含 document.profiles 包含 profile</span></span><br /><span class="line">        <span class="keyword">return</span> ObjectUtils.containsElement(document.getProfiles(), profile.getName())</span><br /><span class="line">                &amp;&amp; <span class="keyword">this</span>.environment.acceptsProfiles(Profiles.of(document.getProfiles()));</span><br /><span class="line">    };</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，当传入的&nbsp;<code>profile</code>&nbsp;为空时，要求&nbsp;<code>document.profiles</code>&nbsp;也要为空。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，当传入的&nbsp;<code>profile</code>&nbsp;非空时，要求&nbsp;<code>environment.activeProfiles</code>&nbsp;包含&nbsp;<code>document.profiles</code>&nbsp;包含&nbsp;<code>profile</code>&nbsp;。</li>
+</ul>
+<p>可能比较绕，胖友先看&nbsp;<a href="https://spldeolin.com/posts/spring-boot-active-profiles/" target="_blank" rel="external nofollow noopener noreferrer">《Spring-boot动态profiles的实践》</a>&nbsp;文章的&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「Spring Boot的Profiles属性」</a>&nbsp;部分。</p>
+<ul>
+<li>
+<p>什么意思呢？假设一个&nbsp;<code>application-prod.properties</code>&nbsp;的配置文件，一般我们的理解是对应 Profile 为&nbsp;<code>prod</code>&nbsp;的情况，对吧？！但是，如果说我们在配置文件中增加了&nbsp;<code>spring.profiles=dev</code>&nbsp;，那它实际是属于 Profile 为&nbsp;<code>dev</code>&nbsp;的情况。</p>
+<blockquote>
+<p>艿艿：第一次知道还有这样的设定！！！</p>
+</blockquote>
+</li>
+<li>
+<p>当然，我们绝大都数情况，并不会去定义&nbsp;<code>spring.profiles</code>&nbsp;属性。所以呢，分成两种情况：</p>
+<blockquote>
+<p>艿艿：仔细理解，我也懵逼了好多小时！！！！</p>
+</blockquote>
+<ul>
+<li><code>profile</code>&nbsp;为&nbsp;<code>null</code>&nbsp;的情况，处理默认情况，即我们未定义&nbsp;<code>spring.profiles</code>&nbsp;属性。</li>
+<li><code>profile</code>&nbsp;非&nbsp;<code>null</code>&nbsp;的情况，处理配置文件中定义了&nbsp;<code>spring.profiles</code>&nbsp;属性，则需要使用&nbsp;<code>profile</code>&nbsp;和&nbsp;<code>spring.profiles</code>&nbsp;匹配，并且它要属于&nbsp;<code>environment.activeProfiles</code>&nbsp;中已经激活的。</li>
+</ul>
+</li>
+</ul>
+<p>😈 所以呢，我们在&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1 load」</a>&nbsp;中，看到它是在加载指定 Profile 的配置文件所使用。</p>
+<h6 id="4-4-1-1-5-3-getPositiveProfileFilter">4.4.1.1.5.3 getPositiveProfileFilter</h6>
+<p><code>#getPositiveProfileFilter(Profile profile)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> DocumentFilter <span class="title">getNegativeProfileFilter</span><span class="params">(Profile profile)</span> </span>{</span><br /><span class="line">    <span class="keyword">return</span> (Document document) -&gt; (profile == <span class="keyword">null</span> <span class="comment">// &lt;1&gt;</span></span><br /><span class="line">            &amp;&amp; !ObjectUtils.isEmpty(document.getProfiles()) <span class="comment">// &lt;2&gt; 非空</span></span><br /><span class="line">            <span class="comment">// environment.activeProfiles 包含 document.profiles</span></span><br /><span class="line">            &amp;&amp; <span class="keyword">this</span>.environment.acceptsProfiles(Profiles.of(document.getProfiles()))); <span class="comment">// &lt;3&gt;</span></span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，要求传入的&nbsp;<code>profile</code>&nbsp;为空。因为呢，<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1 load」</a>&nbsp;中，看到它是在加载<strong>无 Profile</strong>&nbsp;的配置文件所使用。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，要求&nbsp;<code>document.profiles</code>&nbsp;非空。一般情况下，我们在&nbsp;<code>application.properties</code>&nbsp;中，也并不会填写&nbsp;<code>spring.profiles</code>&nbsp;属性值。这就是说，这个方法默认基本返回&nbsp;<code>false</code>&nbsp;。</li>
+<li><code>&lt;3&gt;</code>&nbsp;处，<code>environment.activeProfiles</code>&nbsp;包含&nbsp;<code>document.profiles</code>&nbsp;。</li>
+</ul>
+<h5 id="4-4-1-1-6-DocumentConsumer">4.4.1.1.6 DocumentConsumer</h5>
+<blockquote>
+<p>因为稍后在讲解&nbsp;<code>#loadForFileExtension(...)</code>&nbsp;方法需要用到，所以插播下。</p>
+</blockquote>
+<p>DocumentConsumer ，是 ConfigFileApplicationListener 的内部接口，用于处理传入的 Document 。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#DocumentConsumer.java</span></span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Consumer used to handle a loaded {<span class="doctag">@link</span> Document}.</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="meta">@FunctionalInterface</span></span><br /><span class="line"><span class="keyword">private</span> <span class="class"><span class="keyword">interface</span> <span class="title">DocumentConsumer</span> </span>{</span><br /><br /><span class="line">	<span class="function"><span class="keyword">void</span> <span class="title">accept</span><span class="params">(Profile profile, Document document)</span></span>;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<p>在&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1 load」</a>&nbsp;中，我们在该方法中，已经看到它的一个匿名实现类，如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line">第一个：addToLoaded(MutablePropertySources::addLast, <span class="keyword">false</span>))</span><br /><span class="line">第二个：addToLoaded(MutablePropertySources::addFirst, <span class="keyword">true</span>))</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>差别在于传入的&nbsp;<code>#addToLoaded(BiConsumer&lt;MutablePropertySources, PropertySource&lt;?&gt;&gt; addMethod, boolean checkForExisting)</code>&nbsp;方法的&nbsp;<code>addMethod</code>&nbsp;参数不同。为什么呢？
+<ul>
+<li>对于有 Profile 的情况，使用前者&nbsp;<code>MutablePropertySources::addLast</code>&nbsp;，将 Document 的 PropertySource 添加到尾部。</li>
+<li>对于无 Profile 的情况，使用后者&nbsp;<code>MutablePropertySources::addFirst</code>&nbsp;，将 Document 的 PropertySource 添加到头部。</li>
+<li>最终，我们看到&nbsp;<code>#addLoadedPropertySources()</code>&nbsp;方法中，会执行&nbsp;<code>Collections.reverse(loaded)</code>&nbsp;代码段，进行颠倒。为什么呢？这样，就能很巧妙的实现&nbsp;<code>application-prod.properties</code>&nbsp;的优先级，高于&nbsp;<code>application.properties</code>&nbsp;，从而实现相同属性时，覆盖读取~，即读取的是&nbsp;<code>application-prod.properties</code>的属性配置。</li>
+</ul>
+</li>
+</ul>
+<h6 id="4-4-1-1-6-1-addToLoaded">4.4.1.1.6.1 addToLoaded</h6>
+<p><code>#addToLoaded(BiConsumer&lt;MutablePropertySources, PropertySource&lt;?&gt;&gt; addMethod, boolean checkForExisting)</code>&nbsp;方法，将 Document 的 PropertySource ，添加到&nbsp;<code>Loader.loaded</code>&nbsp;中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> DocumentConsumer <span class="title">addToLoaded</span><span class="params">(BiConsumer&lt;MutablePropertySources, PropertySource&lt;?&gt;&gt; addMethod, <span class="keyword">boolean</span> checkForExisting)</span> </span>{</span><br /><span class="line">    <span class="comment">// 创建 DocumentConsumer 对象</span></span><br /><span class="line">    <span class="keyword">return</span> (profile, document) -&gt; {</span><br /><span class="line">        <span class="comment">// 如果要校验已经存在的情况，则如果已经存在，则直接 return</span></span><br /><span class="line">        <span class="keyword">if</span> (checkForExisting) {</span><br /><span class="line">            <span class="keyword">for</span> (MutablePropertySources merged : <span class="keyword">this</span>.loaded.values()) {</span><br /><span class="line">                <span class="keyword">if</span> (merged.contains(document.getPropertySource().getName())) {</span><br /><span class="line">                    <span class="keyword">return</span>;</span><br /><span class="line">                }</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// 获得 profile 对应的 MutablePropertySources 对象</span></span><br /><span class="line">        MutablePropertySources merged = <span class="keyword">this</span>.loaded.computeIfAbsent(profile,</span><br /><span class="line">                (k) -&gt; <span class="keyword">new</span> MutablePropertySources());</span><br /><span class="line">        <span class="comment">// 将加载的 document 合并到 merged 中</span></span><br /><span class="line">        addMethod.accept(merged, document.getPropertySource());</span><br /><span class="line">    };</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>创建了一个 DocumentConsumer 对象。而其内部的逻辑，很简单，胖友自己瞅瞅即可。</li>
+</ul>
+<h5 id="4-4-1-1-7-loadForFileExtension">4.4.1.1.7 loadForFileExtension</h5>
+<p><code>#loadForFileExtension(PropertySourceLoader loader, String prefix, String fileExtension, Profile profile, DocumentFilterFactory filterFactory, DocumentConsumer consumer)</code>&nbsp;方法，加载 Profile 指定的配置文件（带后缀）。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">loadForFileExtension</span><span class="params">(PropertySourceLoader loader, String prefix,</span></span></span><br /><span class="line"><span class="function"><span class="params">        String fileExtension, Profile profile,</span></span></span><br /><span class="line"><span class="function"><span class="params">        DocumentFilterFactory filterFactory, DocumentConsumer consumer)</span> </span>{</span><br /><span class="line">    <span class="comment">// &lt;1&gt; 获得 DocumentFilter 对象</span></span><br /><span class="line">    DocumentFilter defaultFilter = filterFactory.getDocumentFilter(<span class="keyword">null</span>);</span><br /><span class="line">    DocumentFilter profileFilter = filterFactory.getDocumentFilter(profile);</span><br /><span class="line">    <span class="comment">// &lt;2&gt; 加载 Profile 指定的配置文件（带后缀）。</span></span><br /><span class="line">    <span class="keyword">if</span> (profile != <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="comment">// Try profile-specific file &amp; profile section in profile file (gh-340)</span></span><br /><span class="line">        <span class="comment">// 加载 Profile 指定的配置文件（带后缀）。</span></span><br /><span class="line">        String profileSpecificFile = prefix + <span class="string">"-"</span> + profile + fileExtension;</span><br /><span class="line">        load(loader, profileSpecificFile, profile, defaultFilter, consumer); <span class="comment">// &lt;2.1&gt; 情况一，未配置 spring.profile 属性</span></span><br /><span class="line">        load(loader, profileSpecificFile, profile, profileFilter, consumer); <span class="comment">// &lt;2.2&gt; 情况二，有配置 spring.profile 属性</span></span><br /><span class="line">        <span class="comment">// Try profile specific sections in files we've already processed</span></span><br /><span class="line">        <span class="comment">// &lt;2.3》 特殊情况，之前读取 Profile 对应的配置文件，也可被当前 Profile 所读取。</span></span><br /><span class="line">        <span class="comment">// 举个例子，假设之前读取了 Profile 为 common 对应配置文件是 application-common.properties ，里面配置了 spring.profile=dev,prod</span></span><br /><span class="line">        <span class="comment">//         那么，此时如果读取的 Profile 为 dev 时，也能读取 application-common.properties 这个配置文件</span></span><br /><span class="line">        <span class="keyword">for</span> (Profile processedProfile : <span class="keyword">this</span>.processedProfiles) {</span><br /><span class="line">            <span class="keyword">if</span> (processedProfile != <span class="keyword">null</span>) {</span><br /><span class="line">                String previouslyLoaded = prefix + <span class="string">"-"</span> + processedProfile + fileExtension; <span class="comment">// 拼接之前的配置文件名</span></span><br /><span class="line">                load(loader, previouslyLoaded, profile, profileFilter, consumer); <span class="comment">// 注意噢，传入的 profile 是当前的 profile</span></span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// Also try the profile-specific section (if any) of the normal file</span></span><br /><span class="line">    <span class="comment">// &lt;3&gt; 加载（无需带 Profile）指定的配置文件（带后缀）。</span></span><br /><span class="line">    load(loader, prefix + fileExtension, profile, profileFilter, consumer);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，获得两个 DocumentFilter 对象。为什么是两个呢？胖友思考下。实际上，我们在&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.5.2 getPositiveProfileFilter」</a>&nbsp;中，已经说明了答案。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，加载 Profile 指定的配置文件（带后缀）。有三种情况，胖友认真看&nbsp;<code>&lt;2.1&gt;</code>、<code>&lt;2.2&gt;</code>、<code>&lt;2.3&gt;</code>&nbsp;处的代码注释。</li>
+<li><code>&lt;3&gt;</code>&nbsp;处，加载（无需带 Profile）指定的配置文件（带后缀）。</li>
+<li>关于&nbsp;<code>#load(PropertySourceLoader loader, String location, Profile profile, DocumentFilter filter, DocumentConsumer consumer)</code>&nbsp;方法，真正加载 Profile 指定的配置文件（带后缀）。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.8 load」</a>&nbsp;。</li>
+</ul>
+<h5 id="4-4-1-1-8-load">4.4.1.1.8 load</h5>
+<p><code>#load(PropertySourceLoader loader, String location, Profile profile, DocumentFilter filter, DocumentConsumer consumer)</code>&nbsp;方法，真正加载 Profile 指定的配置文件（带后缀）。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">load</span><span class="params">(PropertySourceLoader loader, String location, Profile profile, DocumentFilter filter, DocumentConsumer consumer)</span> </span>{</span><br /><span class="line">    <span class="keyword">try</span> {</span><br /><span class="line">        <span class="comment">// &lt;1.1&gt; 判断指定的配置文件是否存在。若不存在，则直接返回</span></span><br /><span class="line">        Resource resource = <span class="keyword">this</span>.resourceLoader.getResource(location);</span><br /><span class="line">        <span class="keyword">if</span> (!resource.exists()) {</span><br /><span class="line">            <span class="keyword">if</span> (<span class="keyword">this</span>.logger.isTraceEnabled()) {</span><br /><span class="line">                StringBuilder description = getDescription(<span class="string">"Skipped missing config "</span>, location, resource, profile);</span><br /><span class="line">                <span class="keyword">this</span>.logger.trace(description);</span><br /><span class="line">            }</span><br /><span class="line">            <span class="keyword">return</span>;</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// &lt;1.2&gt; 如果没有文件后缀的配置文件，则忽略，不进行读取</span></span><br /><span class="line">        <span class="keyword">if</span> (!StringUtils.hasText(StringUtils.getFilenameExtension(resource.getFilename()))) {</span><br /><span class="line">            <span class="keyword">if</span> (<span class="keyword">this</span>.logger.isTraceEnabled()) {</span><br /><span class="line">                StringBuilder description = getDescription(<span class="string">"Skipped empty config extension "</span>, location, resource, profile);</span><br /><span class="line">                <span class="keyword">this</span>.logger.trace(description);</span><br /><span class="line">            }</span><br /><span class="line">            <span class="keyword">return</span>;</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// &lt;1.3&gt; 加载配置文件，返回 Document 数组</span></span><br /><span class="line">        String name = <span class="string">"applicationConfig: ["</span> + location + <span class="string">"]"</span>;</span><br /><span class="line">        List&lt;Document&gt; documents = loadDocuments(loader, name, resource);</span><br /><span class="line">        <span class="comment">// &lt;1.4&gt; 如果没加载到，则直接返回</span></span><br /><span class="line">        <span class="keyword">if</span> (CollectionUtils.isEmpty(documents)) {</span><br /><span class="line">            <span class="keyword">if</span> (<span class="keyword">this</span>.logger.isTraceEnabled()) {</span><br /><span class="line">                StringBuilder description = getDescription(</span><br /><span class="line">                        <span class="string">"Skipped unloaded config "</span>, location, resource, profile);</span><br /><span class="line">                <span class="keyword">this</span>.logger.trace(description);</span><br /><span class="line">            }</span><br /><span class="line">            <span class="keyword">return</span>;</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// &lt;2&gt; 使用 DocumentFilter 过滤匹配的 Document ，添加到 loaded 数组中。</span></span><br /><span class="line">        List&lt;Document&gt; loaded = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br /><span class="line">        <span class="keyword">for</span> (Document document : documents) {</span><br /><span class="line">            <span class="keyword">if</span> (filter.match(document)) { <span class="comment">// 匹配</span></span><br /><span class="line">                addActiveProfiles(document.getActiveProfiles()); <span class="comment">// &lt;2.1&gt;</span></span><br /><span class="line">                addIncludedProfiles(document.getIncludeProfiles()); <span class="comment">// &lt;2.2&gt;</span></span><br /><span class="line">                loaded.add(document);</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">        Collections.reverse(loaded);</span><br /><span class="line">        <span class="comment">// &lt;3&gt; 使用 DocumentConsumer 进行消费 Document ，添加到本地的 loaded 中。</span></span><br /><span class="line">        <span class="keyword">if</span> (!loaded.isEmpty()) {</span><br /><span class="line">            loaded.forEach((document) -&gt; consumer.accept(profile, document));</span><br /><span class="line">            <span class="keyword">if</span> (<span class="keyword">this</span>.logger.isDebugEnabled()) {</span><br /><span class="line">                StringBuilder description = getDescription(<span class="string">"Loaded config file "</span>, location, resource, profile);</span><br /><span class="line">                <span class="keyword">this</span>.logger.debug(description);</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    } <span class="keyword">catch</span> (Exception ex) {</span><br /><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Failed to load property "</span></span><br /><span class="line">                + <span class="string">"source from location '"</span> + location + <span class="string">"'"</span>, ex);</span><br /><span class="line">    }</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1.1&gt;</code>&nbsp;处，判断指定的配置文件是否存在。若不存在，则直接返回。</li>
+<li><code>&lt;1.2&gt;</code>&nbsp;处，如果没有文件后缀的配置文件，则忽略，不进行读取。</li>
+<li><code>&lt;1.3&gt;</code>&nbsp;处，调用&nbsp;<code>#loadDocuments(PropertySourceLoader loader, String name, Resource resource)</code>方法，加载配置文件，并返回 Document 数组。详细解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.8.1 loadDocuments」</a>&nbsp;小节。</li>
+<li><code>&lt;1.4&gt;</code>&nbsp;处，如果没加载到，则直接返回。</li>
+<li>
+<p><code>&lt;2&gt;</code>&nbsp;处，遍历加载到&nbsp;<code>documents</code>&nbsp;数组，逐个调用&nbsp;<code>DocumentFilter#match(Document document)</code>&nbsp;方法，进行匹配。若匹配成功，则添加到&nbsp;<code>loaded</code>&nbsp;中。</p>
+<ul>
+<li><code>&lt;2.1&gt;</code>&nbsp;处，<code>#addActiveProfiles(Set&lt;Profile&gt; profiles)</code>&nbsp;方法，已经在&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.1 initializeProfiles」</a>&nbsp;中，详细解析。</li>
+<li>
+<p><code>&lt;2.2&gt;</code>&nbsp;处，<code>#addIncludedProfiles(Set&lt;Profile&gt; profiles)</code>&nbsp;方法，代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">addIncludedProfiles</span><span class="params">(Set&lt;Profile&gt; includeProfiles)</span> </span>{</span><br /><span class="line">    <span class="comment">// 整体逻辑是 includeProfiles - processedProfiles + profiles</span></span><br /><span class="line">	LinkedList&lt;Profile&gt; existingProfiles = <span class="keyword">new</span> LinkedList&lt;&gt;(<span class="keyword">this</span>.profiles);</span><br /><span class="line">	<span class="keyword">this</span>.profiles.clear();</span><br /><span class="line">	<span class="keyword">this</span>.profiles.addAll(includeProfiles);</span><br /><span class="line">	<span class="keyword">this</span>.profiles.removeAll(<span class="keyword">this</span>.processedProfiles);</span><br /><span class="line">	<span class="keyword">this</span>.profiles.addAll(existingProfiles);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>~</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li><code>&lt;3&gt;</code>&nbsp;处，遍历&nbsp;<code>loaded</code>&nbsp;数组，调用&nbsp;<code>DocumentConsumer#accept(Profile profile, Document document)</code>&nbsp;方法，添加到本地的&nbsp;<code>Loader.loaded</code>&nbsp;中。此处，在结合&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「4.4.1.1.6 DocumentConsumer」</a>&nbsp;一起看。</li>
+</ul>
+</li>
+</ul>
+<p>😈 至此，Spring Boot 加载配置的功能，基本是完成了。总的来说，理解大体的流程，还是相对比较容易的。但是，想要扣懂这个过程的每一个细节，需要多多的调试。</p>
+<blockquote>
+<p>艿艿：可能有些细节写的不到位，或者解释的不到位，又或者讲的不正确。所以，有任何疑惑，请立刻马上赶紧给我星球留言提问哈。</p>
+</blockquote>
+<h6 id="4-4-1-1-8-1-loadDocuments">4.4.1.1.8.1 loadDocuments</h6>
+<p><code>#loadDocuments(PropertySourceLoader loader, String name, Resource resource)</code>&nbsp;方法，加载配置文件，并返回 Document 数组。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> List&lt;Document&gt; <span class="title">loadDocuments</span><span class="params">(PropertySourceLoader loader, String name, Resource resource)</span> <span class="keyword">throws</span> IOException </span>{</span><br /><span class="line">    <span class="comment">// &lt;1&gt; 创建 DocumentsCacheKey 对象，从 loadDocumentsCache 缓存中加载 Document 数组</span></span><br /><span class="line">    DocumentsCacheKey cacheKey = <span class="keyword">new</span> DocumentsCacheKey(loader, resource);</span><br /><span class="line">    List&lt;Document&gt; documents = <span class="keyword">this</span>.loadDocumentsCache.get(cacheKey);</span><br /><span class="line">    <span class="comment">// &lt;2.1&gt; 如果不存在，则使用 PropertySourceLoader 加载指定配置文件</span></span><br /><span class="line">    <span class="keyword">if</span> (documents == <span class="keyword">null</span>) {</span><br /><span class="line">        List&lt;PropertySource&lt;?&gt;&gt; loaded = loader.load(name, resource);</span><br /><span class="line">        <span class="comment">// &lt;2.2&gt; 将返回的 PropertySource 数组，封装成 Document 数组</span></span><br /><span class="line">        documents = asDocuments(loaded);</span><br /><span class="line">        <span class="comment">// &lt;2.3&gt; 添加到 loadDocumentsCache 缓存中</span></span><br /><span class="line">        <span class="keyword">this</span>.loadDocumentsCache.put(cacheKey, documents);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> documents;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，创建 DocumentsCacheKey 对象，从&nbsp;<code>loadDocumentsCache</code>&nbsp;缓存中加载 Document 数组。</li>
+<li><code>&lt;2.1&gt;</code>&nbsp;处，如果不存在，则调用&nbsp;<code>PropertySourceLoader#load(String name, Resource resource)</code>&nbsp;方法，加载指定配置文件。详细的解析，见&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「7. PropertySourceLoader」</a>&nbsp;中。</li>
+<li>
+<p><code>&lt;2.2&gt;</code>&nbsp;处，调用&nbsp;<code>#asDocuments(List&lt;PropertySource&lt;?&gt;&gt; loaded)</code>&nbsp;方法，将返回的 PropertySource 数组，封装成 Document 数组。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// ConfigFileApplicationListener#Loader.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> List&lt;Document&gt; <span class="title">asDocuments</span><span class="params">(List&lt;PropertySource&lt;?&gt;&gt; loaded)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (loaded == <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">return</span> Collections.emptyList();</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> loaded.stream().map((propertySource) -&gt; {</span><br /><span class="line">        <span class="comment">// 创建 Binder 对象</span></span><br /><span class="line">        Binder binder = <span class="keyword">new</span> Binder(</span><br /><span class="line">                ConfigurationPropertySources.from(propertySource),</span><br /><span class="line">                <span class="keyword">this</span>.placeholdersResolver);</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> Document(propertySource,</span><br /><span class="line">                binder.bind(<span class="string">"spring.profiles"</span>, STRING_ARRAY).orElse(<span class="keyword">null</span>), <span class="comment">// 读取 "spring.profiles" 配置</span></span><br /><span class="line">                getProfiles(binder, ACTIVE_PROFILES_PROPERTY), <span class="comment">// 读取 "spring.profiles.active" 配置</span></span><br /><span class="line">                getProfiles(binder, INCLUDE_PROFILES_PROPERTY)); <span class="comment">// 读取 "spring.profiles.include" 配置</span></span><br /><span class="line">    }).collect(Collectors.toList());</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> Set&lt;Profile&gt; <span class="title">getProfiles</span><span class="params">(Binder binder, String name)</span> </span>{</span><br /><span class="line">	<span class="keyword">return</span> binder.bind(name, STRING_ARRAY).map(<span class="keyword">this</span>::asProfileSet).orElse(Collections.emptySet());</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> Set&lt;Profile&gt; <span class="title">asProfileSet</span><span class="params">(String[] profileNames)</span> </span>{</span><br /><span class="line">	List&lt;Profile&gt; profiles = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br /><span class="line">	<span class="keyword">for</span> (String profileName : profileNames) {</span><br /><span class="line">		profiles.add(<span class="keyword">new</span> Profile(profileName));</span><br /><span class="line">	}</span><br /><span class="line">	<span class="keyword">return</span> <span class="keyword">new</span> LinkedHashSet&lt;&gt;(profiles);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+<li>
+<p><code>&lt;2.3&gt;</code>&nbsp;处，添加到&nbsp;<code>loadDocumentsCache</code>&nbsp;缓存中。</p>
+</li>
+</ul>
+<h1 id="5-RandomValuePropertySource">5. RandomValuePropertySource</h1>
+<p><code>org.springframework.boot.env.RandomValuePropertySource</code>&nbsp;，继承 PropertySource 类，提供随机值的 PropertySource 实现类。</p>
+<p>不了解 Spring Boot 从配置文件中获取随机数，可以看看&nbsp;<a href="https://blog.csdn.net/qq_35981283/article/details/77853069" target="_blank" rel="external nofollow noopener noreferrer">《Spring Boot学习&ndash;从配置文件中获取随机数》</a>&nbsp;文章。</p>
+<h2 id="5-1-addToEnvironment">5.1 addToEnvironment</h2>
+<p><code>#addToEnvironment(ConfigurableEnvironment environment)</code>&nbsp;<strong>静态</strong>方法，创建 RandomValuePropertySource 对象，添加到&nbsp;<code>environment</code>&nbsp;中。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// RandomValuePropertySource.java</span></span><br /><br /><span class="line"><span class="comment">/**</span></span><br /><span class="line"><span class="comment"> * Name of the random {<span class="doctag">@link</span> PropertySource}.</span></span><br /><span class="line"><span class="comment"> */</span></span><br /><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String RANDOM_PROPERTY_SOURCE_NAME = <span class="string">"random"</span>;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">addToEnvironment</span><span class="params">(ConfigurableEnvironment environment)</span> </span>{</span><br /><span class="line">	environment.getPropertySources().addAfter(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, <span class="keyword">new</span> RandomValuePropertySource(RANDOM_PROPERTY_SOURCE_NAME));</span><br /><span class="line">	logger.trace(<span class="string">"RandomValuePropertySource add to Environment"</span>);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<h2 id="5-2-getProperty">5.2 getProperty</h2>
+<p>实现&nbsp;<code>#getProperty(String name)</code>&nbsp;方法，获得&nbsp;<code>name</code>&nbsp;对应的随机值。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// RandomValuePropertySource.java</span></span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String PREFIX = <span class="string">"random."</span>;</span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">getProperty</span><span class="params">(String name)</span> </span>{</span><br /><span class="line">    <span class="comment">// &lt;1&gt; 必须以 random. 前缀</span></span><br /><span class="line">    <span class="keyword">if</span> (!name.startsWith(PREFIX)) {</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">if</span> (logger.isTraceEnabled()) {</span><br /><span class="line">        logger.trace(<span class="string">"Generating random property for '"</span> + name + <span class="string">"'"</span>);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// &lt;2&gt; 根据类型，获得随机值</span></span><br /><span class="line">    <span class="keyword">return</span> getRandomValue(name.substring(PREFIX.length()));</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，必须以&nbsp;<code>"random."</code>&nbsp;前缀。在获取属性值，<code>name</code>&nbsp;前后的&nbsp;<code>${}</code>&nbsp;已经被去掉。</li>
+<li>
+<p><code>&lt;2&gt;</code>&nbsp;处，调用&nbsp;<code>#getRandomValue(String type)</code>&nbsp;方法，根据类型，获得随机值。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// RandomValuePropertySource.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> Object <span class="title">getRandomValue</span><span class="params">(String type)</span> </span>{</span><br /><span class="line">    <span class="comment">// int</span></span><br /><span class="line">    <span class="keyword">if</span> (type.equals(<span class="string">"int"</span>)) {</span><br /><span class="line">        <span class="keyword">return</span> getSource().nextInt();</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// long</span></span><br /><span class="line">    <span class="keyword">if</span> (type.equals(<span class="string">"long"</span>)) {</span><br /><span class="line">        <span class="keyword">return</span> getSource().nextLong();</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// int 范围</span></span><br /><span class="line">    String range = getRange(type, <span class="string">"int"</span>);</span><br /><span class="line">    <span class="keyword">if</span> (range != <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">return</span> getNextIntInRange(range);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// long 范围</span></span><br /><span class="line">    range = getRange(type, <span class="string">"long"</span>);</span><br /><span class="line">    <span class="keyword">if</span> (range != <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="keyword">return</span> getNextLongInRange(range);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// uuid</span></span><br /><span class="line">    <span class="keyword">if</span> (type.equals(<span class="string">"uuid"</span>)) {</span><br /><span class="line">        <span class="keyword">return</span> UUID.randomUUID().toString();</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// md5</span></span><br /><span class="line">    <span class="keyword">return</span> getRandomBytes();</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> String <span class="title">getRange</span><span class="params">(String type, String prefix)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (type.startsWith(prefix)) {</span><br /><span class="line">        <span class="keyword">int</span> startIndex = prefix.length() + <span class="number">1</span>;</span><br /><span class="line">        <span class="keyword">if</span> (type.length() &gt; startIndex) {</span><br /><span class="line">            <span class="keyword">return</span> type.substring(startIndex, type.length() - <span class="number">1</span>);</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">getNextIntInRange</span><span class="params">(String range)</span> </span>{</span><br /><span class="line">    String[] tokens = StringUtils.commaDelimitedListToStringArray(range);</span><br /><span class="line">    <span class="keyword">int</span> start = Integer.parseInt(tokens[<span class="number">0</span>]);</span><br /><span class="line">    <span class="keyword">if</span> (tokens.length == <span class="number">1</span>) {</span><br /><span class="line">        <span class="keyword">return</span> getSource().nextInt(start);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> start + getSource().nextInt(Integer.parseInt(tokens[<span class="number">1</span>]) - start);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">long</span> <span class="title">getNextLongInRange</span><span class="params">(String range)</span> </span>{</span><br /><span class="line">    String[] tokens = StringUtils.commaDelimitedListToStringArray(range);</span><br /><span class="line">    <span class="keyword">if</span> (tokens.length == <span class="number">1</span>) {</span><br /><span class="line">        <span class="keyword">return</span> Math.abs(getSource().nextLong() % Long.parseLong(tokens[<span class="number">0</span>]));</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">long</span> lowerBound = Long.parseLong(tokens[<span class="number">0</span>]);</span><br /><span class="line">    <span class="keyword">long</span> upperBound = Long.parseLong(tokens[<span class="number">1</span>]) - lowerBound;</span><br /><span class="line">    <span class="keyword">return</span> lowerBound + Math.abs(getSource().nextLong() % upperBound);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">private</span> Object <span class="title">getRandomBytes</span><span class="params">()</span> </span>{</span><br /><span class="line">    <span class="keyword">byte</span>[] bytes = <span class="keyword">new</span> <span class="keyword">byte</span>[<span class="number">32</span>];</span><br /><span class="line">    getSource().nextBytes(bytes);</span><br /><span class="line">    <span class="keyword">return</span> DigestUtils.md5DigestAsHex(bytes);</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>比较简单，瞅瞅即明白。</li>
+</ul>
+</li>
+</ul>
+<p>😈 这个谜题，是不是被揭晓了~</p>
+<h1 id="6-PropertySourcesPlaceholdersResolver">6. PropertySourcesPlaceholdersResolver</h1>
+<p><code>org.springframework.boot.context.properties.bind.PropertySourcesPlaceholdersResolver</code>&nbsp;，实现 PropertySource 对应的值是占位符的解析器 。</p>
+<h2 id="6-1-构造方法">6.1 构造方法</h2>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// PropertySourcesPlaceholdersResolver.java</span></span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Iterable&lt;PropertySource&lt;?&gt;&gt; sources;</span><br /><br /><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> PropertyPlaceholderHelper helper;</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">PropertySourcesPlaceholdersResolver</span><span class="params">(Environment environment)</span> </span>{</span><br /><span class="line">	<span class="keyword">this</span>(getSources(environment), <span class="keyword">null</span>);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">PropertySourcesPlaceholdersResolver</span><span class="params">(Iterable&lt;PropertySource&lt;?&gt;&gt; sources)</span> </span>{</span><br /><span class="line">	<span class="keyword">this</span>(sources, <span class="keyword">null</span>);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">PropertySourcesPlaceholdersResolver</span><span class="params">(Iterable&lt;PropertySource&lt;?&gt;&gt; sources,</span></span></span><br /><span class="line"><span class="function"><span class="params">		PropertyPlaceholderHelper helper)</span> </span>{</span><br /><span class="line">	<span class="keyword">this</span>.sources = sources;</span><br /><span class="line">	<span class="keyword">this</span>.helper = (helper != <span class="keyword">null</span>) ? helper</span><br /><span class="line">			: <span class="keyword">new</span> PropertyPlaceholderHelper(SystemPropertyUtils.PLACEHOLDER_PREFIX, <span class="comment">// ${</span></span><br /><span class="line">					SystemPropertyUtils.PLACEHOLDER_SUFFIX, <span class="comment">// }</span></span><br /><span class="line">					SystemPropertyUtils.VALUE_SEPARATOR, <span class="keyword">true</span>);</span><br /><span class="line">}</span><br /><br /><span class="line"><span class="comment">// 获得 PropertySources 们</span></span><br /><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> PropertySources <span class="title">getSources</span><span class="params">(Environment environment)</span> </span>{</span><br /><span class="line">	Assert.notNull(environment, <span class="string">"Environment must not be null"</span>);</span><br /><span class="line">	Assert.isInstanceOf(ConfigurableEnvironment.class, environment, <span class="string">"Environment must be a ConfigurableEnvironment"</span>);</span><br /><span class="line">	<span class="keyword">return</span> ((ConfigurableEnvironment) environment).getPropertySources();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>其中，创建的&nbsp;<code>helper</code>&nbsp;属性，为 PropertyPlaceholderHelper 对象。其中&nbsp;<code>SystemPropertyUtils.PLACEHOLDER_PREFIX</code>&nbsp;为&nbsp;<code>${</code>&nbsp;，&nbsp;<code>SystemPropertyUtils.PLACEHOLDER_SUFFIX</code>&nbsp;为&nbsp;<code>}</code>。这样，例如说 RandomValuePropertySource 的&nbsp;<code>${random.int}</code>&nbsp;等等，就可以被 PropertySourcesPlaceholdersResolver 所处理。</li>
+</ul>
+<h2 id="6-2-resolvePlaceholders">6.2 resolvePlaceholders</h2>
+<p>实现&nbsp;<code>#resolvePlaceholders(Object value)</code>&nbsp;方法，解析占位符。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// PropertySourcesPlaceholdersResolver.java</span></span><br /><br /><span class="line"><span class="meta">@Override</span></span><br /><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">resolvePlaceholders</span><span class="params">(Object value)</span> </span>{</span><br /><span class="line">    <span class="comment">// 如果 value 是 String 类型，才是占位符</span></span><br /><span class="line">    <span class="keyword">if</span> (value <span class="keyword">instanceof</span> String) {</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>.helper.replacePlaceholders((String) value, <span class="keyword">this</span>::resolvePlaceholder);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> value;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>
+<p>如果&nbsp;<code>value</code>&nbsp;是 String 类型，才<strong>可能</strong>是占位符。满足时，调用&nbsp;<code>PropertyPlaceholderHelper#replacePlaceholders(String value, PlaceholderResolver placeholderResolver)</code>&nbsp;方法，解析出占位符里面的内容。</p>
+<ul>
+<li>例如说：PropertySourcesPlaceholdersResolver 中，占位符是&nbsp;<code>${}</code>&nbsp;，那么&nbsp;<code>${random.int}</code>&nbsp;被解析后的内容是&nbsp;<code>random.int</code>&nbsp;。</li>
+<li>
+<p>解析到占位符后，则回调&nbsp;<code>#resolvePlaceholder(String placeholder)</code>&nbsp;方法，获得占位符对应的值。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// PropertySourcesPlaceholdersResolver.java</span></span><br /><br /><span class="line"><span class="function"><span class="keyword">protected</span> String <span class="title">resolvePlaceholder</span><span class="params">(String placeholder)</span> </span>{</span><br /><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>.sources != <span class="keyword">null</span>) {</span><br /><span class="line">        <span class="comment">// 遍历 sources 数组，逐个获得属性值。若获取到，则进行返回</span></span><br /><span class="line">        <span class="keyword">for</span> (PropertySource&lt;?&gt; source : <span class="keyword">this</span>.sources) {</span><br /><span class="line">            Object value = source.getProperty(placeholder);</span><br /><span class="line">            <span class="keyword">if</span> (value != <span class="keyword">null</span>) {</span><br /><span class="line">                <span class="keyword">return</span> String.valueOf(value);</span><br /><span class="line">            }</span><br /><span class="line">        }</span><br /><span class="line">    }</span><br /><span class="line">    <span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>这样，😈 RandomValuePropertySource 是不是就被串起来喽。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h1 id="7-PropertySourceLoader">7. PropertySourceLoader</h1>
+<p><code>org.springframework.boot.env.PropertySourceLoader</code>&nbsp;接口，加载指定配置文件，返回 PropertySource 数组。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// PropertySourceLoader.java</span></span><br /><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">PropertySourceLoader</span> </span>{</span><br /><br /><span class="line">	<span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 获得可以处理的配置文件的后缀</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">	 * Returns the file extensions that the loader supports (excluding the '.').</span></span><br /><span class="line"><span class="comment">	 * <span class="doctag">@return</span> the file extensions</span></span><br /><span class="line"><span class="comment">	 */</span></span><br /><span class="line">	String[] getFileExtensions();</span><br /><br /><span class="line">	<span class="comment">/**</span></span><br /><span class="line"><span class="comment">     * 加载指定配置文件，返回 PropertySource 数组</span></span><br /><span class="line"><span class="comment">     *</span></span><br /><span class="line"><span class="comment">	 * Load the resource into one or more property sources. Implementations may either</span></span><br /><span class="line"><span class="comment">	 * return a list containing a single source, or in the case of a multi-document format</span></span><br /><span class="line"><span class="comment">	 * such as yaml a source for each document in the resource.</span></span><br /><span class="line"><span class="comment">	 * <span class="doctag">@param</span> name the root name of the property source. If multiple documents are loaded</span></span><br /><span class="line"><span class="comment">	 * an additional suffix should be added to the name for each source loaded.</span></span><br /><span class="line"><span class="comment">     *             PropertySource 的名字</span></span><br /><span class="line"><span class="comment">	 * <span class="doctag">@param</span> resource the resource to load</span></span><br /><span class="line"><span class="comment">     *             配置文件的 Resource 对象</span></span><br /><span class="line"><span class="comment">	 * <span class="doctag">@return</span> a list property sources</span></span><br /><span class="line"><span class="comment">	 * <span class="doctag">@throws</span> IOException if the source cannot be loaded</span></span><br /><span class="line"><span class="comment">	 */</span></span><br /><span class="line">	List&lt;PropertySource&lt;?&gt;&gt; load(String name, Resource resource) <span class="keyword">throws</span> IOException;</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>可能胖友，和我开始一样，为什么一个配置文件，加载后会存在多个 PropertySource 对象呢？下面，我们来见分晓~</li>
+</ul>
+<h2 id="7-1-PropertiesPropertySourceLoader">7.1 PropertiesPropertySourceLoader</h2>
+<p><code>org.springframework.boot.env.PropertiesPropertySourceLoader</code>&nbsp;，实现 PropertySourceLoader 接口，加载&nbsp;<code>.xml</code>&nbsp;和&nbsp;<code>.properties</code>&nbsp;类型的配置文件。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// PropertiesPropertySourceLoader.java</span></span><br /><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">PropertiesPropertySourceLoader</span> <span class="keyword">implements</span> <span class="title">PropertySourceLoader</span> </span>{</span><br /><br /><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String XML_FILE_EXTENSION = <span class="string">".xml"</span>;</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="keyword">public</span> String[] getFileExtensions() {</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> String[] { <span class="string">"properties"</span>, <span class="string">"xml"</span> }; <span class="comment">// &lt;1&gt;</span></span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="keyword">public</span> List&lt;PropertySource&lt;?&gt;&gt; load(String name, Resource resource)</span><br /><span class="line">            <span class="keyword">throws</span> IOException {</span><br /><span class="line">        <span class="comment">// &lt;2.1&gt; 读取指定配置文件，返回 Map 对象</span></span><br /><span class="line">        Map&lt;String, ?&gt; properties = loadProperties(resource);</span><br /><span class="line">        <span class="comment">// &lt;2.2&gt; 如果 Map 为空，返回空数组</span></span><br /><span class="line">        <span class="keyword">if</span> (properties.isEmpty()) {</span><br /><span class="line">            <span class="keyword">return</span> Collections.emptyList();</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// &lt;2.3&gt; 将 Map 封装成 OriginTrackedMapPropertySource 对象，然后返回单元素的数组</span></span><br /><span class="line">        <span class="keyword">return</span> Collections.singletonList(<span class="keyword">new</span> OriginTrackedMapPropertySource(name, properties));</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，返回可处理的文件类型，为&nbsp;<code>properties</code>&nbsp;和&nbsp;<code>xml</code>&nbsp;。</li>
+<li>
+<p><code>&lt;2.1&gt;</code>&nbsp;处，调用&nbsp;<code>#loadProperties(Resource resource)</code>&nbsp;方法，读取指定配置文件，返回 Map 对象。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// PropertiesPropertySourceLoader.java</span></span><br /><br /><span class="line"><span class="keyword">private</span> Map&lt;String, ?&gt; loadProperties(Resource resource) <span class="keyword">throws</span> IOException {</span><br /><span class="line">    String filename = resource.getFilename();</span><br /><span class="line">    <span class="comment">// 读取 XML 后缀的配置文件</span></span><br /><span class="line">    <span class="keyword">if</span> (filename != <span class="keyword">null</span> &amp;&amp; filename.endsWith(XML_FILE_EXTENSION)) {</span><br /><span class="line">        <span class="keyword">return</span> (Map) PropertiesLoaderUtils.loadProperties(resource);</span><br /><span class="line">    }</span><br /><span class="line">    <span class="comment">// 读取 Properties 后缀的配置文件</span></span><br /><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> OriginTrackedPropertiesLoader(resource).load();</span><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li>根据&nbsp;<code>.xml</code>&nbsp;和&nbsp;<code>.properties</code>&nbsp;后缀，使用不同的读取方法。至于读取配置的逻辑，暂时不在本文的范畴，hoho 。感兴趣的胖友，自己去瞅瞅。</li>
+</ul>
+</li>
+<li>
+<p><code>&lt;2.2&gt;</code>&nbsp;处，如果 Map 为空，返回空数组。</p>
+</li>
+<li><code>&lt;2.3&gt;</code>&nbsp;处，将 Map 封装成 OriginTrackedMapPropertySource 对象，然后返回单元素的数组。<code>org.springframework.boot.env.OriginTrackedMapPropertySource</code>&nbsp;，继承 MapPropertySource 类，实现 OriginLookup 接口，代码如下：
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// OriginTrackedMapPropertySource.java</span></span><br /><br /><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">OriginTrackedMapPropertySource</span> <span class="keyword">extends</span> <span class="title">MapPropertySource</span></span></span><br /><span class="line"><span class="class">		<span class="keyword">implements</span> <span class="title">OriginLookup</span>&lt;<span class="title">String</span>&gt; </span>{</span><br /><br /><span class="line">	<span class="meta">@SuppressWarnings</span>({ <span class="string">"unchecked"</span>, <span class="string">"rawtypes"</span> })</span><br /><span class="line">	<span class="function"><span class="keyword">public</span> <span class="title">OriginTrackedMapPropertySource</span><span class="params">(String name, Map source)</span> </span>{</span><br /><span class="line">		<span class="keyword">super</span>(name, source);</span><br /><span class="line">	}</span><br /><br /><span class="line">	<span class="meta">@Override</span></span><br /><span class="line">	<span class="function"><span class="keyword">public</span> Object <span class="title">getProperty</span><span class="params">(String name)</span> </span>{</span><br /><span class="line">	    <span class="comment">// 获得属性值</span></span><br /><span class="line">		Object value = <span class="keyword">super</span>.getProperty(name);</span><br /><span class="line">		<span class="comment">// 如果是 OriginTrackedValue 封装类型，则返回其真实的值</span></span><br /><span class="line">		<span class="keyword">if</span> (value <span class="keyword">instanceof</span> OriginTrackedValue) {</span><br /><span class="line">			<span class="keyword">return</span> ((OriginTrackedValue) value).getValue();</span><br /><span class="line">		}</span><br /><span class="line">		<span class="keyword">return</span> value;</span><br /><span class="line">	}</span><br /><br /><span class="line">	<span class="meta">@Override</span></span><br /><span class="line">	<span class="function"><span class="keyword">public</span> Origin <span class="title">getOrigin</span><span class="params">(String name)</span> </span>{</span><br /><span class="line">        <span class="comment">// 获得属性值</span></span><br /><span class="line">        Object value = <span class="keyword">super</span>.getProperty(name);</span><br /><span class="line">        <span class="comment">// 如果是 OriginTrackedValue 封装类型，则返回其 Origin</span></span><br /><span class="line">		<span class="keyword">if</span> (value <span class="keyword">instanceof</span> OriginTrackedValue) {</span><br /><span class="line">			<span class="keyword">return</span> ((OriginTrackedValue) value).getOrigin();</span><br /><span class="line">		}</span><br /><span class="line">		<span class="keyword">return</span> <span class="keyword">null</span>;</span><br /><span class="line">	}</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+</li>
+</ul>
+<h2 id="7-2-YamlPropertySourceLoader">7.2 YamlPropertySourceLoader</h2>
+<p><code>org.springframework.boot.env.YamlPropertySourceLoader</code>&nbsp;，实现 PropertySourceLoader 接口，加载&nbsp;<code>.yaml</code>&nbsp;和&nbsp;<code>.yml</code>&nbsp;类型的配置文件。代码如下：</p>
+<figure class="highlight java">
+<table>
+<tbody>
+<tr>
+<td class="code">
+<pre><span class="line"><span class="comment">// YamlPropertySourceLoader.java</span></span><br /><br /><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">YamlPropertySourceLoader</span> <span class="keyword">implements</span> <span class="title">PropertySourceLoader</span> </span>{</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="keyword">public</span> String[] getFileExtensions() {</span><br /><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> String[] { <span class="string">"yml"</span>, <span class="string">"yaml"</span> }; <span class="comment">// &lt;1&gt;</span></span><br /><span class="line">    }</span><br /><br /><span class="line">    <span class="meta">@Override</span></span><br /><span class="line">    <span class="keyword">public</span> List&lt;PropertySource&lt;?&gt;&gt; load(String name, Resource resource) <span class="keyword">throws</span> IOException {</span><br /><span class="line">        <span class="comment">// &lt;2&gt; 如果不存在 org.yaml.snakeyaml.Yaml 类，说明没有引入 snakeyaml 依赖</span></span><br /><span class="line">        <span class="keyword">if</span> (!ClassUtils.isPresent(<span class="string">"org.yaml.snakeyaml.Yaml"</span>, <span class="keyword">null</span>)) {</span><br /><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Attempted to load "</span> + name</span><br /><span class="line">                    + <span class="string">" but snakeyaml was not found on the classpath"</span>);</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// &lt;3.1&gt; 加载配置，返回 Map 数组</span></span><br /><span class="line">        List&lt;Map&lt;String, Object&gt;&gt; loaded = <span class="keyword">new</span> OriginTrackedYamlLoader(resource).load();</span><br /><span class="line">        <span class="comment">// &lt;3.2&gt; 如果数组为空，返回空数组</span></span><br /><span class="line">        <span class="keyword">if</span> (loaded.isEmpty()) {</span><br /><span class="line">            <span class="keyword">return</span> Collections.emptyList();</span><br /><span class="line">        }</span><br /><span class="line">        <span class="comment">// &lt;3.3&gt; 将 Map 数组，封装成 OriginTrackedMapPropertySource 数组，返回</span></span><br /><span class="line">        List&lt;PropertySource&lt;?&gt;&gt; propertySources = <span class="keyword">new</span> ArrayList&lt;&gt;(loaded.size());</span><br /><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; loaded.size(); i++) {</span><br /><span class="line">            String documentNumber = (loaded.size() != <span class="number">1</span>) ? <span class="string">" (document #"</span> + i + <span class="string">")"</span> : <span class="string">""</span>;</span><br /><span class="line">            propertySources.add(<span class="keyword">new</span> OriginTrackedMapPropertySource(name + documentNumber, loaded.get(i)));</span><br /><span class="line">        }</span><br /><span class="line">        <span class="keyword">return</span> propertySources;</span><br /><span class="line">    }</span><br /><br /><span class="line">}</span></pre>
+</td>
+</tr>
+</tbody>
+</table>
+</figure>
+<ul>
+<li><code>&lt;1&gt;</code>&nbsp;处，返回可处理的文件类型，为&nbsp;<code>yaml</code>&nbsp;和&nbsp;<code>yml</code>&nbsp;。</li>
+<li><code>&lt;2&gt;</code>&nbsp;处，如果不存在&nbsp;<code>org.yaml.snakeyaml.Yaml</code>&nbsp;类，说明没有引入 snakeyaml 依赖，则抛出 IllegalStateException 异常。</li>
+<li><code>&lt;3.1&gt;</code>&nbsp;处，调用&nbsp;<code>OriginTrackedYamlLoader#load()</code>&nbsp;方法，加载配置，返回 Map 数组。😈 哎哟，此处就是我们的好奇了，返回的是 Map 数组列！我们先来看看&nbsp;<a href="https://blog.csdn.net/yy756127197/article/details/78193398" target="_blank" rel="external nofollow noopener noreferrer">《Spring Boot 使用 YML 文件配置多环境》</a>&nbsp;的&nbsp;<a href="http://svip.iocoder.cn/Spring-Boot/properties-load/">「1 一个yml文件」</a>&nbsp;，每个&nbsp;<code>----</code>&nbsp;分割线，会解析成一个对应的&nbsp;<code>Map&lt;String, Object&gt;</code>&nbsp;对象。</li>
+<li><code>&lt;3.2&gt;</code>&nbsp;处，如果 Map 数组为空，返回空数组。</li>
+<li><code>&lt;3.3&gt;</code>&nbsp;处，将 Map 数组，封装成 OriginTrackedMapPropertySource 数组，然后返回。</li>
+</ul>
+<h1 id="666-彩蛋">666. 彩蛋</h1>
+<p>卧槽，真心是内心无比卧槽。比我预先的，长太太太多了。</p>
+<p>如果有解释不到位的地方，麻烦胖友在星球提出下哟。hoho ，春节期间初二，在老家写完~</p>
+<p>参考和推荐如下文章：</p>
+<ul>
+<li>oldflame-Jm&nbsp;<a href="https://blog.csdn.net/jamet/article/details/77508182" target="_blank" rel="external nofollow noopener noreferrer">《Spring boot源码分析-profiles环境（4）》</a></li>
+<li>oldflame-Jm&nbsp;<a href="https://blog.csdn.net/jamet/article/details/78042486" target="_blank" rel="external nofollow noopener noreferrer">《Spring boot源码分析-ApplicationListener应用环境（5）》</a></li>
+<li>youzhibing2904&nbsp;<a href="https://www.cnblogs.com/youzhibing/p/9622441.html" target="_blank" rel="external nofollow noopener noreferrer">《spring-boot-2.0.3不一样系列之源码篇 - run方法（二）之prepareEnvironment，绝对有值得你看的地方》</a></li>
+</ul>
+<hr />
+<p>如下内容，是艿艿的草稿，胖友可以先不去了解。</p>
+<p>假设 Profile 为&nbsp;<code>prod,dev</code>&nbsp;。读取结果如下：</p>
+<blockquote>
+<p>如下过程，省略读取不到配置文件的情况。</p>
+</blockquote>
+<ul>
+<li>getPositiveProfileFilter 的情况
+<ul>
+<li><code>profile=null</code>&nbsp;部分
+<ul>
+<li>读取&nbsp;<code>classpath:/application.properties</code>&nbsp;，匹配成功。</li>
+<li>读取&nbsp;<code>classpath:/application.yaml</code>&nbsp;，匹配成功。</li>
+</ul>
+</li>
+<li><code>profile=prod</code>
+<ul>
+<li>读取&nbsp;<code>classpath:/application-prod.properties</code>&nbsp;，匹配成功（基于&nbsp;<code>defaultFilter</code>）。</li>
+<li>读取&nbsp;<code>classpath:/application-prod.properties</code>&nbsp;，匹配失败（基于&nbsp;<code>profileFilter</code>）。</li>
+<li>读取&nbsp;<code>classpath:/application-prod.properties</code>&nbsp;，匹配失败（基于&nbsp;<code>profileFilter</code>）。</li>
+<li>读取&nbsp;<code>classpath:/application.yaml</code>&nbsp;，匹配失败（基于&nbsp;<code>profileFilter</code>）。【匹配上 prod 那部分】</li>
+</ul>
+</li>
+<li><code>profile=dev</code>
+<ul>
+<li>读取&nbsp;<code>classpath:/application-dev.properties</code>&nbsp;，匹配成功（基于&nbsp;<code>defaultFilter</code>）。</li>
+<li>读取&nbsp;<code>classpath:/application-dev.properties</code>&nbsp;，匹配失败（基于&nbsp;<code>profileFilter</code>）。</li>
+<li>读取&nbsp;<code>classpath:/application-dev.properties</code>&nbsp;，匹配失败（基于&nbsp;<code>profileFilter</code>）。</li>
+<li>读取&nbsp;<code>classpath:/application.yaml</code>&nbsp;，匹配失败（基于&nbsp;<code>profileFilter</code>）。【匹配上 dev 那部分】</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>getNegativeProfileFilter 的情况
+<ul>
+<li><code>profile=null</code>&nbsp;部分
+<ul>
+<li>读取&nbsp;<code>classpath:/application.properties</code>&nbsp;，匹配失败。</li>
+<li>🙂🙂🙂 读取&nbsp;<code>classpath:/application.yaml</code>&nbsp;，匹配成功【匹配上 prod、dev 那部分】。比较有意思 😈 ，用于解决&nbsp;<code>profile=null</code>&nbsp;的情况，可以把激活的 Profile ，也匹配上。但是在目前这个情况下，即使匹配上，在&nbsp;<code>#addToLoaded(...)</code>&nbsp;方法中的 DocumentConsumer 的逻辑时，会在&nbsp;<code>checkForExisting</code>&nbsp;那块的逻辑，如果要校验已经存在的情况，则如果已经存在，则直接&nbsp;<code>return</code>&nbsp;被排除掉。因为在&nbsp;<code>profile=prod</code>&nbsp;和&nbsp;<code>profile=dev</code>&nbsp;部分，已经匹配上该部分的配置。
+<ul>
+<li>= =~当然，实在搞不懂这个逻辑，也不用纠结这个。重点是搞懂 Spring Boot 加载配置的核心逻辑。也就是，ConfigFileApplicationListener 整体的逻辑。</li>
+<li>艿艿又思考了下，貌似突然也有点想不通，什么情况下，这块逻辑会成功加载到 Profile 不匹配的配置文件，即在在&nbsp;<code>#addToLoaded(...)</code>&nbsp;方法中的 DocumentConsumer 的逻辑时，会在&nbsp;<code>checkForExisting</code>&nbsp;那块的逻辑，如果要校验已经存在的情况，则如果不存在。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>

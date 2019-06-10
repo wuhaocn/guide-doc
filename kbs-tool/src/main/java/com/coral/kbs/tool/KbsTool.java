@@ -15,12 +15,23 @@ public class KbsTool {
     static FileOutputStream fileStream = null;
 
     public static void main(String[] args) throws IOException {
-        File file = new File("/Users/wuhao/data/code/github/framework/incubator-dubbo/dubbo-common/src/main/resources/META-INF/dubbo/internal");
-        findAnrWrite(file, 0, false, "", false, 5);
+        File file = new File("./");
+        findAnrWrite(file, 0, true, "", false, 6);
         //findAnrWrite(file, 0, false, "", true);
         getFileStream().close();
     }
 
+    /**
+     *
+     * @param file
+     * @param level
+     * @param guide
+     * @param index
+     * @param referIndex 参照索引
+     * @param maxLevel
+     * @return
+     * @throws IOException
+     */
     private static boolean findAnrWrite(File file, int level, boolean guide, String index, boolean referIndex, int maxLevel) throws IOException {
         //是否需要跳过
         if (DocIndexUtils.isIgnoreFile(file, level, maxLevel, referIndex)){
