@@ -8,7 +8,8 @@ import java.util.List;
 
 public class DocIndexUtils {
 
-    public static boolean containUrl = false;
+    public static boolean containUrl = true;
+    public static String baseUrl = "https://github.com/wuhaocn/guide-doc/tree/master/";
 
     public static List<String> sort(String[] unSortStringArray) {
         List<String> unSortStringList = Arrays.asList(unSortStringArray);
@@ -117,5 +118,17 @@ public class DocIndexUtils {
         return false;
     }
 
-    final static String[] ignoreFiles = new String[]{"build", "tmp" , "out", "src", "target", "gradle"};
+    final static String[] ignoreFiles = new String[]{
+            ".git",
+            ".gradle",
+            ".idea",
+            "0.awesome",
+            "nodejs",
+            "1.csnotes",
+            "build",
+            "tmp" ,
+            "out",
+            "src",
+            "target",
+            "gradle"};
 }
