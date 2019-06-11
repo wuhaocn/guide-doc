@@ -43,7 +43,7 @@ public class KbsTool {
         if (file.isDirectory()) {
             List<File> fileList = DocIndexUtils.sortFile(file.listFiles());
             if (level == 0 && guide){
-                getFileStream().write("* [知识库目录](#)\n".getBytes());
+                getFileStream().write("* [珊瑚客](#)\n".getBytes());
                 getFileStream().flush();
             } else {
                 StringBuilder sb = new StringBuilder();
@@ -52,7 +52,7 @@ public class KbsTool {
                     for (int i = 0; i < level; i++){
                         sb.append("     ");
                     }
-                    sb.append(" ");
+                    sb.append("*");
                 } else {
                     for (int i = 0; i < level; i++){
                         sb.append("#");
@@ -69,6 +69,7 @@ public class KbsTool {
                 sb.append(fileName);
                 if (DocIndexUtils.containUrl){
                     sb.append("](");
+                    sb.append(DocIndexUtils.baseUrl);
                     sb.append(pathNoWin);
                     sb.append(")\n");
                 }else {
