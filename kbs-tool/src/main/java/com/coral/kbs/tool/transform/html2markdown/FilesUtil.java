@@ -845,6 +845,9 @@ public class FilesUtil {
       File dstFile = new File(filepath);
       if (!dstFile.exists()) {
         dstFile.createNewFile();
+      } else {
+        dstFile.delete();
+        dstFile.createNewFile();
       }
       fileOutputStream = new FileOutputStream(dstFile);
       fileOutputStream.write(content.getBytes());

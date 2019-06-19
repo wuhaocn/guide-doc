@@ -207,6 +207,8 @@ public class HTML2Md {
       img(element, lines);
     } else if (tagName.equals("code")) {
       code(element, lines);
+    } else if (tagName.equals("pre")) {
+      pre(element, lines);
     } else if (tagName.equals("ul")) {
       ul(element, lines);
     } else if (tagName.equals("ol")) {
@@ -346,6 +348,15 @@ public class HTML2Md {
     MDLine line = new MDLine(MDLine.MDLineType.None, 0, "    ");
     line.append(getTextContent(element).replace("\n", "    "));
     lines.add(line);
+    lines.add(new MDLine(MDLine.MDLineType.None, 0, ""));
+  }
+
+  private static void pre(Element element, ArrayList<MDLine> lines) {
+    lines.add(new MDLine(MDLine.MDLineType.None, 0, "```"));
+    MDLine line = new MDLine(MDLine.MDLineType.None, 0, "");
+    line.append(getTextContent(element));
+    lines.add(line);
+    lines.add(new MDLine(MDLine.MDLineType.None, 0, "```"));
     lines.add(new MDLine(MDLine.MDLineType.None, 0, ""));
   }
 
