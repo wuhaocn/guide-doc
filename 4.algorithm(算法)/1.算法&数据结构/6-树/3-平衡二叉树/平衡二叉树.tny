@@ -1,0 +1,1005 @@
+<h1 class="postTitle"><a id="cb_post_title_url" class="postTitle2" href="https://www.cnblogs.com/zhujunxxxxx/p/3348798.html">数据结构之 平衡二叉树</a></h1>
+<div class="clear">&nbsp;</div>
+<div class="postBody">
+<div id="cnblogs_post_body" class="blogpost-body">
+<p>平衡二叉树，是一种二叉排序树，其中每个结点的左子树和右子树的高度差至多等于1。它是一种高度平衡的二叉排序树。高度平衡？意思是说，要么它是一棵空树，要么它的左子树和右子树都是平衡二叉树，且左子树和右子树的深度之差的绝对值不超过1。</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;将二叉树上结点的左子树深度减去右子树深度的值称为平衡因子BF，那么平衡二叉树上的所有结点的平衡因子只可能是-1、0和1。只要二叉树上有一个结点的平衡因子的绝对值大于1，则该二叉树就是不平衡的。&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;平衡二叉树的前提是它是一棵二叉排序树。&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;距离插入结点最近的，且平衡因子的绝对值大于1的结点为根的子树，称为最小不平衡子树。如下图所示，当插入结点37时，距离它最近的平衡因子的绝对值超过1的结点是58。</p>
+<p>&nbsp;</p>
+<p>&nbsp;<img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358647849QBbO.png" alt="" width="475" height="165" /></p>
+<p>1、平衡二叉树实现原理&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;平衡二叉树构建的基本思想就是在构建二叉排序树的过程中，每当插入一个结点时，先检查是否因插入而破坏了树的平衡性，若是，则找出最小不平衡子树。在保持二叉排序树特性的前提下，调整最小不平衡子树中各结点之间的链接关系，进行相应的旋转，使之成为新的平衡子树。 下面讲解一个平衡二叉树构建过程的例子。现在又a[10] = {3, 2, 1, 4, 5, 6, 7, 10, 9, 8}需要构建二叉排序树。在没有学习平衡二叉树之前，根据二叉排序树的特性，通常会将它构建成如下左图。虽然完全符合二叉排序树的定义，但是对这样高度达到8的二叉树来说，查找是非常不利的。因此，更加期望构建出如下右图的样子，高度为4的二叉排序树，这样才可以提供高效的查找效率。</p>
+<p><img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358648262bfLw.png" alt="" width="485" height="173" />&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;现在来看看如何将一个数组构成出如上右图的树结构。 对于数组a的前两位3和2，很正常地构建，到了第个数&ldquo;1&rdquo;时，发现此时根结点&ldquo;3&rdquo;的平衡因子变成了2，此时整棵树都成了最小不平衡子树，需要进行调整，如下图图1（结点左上角数字为平衡因子BF值）。因为BF为正，因此将整个树进行右旋（顺时针），此时结点2成了根结点，3成了2的右孩子，这样三个结点的BF值均为0，非常的平衡，如下图图2所示。</p>
+<p><img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358648531VpPP.png" alt="" width="456" height="172" /></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;然后再增加结点4，平衡因子没有改变，如上图图3。增加结点5时，结点3的BF值为-2，说明要旋转了。由于BF是负值，对这棵最小平衡子树进行左旋（逆时针旋转），如下图图4，此时整个树又达到了平衡。</p>
+<p><img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358648821ZpPK.png" alt="" width="494" height="194" />&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;继续增加结点6时，发现根结点2的BF值变成了-2，如下图图6所示。所以对根结点进行了左旋，注意此时本来结点3是结点3的左孩子，由于旋转后需要满足二叉排序树特性，因此它成了结点2的右孩子，如图7所示。</p>
+<p><img src="http://blog.chinaunix.net/attachment/201301/20/26548237_13586496564218.png" alt="" width="485" height="170" />&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;增加结点7，同样的左旋转，使得整棵树达到平衡，如下图8和9所示。</p>
+<p>&nbsp;&nbsp;&nbsp;<img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358649801UbTZ.png" alt="" width="438" height="169" />&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;当增加结点10时，结构无变化，如图10所示。再增加结点9，此时结点7的BF变成了-2，理论上只需要旋转最小不平衡树7、9、10即可，但是，如果左旋转后，结点9变成了10的右孩子，这是不符合二叉排序树的特性的，此时不能简单的左旋。如图11所示。</p>
+<p><img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358650084A4zx.png" alt="" width="482" height="196" /></p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;仔细观察图11，发现根本原因在于结点7的BF是-2，而结点10的BF是1，也就是说，它们两个一正一负，符号并不统一，而前面的几次旋转，无论左还是右旋，最小不平衡子树的根结点与它的子结点符号都是相同的。这就是不能直接旋转的关键。 不统一，不统一就把它们先转到符号统一再说，于是先对结点9和结点10进行右旋，使得结点10成了9的右子树，结点9的BF为-1，此时就与结点7的BF值符号统一了，如图12所示。</p>
+<p><img src="http://blog.chinaunix.net/attachment/201301/20/26548237_13586503529IMU.png" alt="" width="485" height="191" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;这样再以结点7为最小不平衡子树进行左旋，得到如下图13。接着，插入8，情况与刚才类似，结点6的BF是-2，而它的右孩子9的BF是1，如图14，因此首先以9为根结点，进行右旋，得到图15，此时结点6和结点7的符号都是负，再以6为根结点左旋，最终得到最后的平衡二叉树，如图16所示。</p>
+<p>&nbsp;<img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358650571sdU0.png" alt="" width="489" height="359" />&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;通过这个例子，可以发现，当最小不平衡树根结点的平衡因子BF是大于1时，就右旋，小于-1时就左旋，如上例中的结点1、5、6、7的插入等。插入结点后，最小不平衡子树的BF与它的子树的BF符号相反时，就需要对结点先进行一次旋转以使得符号相同后，再反向旋转一次才能够完成平衡操作，如上例中结点9、8的插入时。</p>
+<p>&nbsp; &nbsp; 下面两个图讲解了插入时所要做的旋转操作的例子。《来自：http://www.cnblogs.com/guyan/archive/2012/09/03/2668399.html》</p>
+<p><img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358690724QUaT.png" alt="" width="700" height="402.93005671078" /></p>
+<p><img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358690668jy1n.png" alt="" width="700" height="402.44173140954" /></p>
+<p>&nbsp;2、平衡二叉树算法的实现&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;首先是需要改进二叉排序树的结点结构，增加一个bf，用来存储平衡因子。</p>
+<p>&nbsp;</p>
+<div>
+<div id="highlighter_120298" class="syntaxhighlighter  cpp">
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody>
+<tr>
+<td class="code">
+<div class="container">
+<div class="line number1 index0 alt2"><code class="cpp keyword bold">typedef</code> <code class="cpp keyword bold">
+struct</code> <code class="cpp plain">
+BitNode</code></div>
+<div class="line number2 index1 alt1"><code class="cpp plain">{</code></div>
+<div class="line number3 index2 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+data;</code></div>
+<div class="line number4 index3 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+bf;</code></div>
+<div class="line number5 index4 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">struct</code> <code class="cpp plain">
+BitNode *lchild, *rchild;</code></div>
+<div class="line number6 index5 alt1"><code class="cpp plain">}BitNode,
+ *BiTree;</code></div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+&nbsp;&nbsp;&nbsp;&nbsp; 然后对于右旋（顺时针）操作，代码如下：
+<p>&nbsp;</p>
+<div>
+<div id="highlighter_491285" class="syntaxhighlighter  cpp">
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody>
+<tr>
+<td class="code">
+<div class="container">
+<div class="line number1 index0 alt2"><code class="cpp keyword bold">void</code> <code class="cpp plain">
+R_rotate(BiTree *t)</code></div>
+<div class="line number2 index1 alt1"><code class="cpp plain">{</code></div>
+<div class="line number3 index2 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">BiTree
+ s;</code></div>
+<div class="line number4 index3 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">s
+ = (*t)-&gt;lchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//s指向t的左子树根结点</code></div>
+<div class="line number5 index4 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*t)-&gt;lchild
+ = s-&gt;rchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//s的右子树挂接为t的左子树</code></div>
+<div class="line number6 index5 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">s-&gt;rchild
+ = (*t);</code></div>
+<div class="line number7 index6 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*p
+ = s;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//t指向新的根结点</code></div>
+<div class="line number8 index7 alt1"><code class="cpp plain">}</code></div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+&nbsp;&nbsp; &nbsp;&nbsp;此函数代码的意思是说，当传入一个二叉排序树t，将它的左孩子结点定义为s，将s的右子树变成t的左子树，再将t改为s的右子树，最后将s替换为t的根结点。这样就完成了一次右旋操作。如下图示，图中三角形代表子树，N代表新增的结点。
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;</p>
+<p><img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358676013pPD7.png" alt="" width="481" height="163" />&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;上面的例子中新增加了结点N，就是右旋操作。&nbsp;</p>
+<p>&nbsp; &nbsp; 左旋代码如下所示。</p>
+<p>&nbsp;</p>
+<div>
+<div id="highlighter_866035" class="syntaxhighlighter  cpp"><br />
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody>
+<tr>
+<td class="code">
+<div class="container">
+<div class="line number1 index0 alt2"><code class="cpp keyword bold">void</code> <code class="cpp plain">
+L_rotate(BiTree *t)</code></div>
+<div class="line number2 index1 alt1"><code class="cpp plain">{</code></div>
+<div class="line number3 index2 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">BiTree
+ s;</code></div>
+<div class="line number4 index3 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">s
+ = (*t)-&gt;rchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//s指向t的右子树根结点</code></div>
+<div class="line number5 index4 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*t)-&gt;rchild
+ = s-&gt;lchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//s的左子树挂接为t的右子树</code></div>
+<div class="line number6 index5 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">s-&gt;lchild
+ = (*t);</code></div>
+<div class="line number7 index6 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*p
+ = s;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//t指向新的根结点</code></div>
+<div class="line number8 index7 alt1"><code class="cpp plain">}</code></div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+&nbsp;&nbsp; &nbsp;&nbsp;下面看左旋转平衡（使左边平衡）的处理代码。
+<p>&nbsp;</p>
+<div>
+<div id="highlighter_546816" class="syntaxhighlighter  cpp"><br />
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody>
+<tr>
+<td class="code">
+<div class="container">
+<div class="line number1 index0 alt2"><code class="cpp preprocessor">#define
+ LH +1 /*&nbsp; 左高 */ </code></div>
+<div class="line number2 index1 alt1"><code class="cpp preprocessor">#define
+ EH 0&nbsp; /*&nbsp; 等高 */ </code></div>
+<div class="line number3 index2 alt2"><code class="cpp preprocessor">#define
+ RH -1 /*&nbsp; 右高 */ </code></div>
+<div class="line number4 index3 alt1">&nbsp;</div>
+<div class="line number5 index4 alt2"><code class="cpp comments">/*&nbsp;
+ 对以指针T所指结点为根的二叉树作左平衡旋转处理 */</code></div>
+<div class="line number6 index5 alt1"><code class="cpp comments">/*&nbsp;
+ 本算法结束时，指针T指向新的根结点 */</code></div>
+<div class="line number7 index6 alt2"><code class="cpp keyword bold">void</code> <code class="cpp plain">
+LeftBalance(BiTree *T)</code></div>
+<div class="line number8 index7 alt1"><code class="cpp plain">{
+</code></div>
+<div class="line number9 index8 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">BiTree
+ L,Lr;</code></div>
+<div class="line number10 index9 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L
+ = (*T)-&gt;lchild;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*&nbsp;
+ L指向T的左子树根结点 */</code></div>
+<div class="line number11 index10 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">(L-&gt;bf)</code></div>
+<div class="line number12 index11 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number13 index12 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*
+ 检查T的左子树的平衡度，并作相应平衡处理 */</code></div>
+<div class="line number14 index13 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ 新结点插入在T的左孩子的左子树上，要作单右旋处理 */</code></div>
+<div class="line number15 index14 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=L-&gt;bf=EH;</code></div>
+<div class="line number16 index15 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R_Rotate(T);</code></div>
+<div class="line number17 index16 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number18 index17 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ 新结点插入在T的左孩子的右子树上，要作双旋处理 */</code></div>
+<div class="line number19 index18 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">Lr=L-&gt;rchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*
+ Lr指向T的左孩子的右子树根 */</code></div>
+<div class="line number20 index19 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">(Lr-&gt;bf)</code></div>
+<div class="line number21 index20 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{&nbsp;&nbsp;
+</code><code class="cpp comments">/*
+ 修改T及其左孩子的平衡因子 */</code></div>
+<div class="line number22 index21 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH: (*T)-&gt;bf=RH;</code></div>
+<div class="line number23 index22 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L-&gt;bf=EH;</code></div>
+<div class="line number24 index23 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number25 index24 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+EH: (*T)-&gt;bf=L-&gt;bf=EH;</code></div>
+<div class="line number26 index25 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number27 index26 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH: (*T)-&gt;bf=EH;</code></div>
+<div class="line number28 index27 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L-&gt;bf=LH;</code></div>
+<div class="line number29 index28 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number30 index29 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number31 index30 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">Lr-&gt;bf=EH;</code></div>
+<div class="line number32 index31 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L_Rotate(&amp;(*T)-&gt;lchild);
+ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*
+ 对T的左子树作左旋平衡处理 */</code></div>
+<div class="line number33 index32 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R_Rotate(T);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*
+ 对T作右旋平衡处理 */</code></div>
+<div class="line number34 index33 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number35 index34 alt2"><code class="cpp plain">}</code></div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+&nbsp; &nbsp;
+<p>&nbsp; &nbsp; 首先，定义三个常数变量，分别代码1、0、-1。</p>
+<p>&nbsp; &nbsp; （1）函数被调用，传入一个需调整平衡型的子树T。由于LeftBalance函数被调用时，其实是已经确认当前子树是不平衡的状态，且左子树的高度大于右子树的高度。换句话说，此时T的根结点应该是平衡因子BF的值大于1的数。</p>
+<p>&nbsp; &nbsp; （2）将T的左孩子赋值给L。</p>
+<p>&nbsp; &nbsp; （3）然后是分支判断。</p>
+<p>&nbsp; &nbsp; （4）当L的平衡因子为LH，即为1时，表明它与根结点的BF值符号相同，因此，将它们的BF值都改为0，并进行右旋（顺时针）操作，操作方式如图所示。</p>
+<p>&nbsp; &nbsp; （5）当L的平衡因子为RH时，即为-1时，表明它与根结点的BF值符号相反，此时需要做双旋操作。针对L的右孩子的BF作判断，修改结点T和L的BF值。将当前的Lr的BF改为0。</p>
+<p>&nbsp; &nbsp; （6）对根结点的左子树进行左旋，如下图第二图所示。</p>
+<p>&nbsp; &nbsp; （7）对根结点进行右旋，如下图第三图所示，完成平衡操作。</p>
+<p><img src="http://blog.chinaunix.net/attachment/201301/20/26548237_1358677817GNjg.png" alt="" width="473" height="406" /></p>
+<p>&nbsp;</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;右平衡（使右边平衡）旋转处理的函数代码如下。</p>
+<p>&nbsp;</p>
+<div>
+<div id="highlighter_975989" class="syntaxhighlighter  cpp">
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody>
+<tr>
+<td class="code">
+<div class="container">
+<div class="line number1 index0 alt2"><code class="cpp comments">/*&nbsp;
+ 对以指针T所指结点为根的二叉树作右平衡旋转处理， */</code></div>
+<div class="line number2 index1 alt1"><code class="cpp comments">/*&nbsp;
+ 本算法结束时，指针T指向新的根结点 */</code></div>
+<div class="line number3 index2 alt2"><code class="cpp keyword bold">void</code> <code class="cpp plain">
+RightBalance(BiTree *T)</code></div>
+<div class="line number4 index3 alt1"><code class="cpp plain">{
+</code></div>
+<div class="line number5 index4 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">BiTree
+ R,Rl;</code></div>
+<div class="line number6 index5 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R=(*T)-&gt;rchild;
+</code><code class="cpp comments">/*&nbsp;
+ R指向T的右子树根结点 */</code></div>
+<div class="line number7 index6 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">(R-&gt;bf)</code></div>
+<div class="line number8 index7 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code><code class="cpp comments">/*&nbsp;
+ 检查T的右子树的平衡度，并作相应平衡处理 */</code></div>
+<div class="line number9 index8 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH: </code><code class="cpp comments">/*&nbsp;
+ 新结点插入在T的右孩子的右子树上，要作单左旋处理 */</code></div>
+<div class="line number10 index9 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=R-&gt;bf=EH;</code></div>
+<div class="line number11 index10 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L_Rotate(T);</code></div>
+<div class="line number12 index11 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number13 index12 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH: </code><code class="cpp comments">/*&nbsp;
+ 新结点插入在T的右孩子的左子树上，要作双旋处理 */</code></div>
+<div class="line number14 index13 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">Rl=R-&gt;lchild;
+</code><code class="cpp comments">/*&nbsp;
+ Rl指向T的右孩子的左子树根 */</code></div>
+<div class="line number15 index14 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">(Rl-&gt;bf)</code></div>
+<div class="line number16 index15 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code><code class="cpp comments">/*&nbsp;
+ 修改T及其右孩子的平衡因子 */</code></div>
+<div class="line number17 index16 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH: (*T)-&gt;bf=LH;</code></div>
+<div class="line number18 index17 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R-&gt;bf=EH;</code></div>
+<div class="line number19 index18 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number20 index19 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+EH: (*T)-&gt;bf=R-&gt;bf=EH;</code></div>
+<div class="line number21 index20 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number22 index21 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH: (*T)-&gt;bf=EH;</code></div>
+<div class="line number23 index22 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R-&gt;bf=RH;</code></div>
+<div class="line number24 index23 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number25 index24 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number26 index25 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">Rl-&gt;bf=EH;</code></div>
+<div class="line number27 index26 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R_Rotate(&amp;(*T)-&gt;rchild);
+</code><code class="cpp comments">/*&nbsp;
+ 对T的右子树作右旋平衡处理 */</code></div>
+<div class="line number28 index27 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L_Rotate(T);
+</code><code class="cpp comments">/*&nbsp;
+ 对T作左旋平衡处理 */</code></div>
+<div class="line number29 index28 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number30 index29 alt1"><code class="cpp plain">}</code></div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>&nbsp;&nbsp;&nbsp;&nbsp; 插入数据操作如下所示。</p>
+<p>&nbsp;</p>
+<div>
+<div id="highlighter_324646" class="syntaxhighlighter  cpp">
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody>
+<tr>
+<td class="code">
+<div class="container">
+<div class="line number1 index0 alt2"><code class="cpp comments">/*&nbsp;
+ 若在平衡的二叉排序树T中不存在和e有相同关键字的结点，则插入一个 */</code></div>
+<div class="line number2 index1 alt1"><code class="cpp comments">/*&nbsp;
+ 数据元素为e的新结点，并返回1，否则返回0。若因插入而使二叉排序树 */</code></div>
+<div class="line number3 index2 alt2"><code class="cpp comments">/*&nbsp;
+ 失去平衡，则作平衡旋转处理，布尔变量taller反映T长高与否。 */</code></div>
+<div class="line number4 index3 alt1"><code class="cpp plain">Status
+ InsertAVL(BiTree *T,</code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+e,Status *taller)</code></div>
+<div class="line number5 index4 alt2"><code class="cpp plain">{&nbsp;
+</code></div>
+<div class="line number6 index5 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(!*T)</code></div>
+<div class="line number7 index6 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number8 index7 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*&nbsp;
+ 插入新结点，树&ldquo;长高&rdquo;，置taller为TRUE */</code></div>
+<div class="line number9 index8 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*T=(BiTree)</code><code class="cpp functions bold">malloc</code><code class="cpp plain">(</code><code class="cpp keyword bold">sizeof</code><code class="cpp plain">(BitNode));</code></div>
+<div class="line number10 index9 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;data=e;
+ (*T)-&gt;lchild=(*T)-&gt;rchild=NULL; (*T)-&gt;bf=EH;</code></div>
+<div class="line number11 index10 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=TRUE;</code></div>
+<div class="line number12 index11 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number13 index12 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code></div>
+<div class="line number14 index13 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number15 index14 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code> <code class="cpp plain">
+(e==(*T)-&gt;data)</code></div>
+<div class="line number16 index15 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number17 index16 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*&nbsp;
+ 树中已存在和e有相同关键字的结点则不再插入 */</code></div>
+<div class="line number18 index17 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=FALSE;
+</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+FALSE;</code></div>
+<div class="line number19 index18 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number20 index19 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code> <code class="cpp plain">
+(e&lt;(*T)-&gt;data)</code></div>
+<div class="line number21 index20 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number22 index21 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*&nbsp;
+ 应继续在T的左子树中进行搜索 */</code></div>
+<div class="line number23 index22 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(!InsertAVL(&amp;(*T)-&gt;lchild,e,taller))
+</code><code class="cpp comments">/*&nbsp;
+ 未插入 */</code></div>
+<div class="line number24 index23 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+FALSE;</code></div>
+<div class="line number25 index24 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(*taller)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;&nbsp;
+ 已插入到T的左子树中且左子树&ldquo;长高&rdquo; */</code></div>
+<div class="line number26 index25 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">((*T)-&gt;bf)
+</code><code class="cpp comments">/*&nbsp;
+ 检查T的平衡度 */</code></div>
+<div class="line number27 index26 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number28 index27 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本左子树比右子树高，需要作左平衡处理 */</code></div>
+<div class="line number29 index28 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">LeftBalance(T);
+</code></div>
+<div class="line number30 index29 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=FALSE;
+</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number31 index30 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+EH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本左、右子树等高，现因左子树增高而使树增高 */</code></div>
+<div class="line number32 index31 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=LH;
+</code></div>
+<div class="line number33 index32 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=TRUE;
+</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number34 index33 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本右子树比左子树高，现左、右子树等高 */</code>&nbsp;</div>
+<div class="line number35 index34 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=EH;
+</code></div>
+<div class="line number36 index35 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=FALSE;
+</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number37 index36 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number38 index37 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number39 index38 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code></div>
+<div class="line number40 index39 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code><code class="cpp comments">/*&nbsp;
+ 应继续在T的右子树中进行搜索 */</code></div>
+<div class="line number41 index40 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(!InsertAVL(&amp;(*T)-&gt;rchild,e,taller))
+</code><code class="cpp comments">/*&nbsp;
+ 未插入 */</code></div>
+<div class="line number42 index41 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+FALSE;</code></div>
+<div class="line number43 index42 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(*taller)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;
+ 已插入到T的右子树且右子树&ldquo;长高&rdquo; */</code></div>
+<div class="line number44 index43 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">((*T)-&gt;bf)
+</code><code class="cpp comments">/*&nbsp;
+ 检查T的平衡度 */</code></div>
+<div class="line number45 index44 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number46 index45 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH:&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本左子树比右子树高，现左、右子树等高 */</code></div>
+<div class="line number47 index46 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=EH;
+</code></div>
+<div class="line number48 index47 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=FALSE;&nbsp;
+</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number49 index48 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+EH:&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本左、右子树等高，现因右子树增高而使树增高&nbsp; */</code></div>
+<div class="line number50 index49 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=RH;
+</code></div>
+<div class="line number51 index50 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=TRUE;
+</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number52 index51 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH:&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本右子树比左子树高，需要作右平衡处理 */</code></div>
+<div class="line number53 index52 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">RightBalance(T);
+</code></div>
+<div class="line number54 index53 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=FALSE;
+</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number55 index54 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number56 index55 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number57 index56 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number58 index57 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+TRUE;</code></div>
+<div class="line number59 index58 alt2"><code class="cpp plain">}</code></div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>&nbsp; &nbsp;&nbsp;&nbsp;说明：</p>
+<p>&nbsp; &nbsp; （1）程序开始执行时，如果T为空时，则申请内存新增一个结点。</p>
+<p>&nbsp; &nbsp; （2）如果表示当存在相同结点，则不需要插入。</p>
+<p>&nbsp; &nbsp; （3）当新结点e小于T的根结点时，则在T的左子树查找。</p>
+<p>&nbsp; &nbsp; （4）递归调用本函数，直到找到则返回FALSE，否则说明插入结点成功，执行下面语句。</p>
+<p>&nbsp; &nbsp; （5）当taller为TRUE时，说明插入结点，此时需要判断T的平衡因子，如果是1，说明左子树高于右子树，需要调用LeftBalance函数进行左平衡旋转处理。如果为0或-1，则说明新插入的结点没有让整棵二叉排序树失去平衡性，只需修改相关BF值即可。</p>
+<p>&nbsp; &nbsp; （6）说明结点e大于T的根结点的值，在T的右子树查找。与上面类似。</p>
+<p>&nbsp;</p>
+<p>&nbsp; &nbsp; 删除结点的代码如下所示。</p>
+<p>&nbsp;</p>
+<p>3、C语言实现</p>
+<p>&nbsp;</p>
+<div>
+<div id="highlighter_93440" class="syntaxhighlighter  cpp">
+<table border="0" cellspacing="0" cellpadding="0">
+<tbody>
+<tr>
+<td class="gutter">&nbsp;</td>
+<td class="code">
+<div class="container">
+<div class="line number1 index0 alt2"><code class="cpp plain">&lt;strong&gt;#include
+ &lt;stdio.h&gt;&nbsp;&nbsp;&nbsp; </code></div>
+<div class="line number2 index1 alt1"><code class="cpp preprocessor">#include
+ &lt;stdlib.h&gt;&nbsp;&nbsp; </code></div>
+<div class="line number3 index2 alt2">&nbsp;</div>
+<div class="line number4 index3 alt1"><code class="cpp preprocessor">#define
+ OK 1</code></div>
+<div class="line number5 index4 alt2"><code class="cpp preprocessor">#define
+ ERROR 0</code></div>
+<div class="line number6 index5 alt1"><code class="cpp preprocessor">#define
+ TRUE 1</code></div>
+<div class="line number7 index6 alt2"><code class="cpp preprocessor">#define
+ FALSE 0</code></div>
+<div class="line number8 index7 alt1"><code class="cpp preprocessor">#define
+ MAXSIZE 100&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /* 存储空间初始分配量 */</code></div>
+<div class="line number9 index8 alt2">&nbsp;</div>
+<div class="line number10 index9 alt1"><code class="cpp keyword bold">typedef</code> <code class="cpp color1 bold">
+int</code> <code class="cpp plain">
+Status;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ Status是函数的类型,其值是函数结果状态代码，如OK等 */</code></div>
+<div class="line number11 index10 alt2">&nbsp;</div>
+<div class="line number12 index11 alt1">&nbsp;</div>
+<div class="line number13 index12 alt2"><code class="cpp comments">/*
+ 二叉树的二叉链表结点结构定义 */</code></div>
+<div class="line number14 index13 alt1"><code class="cpp keyword bold">typedef</code>&nbsp; <code class="cpp keyword bold">
+struct</code> <code class="cpp plain">
+BitNode&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ 结点结构 */</code></div>
+<div class="line number15 index14 alt2"><code class="cpp plain">{</code></div>
+<div class="line number16 index15 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+data;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ 结点数据 */</code></div>
+<div class="line number17 index16 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+bf;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 结点的平衡因子 */</code></div>
+<div class="line number18 index17 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">struct</code> <code class="cpp plain">
+BitNode *lchild, *rchild;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ 左右孩子指针 */</code></div>
+<div class="line number19 index18 alt2"><code class="cpp plain">}
+ BitNode, *BiTree;</code></div>
+<div class="line number20 index19 alt1">&nbsp;</div>
+<div class="line number21 index20 alt2">&nbsp;</div>
+<div class="line number22 index21 alt1"><code class="cpp comments">/*
+ 对以p为根的二叉排序树作右旋处理 */</code></div>
+<div class="line number23 index22 alt2"><code class="cpp comments">/*
+ 处理之后p指向新的树根结点，即旋转处理之前的左子树的根结点 */</code></div>
+<div class="line number24 index23 alt1"><code class="cpp comments">//右旋-顺时针旋转(如LL型就得对根结点做该旋转)</code></div>
+<div class="line number25 index24 alt2"><code class="cpp keyword bold">void</code> <code class="cpp plain">
+R_Rotate(BiTree *P)</code></div>
+<div class="line number26 index25 alt1"><code class="cpp plain">{
+</code></div>
+<div class="line number27 index26 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">BiTree
+ L;</code></div>
+<div class="line number28 index27 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L=(*P)-&gt;lchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;
+ L指向P的左子树根结点 */</code></div>
+<div class="line number29 index28 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*P)-&gt;lchild=L-&gt;rchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;
+ L的右子树挂接为P的左子树 */</code></div>
+<div class="line number30 index29 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L-&gt;rchild=(*P);</code></div>
+<div class="line number31 index30 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*P=L;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;
+ P指向新的根结点 */</code></div>
+<div class="line number32 index31 alt1"><code class="cpp plain">}</code></div>
+<div class="line number33 index32 alt2">&nbsp;</div>
+<div class="line number34 index33 alt1"><code class="cpp comments">/*
+ 对以P为根的二叉排序树作左旋处理， */</code></div>
+<div class="line number35 index34 alt2"><code class="cpp comments">/*
+ 处理之后P指向新的树根结点，即旋转处理之前的右子树的根结点0&nbsp; */</code></div>
+<div class="line number36 index35 alt1"><code class="cpp comments">//左旋-逆时针旋转(如RR型就得对根结点做该旋转)</code></div>
+<div class="line number37 index36 alt2"><code class="cpp keyword bold">void</code> <code class="cpp plain">
+L_Rotate(BiTree *P)</code></div>
+<div class="line number38 index37 alt1"><code class="cpp plain">{
+</code></div>
+<div class="line number39 index38 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">BiTree
+ R;</code></div>
+<div class="line number40 index39 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R
+ = (*P)-&gt;rchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ R指向P的右子树根结点 */</code></div>
+<div class="line number41 index40 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*P)-&gt;rchild
+ = R-&gt;lchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ R的左子树挂接为P的右子树 */</code></div>
+<div class="line number42 index41 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R-&gt;lchild
+ = (*P);</code></div>
+<div class="line number43 index42 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*P
+ = R;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ P指向新的根结点 */</code></div>
+<div class="line number44 index43 alt1"><code class="cpp plain">}</code></div>
+<div class="line number45 index44 alt2">&nbsp;</div>
+<div class="line number46 index45 alt1"><code class="cpp preprocessor">#define
+ LH +1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /*&nbsp; 左高 */ </code></div>
+<div class="line number47 index46 alt2"><code class="cpp preprocessor">#define
+ EH 0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /*&nbsp; 等高 */ </code></div>
+<div class="line number48 index47 alt1"><code class="cpp preprocessor">#define
+ RH -1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; /*&nbsp; 右高 */ </code></div>
+<div class="line number49 index48 alt2">&nbsp;</div>
+<div class="line number50 index49 alt1"><code class="cpp comments">/*&nbsp;
+ 对以指针T所指结点为根的二叉树作左平衡旋转处理 */</code></div>
+<div class="line number51 index50 alt2"><code class="cpp comments">/*&nbsp;
+ 本算法结束时，指针T指向新的根结点 */</code></div>
+<div class="line number52 index51 alt1"><code class="cpp keyword bold">void</code> <code class="cpp plain">
+LeftBalance(BiTree *T)</code></div>
+<div class="line number53 index52 alt2"><code class="cpp plain">{
+</code></div>
+<div class="line number54 index53 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">BiTree
+ L,Lr;</code></div>
+<div class="line number55 index54 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L
+ = (*T)-&gt;lchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ L指向T的左子树根结点 */</code></div>
+<div class="line number56 index55 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">(L-&gt;bf)</code></div>
+<div class="line number57 index56 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number58 index57 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*
+ 检查T的左子树的平衡度，并作相应平衡处理 */</code></div>
+<div class="line number59 index58 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ 新结点插入在T的左孩子的左子树上，要作单右旋处理 */</code></div>
+<div class="line number60 index59 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=L-&gt;bf=EH;</code></div>
+<div class="line number61 index60 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R_Rotate(T);</code></div>
+<div class="line number62 index61 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number63 index62 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*
+ 新结点插入在T的左孩子的右子树上，要作双旋处理 */</code> <code class="cpp comments">
+//</code></div>
+<div class="line number64 index63 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">Lr=L-&gt;rchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*
+ Lr指向T的左孩子的右子树根 */</code></div>
+<div class="line number65 index64 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">(Lr-&gt;bf)</code></div>
+<div class="line number66 index65 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{&nbsp;&nbsp;
+</code></div>
+<div class="line number67 index66 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*
+ 修改T及其左孩子的平衡因子 */</code></div>
+<div class="line number68 index67 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH: </code></div>
+<div class="line number69 index68 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=RH;</code></div>
+<div class="line number70 index69 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L-&gt;bf=EH;</code></div>
+<div class="line number71 index70 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number72 index71 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+EH: </code></div>
+<div class="line number73 index72 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=L-&gt;bf=EH;</code></div>
+<div class="line number74 index73 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number75 index74 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH: </code></div>
+<div class="line number76 index75 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=EH;</code></div>
+<div class="line number77 index76 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L-&gt;bf=LH;</code></div>
+<div class="line number78 index77 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number79 index78 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number80 index79 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">Lr-&gt;bf=EH;</code></div>
+<div class="line number81 index80 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L_Rotate(&amp;(*T)-&gt;lchild);
+</code><code class="cpp comments">/*
+ 对T的左子树作左旋平衡处理 */</code></div>
+<div class="line number82 index81 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R_Rotate(T);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*
+ 对T作右旋平衡处理 */</code></div>
+<div class="line number83 index82 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number84 index83 alt1"><code class="cpp plain">}</code></div>
+<div class="line number85 index84 alt2">&nbsp;</div>
+<div class="line number86 index85 alt1"><code class="cpp comments">/*&nbsp;
+ 对以指针T所指结点为根的二叉树作右平衡旋转处理， */</code></div>
+<div class="line number87 index86 alt2"><code class="cpp comments">/*&nbsp;
+ 本算法结束时，指针T指向新的根结点 */</code></div>
+<div class="line number88 index87 alt1"><code class="cpp keyword bold">void</code> <code class="cpp plain">
+RightBalance(BiTree *T)</code></div>
+<div class="line number89 index88 alt2"><code class="cpp plain">{
+</code></div>
+<div class="line number90 index89 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">BiTree
+ R,Rl;</code></div>
+<div class="line number91 index90 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R=(*T)-&gt;rchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;
+ R指向T的右子树根结点 */</code></div>
+<div class="line number92 index91 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">(R-&gt;bf)</code></div>
+<div class="line number93 index92 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number94 index93 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*&nbsp;
+ 检查T的右子树的平衡度，并作相应平衡处理 */</code></div>
+<div class="line number95 index94 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 新结点插入在T的右孩子的右子树上，要作单左旋处理 */</code></div>
+<div class="line number96 index95 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=R-&gt;bf=EH;</code></div>
+<div class="line number97 index96 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L_Rotate(T);</code></div>
+<div class="line number98 index97 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number99 index98 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 新结点插入在T的右孩子的左子树上，要作双旋处理 */</code> <code class="cpp comments">
+//最小不平衡树的根结点为负，其右孩子为正</code></div>
+<div class="line number100 index99 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">Rl=R-&gt;lchild;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;
+ Rl指向T的右孩子的左子树根 */</code></div>
+<div class="line number101 index100 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">(Rl-&gt;bf)</code></div>
+<div class="line number102 index101 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number103 index102 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*&nbsp;
+ 修改T及其右孩子的平衡因子 */</code></div>
+<div class="line number104 index103 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH: </code></div>
+<div class="line number105 index104 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=LH;</code></div>
+<div class="line number106 index105 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R-&gt;bf=EH;</code></div>
+<div class="line number107 index106 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number108 index107 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+EH: </code></div>
+<div class="line number109 index108 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=R-&gt;bf=EH;</code></div>
+<div class="line number110 index109 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number111 index110 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH: </code></div>
+<div class="line number112 index111 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=EH;</code></div>
+<div class="line number113 index112 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R-&gt;bf=RH;</code></div>
+<div class="line number114 index113 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number115 index114 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number116 index115 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">Rl-&gt;bf=EH;</code></div>
+<div class="line number117 index116 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">R_Rotate(&amp;(*T)-&gt;rchild);
+</code><code class="cpp comments">/*&nbsp;
+ 对T的右子树作右旋平衡处理 */</code></div>
+<div class="line number118 index117 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">L_Rotate(T);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;
+ 对T作左旋平衡处理 */</code></div>
+<div class="line number119 index118 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number120 index119 alt1"><code class="cpp plain">}</code></div>
+<div class="line number121 index120 alt2">&nbsp;</div>
+<div class="line number122 index121 alt1"><code class="cpp comments">/*&nbsp;
+ 若在平衡的二叉排序树T中不存在和e有相同关键字的结点，则插入一个 */</code></div>
+<div class="line number123 index122 alt2"><code class="cpp comments">/*&nbsp;
+ 数据元素为e的新结点，并返回1，否则返回0。若因插入而使二叉排序树 */</code></div>
+<div class="line number124 index123 alt1"><code class="cpp comments">/*&nbsp;
+ 失去平衡，则作平衡旋转处理，布尔变量taller反映T长高与否。 */</code></div>
+<div class="line number125 index124 alt2"><code class="cpp plain">Status
+ InsertAVL(BiTree *T,</code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+e,Status *taller)</code></div>
+<div class="line number126 index125 alt1"><code class="cpp plain">{&nbsp;
+</code></div>
+<div class="line number127 index126 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(!*T)</code></div>
+<div class="line number128 index127 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number129 index128 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*&nbsp;
+ 插入新结点，树&ldquo;长高&rdquo;，置taller为TRUE */</code></div>
+<div class="line number130 index129 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*T=(BiTree)</code><code class="cpp functions bold">malloc</code><code class="cpp plain">(</code><code class="cpp keyword bold">sizeof</code><code class="cpp plain">(BitNode));</code></div>
+<div class="line number131 index130 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;data=e;
+</code></div>
+<div class="line number132 index131 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;lchild=(*T)-&gt;rchild=NULL;
+</code></div>
+<div class="line number133 index132 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=EH;</code></div>
+<div class="line number134 index133 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=TRUE;</code></div>
+<div class="line number135 index134 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number136 index135 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code></div>
+<div class="line number137 index136 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number138 index137 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code> <code class="cpp plain">
+(e==(*T)-&gt;data)</code></div>
+<div class="line number139 index138 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number140 index139 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*&nbsp;
+ 树中已存在和e有相同关键字的结点则不再插入 */</code></div>
+<div class="line number141 index140 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=FALSE;
+</code></div>
+<div class="line number142 index141 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+FALSE;</code></div>
+<div class="line number143 index142 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number144 index143 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code> <code class="cpp plain">
+(e&lt;(*T)-&gt;data)</code></div>
+<div class="line number145 index144 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number146 index145 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*&nbsp;
+ 应继续在T的左子树中进行搜索 */</code></div>
+<div class="line number147 index146 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(!InsertAVL(&amp;(*T)-&gt;lchild,
+ e, taller)) </code><code class="cpp comments">/*&nbsp;
+ 未插入 */</code></div>
+<div class="line number148 index147 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+FALSE;</code></div>
+<div class="line number149 index148 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(*taller)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;&nbsp;
+ 已插入到T的左子树中且左子树&ldquo;长高&rdquo; */</code></div>
+<div class="line number150 index149 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">((*T)-&gt;bf)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;
+ 检查T的平衡度 */</code></div>
+<div class="line number151 index150 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number152 index151 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本左子树比右子树高，需要作左平衡处理 */</code></div>
+<div class="line number153 index152 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">LeftBalance(T);
+</code></div>
+<div class="line number154 index153 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=FALSE;
+</code></div>
+<div class="line number155 index154 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number156 index155 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+EH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本左、右子树等高，现因左子树增高而使树增高 */</code></div>
+<div class="line number157 index156 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=LH;
+</code></div>
+<div class="line number158 index157 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=TRUE;
+</code></div>
+<div class="line number159 index158 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number160 index159 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本右子树比左子树高，现左、右子树等高 */</code>&nbsp;</div>
+<div class="line number161 index160 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=EH;
+</code></div>
+<div class="line number162 index161 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=FALSE;
+</code></div>
+<div class="line number163 index162 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number164 index163 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number165 index164 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number166 index165 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code></div>
+<div class="line number167 index166 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{
+</code></div>
+<div class="line number168 index167 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp comments">/*&nbsp;
+ 应继续在T的右子树中进行搜索 */</code></div>
+<div class="line number169 index168 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(!InsertAVL(&amp;(*T)-&gt;rchild,e,
+ taller)) </code><code class="cpp comments">/*&nbsp;
+ 未插入 */</code></div>
+<div class="line number170 index169 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number171 index170 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+FALSE;</code></div>
+<div class="line number172 index171 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number173 index172 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(*taller)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;
+ 已插入到T的右子树且右子树&ldquo;长高&rdquo; */</code></div>
+<div class="line number174 index173 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number175 index174 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">((*T)-&gt;bf)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">/*&nbsp;
+ 检查T的平衡度 */</code></div>
+<div class="line number176 index175 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number177 index176 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本左子树比右子树高，现左、右子树等高 */</code></div>
+<div class="line number178 index177 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=EH;
+</code></div>
+<div class="line number179 index178 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=FALSE;&nbsp;
+</code></div>
+<div class="line number180 index179 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number181 index180 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+EH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本左、右子树等高，现因右子树增高而使树增高&nbsp; */</code></div>
+<div class="line number182 index181 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*T)-&gt;bf=RH;
+</code></div>
+<div class="line number183 index182 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=TRUE;
+</code></div>
+<div class="line number184 index183 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number185 index184 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">/*&nbsp;
+ 原本右子树比左子树高，需要作右平衡处理 */</code></div>
+<div class="line number186 index185 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">RightBalance(T);
+</code></div>
+<div class="line number187 index186 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*taller=FALSE;
+</code></div>
+<div class="line number188 index187 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number189 index188 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number190 index189 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number191 index190 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number192 index191 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number193 index192 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+TRUE;</code></div>
+<div class="line number194 index193 alt1"><code class="cpp plain">}</code></div>
+<div class="line number195 index194 alt2">&nbsp;</div>
+<div class="line number196 index195 alt1">&nbsp;</div>
+<div class="line number197 index196 alt2"><code class="cpp comments">/*
+</code></div>
+<div class="line number198 index197 alt1"><code class="cpp comments">若在平衡的二叉排序树t中存在和e有相同关键字的结点，则删除之
+</code></div>
+<div class="line number199 index198 alt2"><code class="cpp comments">并返回TRUE，否则返回FALSE。若因删除而使二叉排序树
+</code></div>
+<div class="line number200 index199 alt1"><code class="cpp comments">失去平衡，则作平衡旋转处理，布尔变量shorter反映t变矮与否</code></div>
+<div class="line number201 index200 alt2"><code class="cpp comments">*/</code></div>
+<div class="line number202 index201 alt1"><code class="cpp color1 bold">int</code> <code class="cpp plain">
+deleteAVL(BiTree *t, </code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+key, </code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+*shorter)</code></div>
+<div class="line number203 index202 alt2"><code class="cpp plain">{</code></div>
+<div class="line number204 index203 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(*t
+ == NULL)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//不存在该元素
+</code></div>
+<div class="line number205 index204 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number206 index205 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+FALSE;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//删除失败
+</code></div>
+<div class="line number207 index206 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number208 index207 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code> <code class="cpp keyword bold">
+if</code><code class="cpp plain">(key
+ == (*t)-&gt;data)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//找到元素结点</code></div>
+<div class="line number209 index208 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number210 index209 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">BitNode
+ *q = NULL;</code></div>
+<div class="line number211 index210 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">((*t)-&gt;lchild
+ == NULL)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//左子树为空
+</code></div>
+<div class="line number212 index211 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number213 index212 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">q
+ = (*t);</code></div>
+<div class="line number214 index213 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*t)
+ = (*t)-&gt;rchild;</code></div>
+<div class="line number215 index214 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp functions bold">free</code><code class="cpp plain">(q);</code></div>
+<div class="line number216 index215 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*shorter
+ = TRUE;</code></div>
+<div class="line number217 index216 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number218 index217 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code> <code class="cpp keyword bold">
+if</code><code class="cpp plain">((*t)-&gt;rchild
+ == NULL)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//右子树为空
+</code></div>
+<div class="line number219 index218 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number220 index219 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">q
+ = (*t);</code></div>
+<div class="line number221 index220 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*t)
+ = (*t)-&gt;lchild;</code></div>
+<div class="line number222 index221 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp functions bold">free</code><code class="cpp plain">(q);</code></div>
+<div class="line number223 index222 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*shorter
+ = TRUE;</code></div>
+<div class="line number224 index223 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number225 index224 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <code class="cpp comments">
+//左右子树都存在,</code></div>
+<div class="line number226 index225 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number227 index226 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">q
+ = (*t)-&gt;lchild;</code></div>
+<div class="line number228 index227 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">while</code><code class="cpp plain">(q-&gt;rchild)</code></div>
+<div class="line number229 index228 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number230 index229 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">q
+ = q-&gt;rchild;</code></div>
+<div class="line number231 index230 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number232 index231 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*t)-&gt;data
+ = q-&gt;data;</code></div>
+<div class="line number233 index232 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">deleteAVL(&amp;(*t)-&gt;lchild,
+ q-&gt;data, shorter);&nbsp;&nbsp; </code><code class="cpp comments">//在左子树中递归删除前驱结点
+</code></div>
+<div class="line number234 index233 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number235 index234 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number236 index235 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code> <code class="cpp keyword bold">
+if</code><code class="cpp plain">(key
+ &lt; (*t)-&gt;data)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//左子树中继续查找
+</code></div>
+<div class="line number237 index236 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number238 index237 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(!deleteAVL(&amp;(*t)-&gt;lchild,
+ key, shorter))</code></div>
+<div class="line number239 index238 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number240 index239 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+FALSE;</code></div>
+<div class="line number241 index240 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number242 index241 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(*shorter)</code></div>
+<div class="line number243 index242 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number244 index243 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">((*t)-&gt;bf)</code></div>
+<div class="line number245 index244 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number246 index245 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH:</code></div>
+<div class="line number247 index246 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*t)-&gt;bf
+ = EH;</code></div>
+<div class="line number248 index247 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*shorter
+ = TRUE;</code></div>
+<div class="line number249 index248 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number250 index249 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+EH:</code></div>
+<div class="line number251 index250 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*t)-&gt;bf
+ = RH;</code></div>
+<div class="line number252 index251 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*shorter
+ = FALSE;</code></div>
+<div class="line number253 index252 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number254 index253 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH:</code></div>
+<div class="line number255 index254 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">RightBalance(&amp;(*t));&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">//右平衡处理</code></div>
+<div class="line number256 index255 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">((*t)-&gt;rchild-&gt;bf
+ == EH)&nbsp;&nbsp;&nbsp; </code><code class="cpp comments">//注意这里，画图思考一下
+</code></div>
+<div class="line number257 index256 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*shorter
+ = FALSE;</code></div>
+<div class="line number258 index257 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code></div>
+<div class="line number259 index258 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*shorter
+ = TRUE;</code></div>
+<div class="line number260 index259 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number261 index260 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number262 index261 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number263 index262 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number264 index263 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <code class="cpp comments">
+//右子树中继续查找 </code></div>
+<div class="line number265 index264 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number266 index265 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(!deleteAVL(&amp;(*t)-&gt;rchild,
+ key, shorter))</code></div>
+<div class="line number267 index266 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number268 index267 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+FALSE;</code></div>
+<div class="line number269 index268 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number270 index269 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(shorter)</code></div>
+<div class="line number271 index270 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number272 index271 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">switch</code><code class="cpp plain">((*t)-&gt;bf)</code></div>
+<div class="line number273 index272 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number274 index273 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+LH:</code></div>
+<div class="line number275 index274 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">LeftBalance(&amp;(*t));&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</code><code class="cpp comments">//左平衡处理
+</code></div>
+<div class="line number276 index275 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">((*t)-&gt;lchild-&gt;bf
+ == EH)&nbsp; </code><code class="cpp comments">//注意这里，画图思考一下
+</code></div>
+<div class="line number277 index276 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*shorter
+ = FALSE;</code></div>
+<div class="line number278 index277 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">else</code></div>
+<div class="line number279 index278 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*shorter
+ = TRUE;</code></div>
+<div class="line number280 index279 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number281 index280 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+EH:</code></div>
+<div class="line number282 index281 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*t)-&gt;bf
+ = LH;</code></div>
+<div class="line number283 index282 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*shorter
+ = FALSE;</code></div>
+<div class="line number284 index283 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number285 index284 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">case</code> <code class="cpp plain">
+RH:</code></div>
+<div class="line number286 index285 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">(*t)-&gt;bf
+ = EH;</code></div>
+<div class="line number287 index286 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">*shorter
+ = TRUE;</code></div>
+<div class="line number288 index287 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">break</code><code class="cpp plain">;</code></div>
+<div class="line number289 index288 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number290 index289 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number291 index290 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number292 index291 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+TRUE;</code></div>
+<div class="line number293 index292 alt2"><code class="cpp plain">}</code></div>
+<div class="line number294 index293 alt1">&nbsp;</div>
+<div class="line number295 index294 alt2"><code class="cpp keyword bold">void</code> <code class="cpp plain">
+InOrderTraverse(BiTree t)</code></div>
+<div class="line number296 index295 alt1"><code class="cpp plain">{</code></div>
+<div class="line number297 index296 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">if</code><code class="cpp plain">(t)</code></div>
+<div class="line number298 index297 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number299 index298 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">InOrderTraverse(t-&gt;lchild);</code></div>
+<div class="line number300 index299 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp functions bold">printf</code><code class="cpp plain">(</code><code class="cpp string">"%d&nbsp;
+ "</code><code class="cpp plain">,
+ t-&gt;data);</code></div>
+<div class="line number301 index300 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">InOrderTraverse(t-&gt;rchild);</code></div>
+<div class="line number302 index301 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number303 index302 alt2"><code class="cpp plain">}</code></div>
+<div class="line number304 index303 alt1">&nbsp;</div>
+<div class="line number305 index304 alt2">&nbsp;</div>
+<div class="line number306 index305 alt1"><code class="cpp color1 bold">int</code> <code class="cpp plain">
+main(</code><code class="cpp keyword bold">void</code><code class="cpp plain">)</code></div>
+<div class="line number307 index306 alt2"><code class="cpp plain">{&nbsp;&nbsp;&nbsp;
+</code></div>
+<div class="line number308 index307 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+i;</code></div>
+<div class="line number309 index308 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+a[10]={3,2,1,4,5,6,7,10,9,8};</code></div>
+<div class="line number310 index309 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">BiTree
+ T=NULL;</code></div>
+<div class="line number311 index310 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">Status
+ taller;</code></div>
+<div class="line number312 index311 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">for</code><code class="cpp plain">(i=0;i&lt;10;i++)</code></div>
+<div class="line number313 index312 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">{</code></div>
+<div class="line number314 index313 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">InsertAVL(&amp;T,a[i],&amp;taller);</code></div>
+<div class="line number315 index314 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">}</code></div>
+<div class="line number316 index315 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp functions bold">printf</code><code class="cpp plain">(</code><code class="cpp string">"中序遍历二叉平衡树:\n"</code><code class="cpp plain">);</code></div>
+<div class="line number317 index316 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">InOrderTraverse(T);</code></div>
+<div class="line number318 index317 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp functions bold">printf</code><code class="cpp plain">(</code><code class="cpp string">"\n"</code><code class="cpp plain">);</code></div>
+<div class="line number319 index318 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp functions bold">printf</code><code class="cpp plain">(</code><code class="cpp string">"删除结点元素5后中序遍历:\n"</code><code class="cpp plain">);</code></div>
+<div class="line number320 index319 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp color1 bold">int</code> <code class="cpp plain">
+shorter;</code></div>
+<div class="line number321 index320 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">deleteAVL(&amp;T,
+ 5, &amp;shorter);</code></div>
+<div class="line number322 index321 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp plain">InOrderTraverse(T);</code></div>
+<div class="line number323 index322 alt2"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp functions bold">printf</code><code class="cpp plain">(</code><code class="cpp string">"\n"</code><code class="cpp plain">);</code></div>
+<div class="line number324 index323 alt1"><code class="cpp spaces">&nbsp;&nbsp;&nbsp;&nbsp;</code><code class="cpp keyword bold">return</code> <code class="cpp plain">
+0;</code></div>
+<div class="line number325 index324 alt2"><code class="cpp plain">}&lt;/strong&gt;</code></div>
+<div class="line number325 index324 alt2">&nbsp;</div>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<p>参考：</p>
+<p><a href="https://www.cnblogs.com/zhujunxxxxx/p/3348798.html">https://www.cnblogs.com/zhujunxxxxx/p/3348798.html</a></p>
+</div>
+</div>
+</div>
+</div>
