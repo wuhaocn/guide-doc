@@ -7,6 +7,32 @@
        强一致性
 
 ### 网络
+    总结：
+        网络调用流程：
+            internet网关--路由表--acl---子网---安全组
+        公网IP：
+            eip：固定【不工作就收费、一台ec2多一个eip就收费】
+            pubicip：关机释放
+        负载均衡器：
+            alb：7层【http】
+            nlb：4层【tcp-单节点百万】
+            clb：上一代
+        Route 53：
+            dns解析
+        IAM：
+            用户、组、角色
+            权限：
+                拒绝
+                允许
+            附加权限：
+                用户
+                资源
+        弹性：
+            elb：负载
+            cloudwatch：监听
+            auto scaling：管理，扩展
+            保存时间：13月
+
 #### Amazon Virtual Private Cloud(VPC)
     部署在区域
     作用：

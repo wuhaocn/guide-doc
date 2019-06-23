@@ -1,9 +1,10 @@
-### gomod初尝试
+#### go mod
+##### gomod初尝试
 
     下载官方包1.11(及其以上版本将会自动支持gomod) 默认GO111MODULE=auto(auto是指如果在gopath下不启用mod)
     设置【on/offer/auto】
     export GO111MODULE=on
-### gomod命令    
+##### gomod命令    
     go mod help查看帮助
     go mod init<项目模块名称>初始化模块，会在项目根目录下生成 go.mod文件。
     go mod tidy根据go.mod文件来处理依赖关系。
@@ -18,4 +19,21 @@
     go模块版本控制的下载文件及信息会存储到GOPATH的pkg/mod文件夹里。
     
     在国内访问golang.org/x的各个包都需要翻墙，我们可以在go.mod中使用replace替换成github上对应的库。(强烈建议翻墙，我使用的lantern专业版+proxifier)非常稳定
+
+#### go proxy代理
+
+    In Linux or macOS, you can execute the below commands.
+    
+    linux/mac
+    
+    export GO111MODULE=on
+    export GOPROXY=https://goproxy.io
+    
+    windows
+    # Enable the go modules feature
+    $env:GO111MODULE=on
+    # Set the GOPROXY environment variable
+    $env:GOPROXY=https://goproxy.io
+    
+    Now, when you build and run your applications, go will fetch dependencies via goproxy.io. See more information in the goproxy repository.
 
