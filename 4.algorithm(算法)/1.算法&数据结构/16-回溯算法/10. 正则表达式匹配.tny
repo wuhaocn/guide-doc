@@ -1,0 +1,161 @@
+<div class="css-1d9f4xd-RowWrapper e5i1odf2">
+<div class="css-9u8fru-Row e5i1odf1">
+<div class="css-1cf54ka-ClickableDiv e5i1odf3">
+<div class="css-zivby-RowTitle e5i1odf7"><img class="css-12b9jws-Avatar e5i1odf4" src="https://assets.leetcode-cn.com/aliyun-lc-upload/users/leetcode/avatar_1558372906.png" alt="" />
+<h4 class="css-3mrlhg-Title e5i1odf3"><a href="https://leetcode-cn.com/problems/regular-expression-matching/">10. 正则表达式匹配</a></h4>
+<p>给你一个字符串&nbsp;s&nbsp;和一个字符规律&nbsp;p，请你来实现一个支持 '.'&nbsp;和&nbsp;'*'&nbsp;的正则表达式匹配。</p>
+<p>'.' 匹配任意单个字符<br />'*' 匹配零个或多个前面的那一个元素<br />所谓匹配，是要涵盖&nbsp;整个&nbsp;字符串&nbsp;s的，而不是部分字符串。</p>
+<p>说明:</p>
+<p>s&nbsp;可能为空，且只包含从&nbsp;a-z&nbsp;的小写字母。<br />p&nbsp;可能为空，且只包含从&nbsp;a-z&nbsp;的小写字母，以及字符&nbsp;.&nbsp;和&nbsp;*。<br />示例 1:</p>
+<p>输入:<br />s = "aa"<br />p = "a"<br />输出: false<br />解释: "a" 无法匹配 "aa" 整个字符串。<br />示例 2:</p>
+<p>输入:<br />s = "aa"<br />p = "a*"<br />输出: true<br />解释:&nbsp;因为 '*' 代表可以匹配零个或多个前面的那一个元素, 在这里前面的元素就是 'a'。因此，字符串 "aa" 可被视为 'a' 重复了一次。<br />示例&nbsp;3:</p>
+<p>输入:<br />s = "ab"<br />p = ".*"<br />输出: true<br />解释:&nbsp;".*" 表示可匹配零个或多个（'*'）任意字符（'.'）。<br />示例 4:</p>
+<p>输入:<br />s = "aab"<br />p = "c*a*b"<br />输出: true<br />解释:&nbsp;因为 '*' 表示零个或多个，这里 'c' 为 0 个, 'a' 被重复一次。因此可以匹配字符串 "aab"。<br />示例 5:</p>
+<p>输入:<br />s = "mississippi"<br />p = "mis*is*p*."<br />输出: false</p>
+<p>&nbsp;</p>
+</div>
+<div class="css-9wa8fq-RowInfo e5i1odf8">
+<div class="e5i1odf17 css-x65ch0-TagWrapper-Tag e5i1odf0">
+<div class="css-1e0c8oz-TagContent e5i1odf1">解答</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="css-1ru7916-Content e5i1odf1">
+<div class="css-qtm9ce">
+<h4 id="方法-1：回溯">方法 1：回溯</h4>
+<p><strong>想法</strong></p>
+<p>如果没有星号（正则表达式中的&nbsp;<code>*</code>&nbsp;），问题会很简单&mdash;&mdash;我们只需要从左到右检查匹配串&nbsp;<code>s</code>&nbsp;是否能匹配模式串&nbsp;<code>p</code>&nbsp;的每一个字符。</p>
+<p>当模式串中有星号时，我们需要检查匹配串&nbsp;<code>s</code>&nbsp;中的不同后缀，以判断它们是否能匹配模式串剩余的部分。一个直观的解法就是用回溯的方法来体现这种关系。</p>
+<p><strong>算法</strong></p>
+<p>如果没有星号，我们的代码会像这样：</p>
+<div class="css-15qy69s-container">
+<ul class="css-1o8dlik-navigationBar">
+<li><label for="group-33-0">Python</label></li>
+</ul>
+<pre><code class="language-Python"><span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">match</span><span class="hljs-params">(text, pattern)</span>:</span>
+    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> pattern: <span class="hljs-keyword">return</span> <span class="hljs-keyword">not</span> text
+    first_match = bool(text) <span class="hljs-keyword">and</span> pattern[<span class="hljs-number">0</span>] <span class="hljs-keyword">in</span> {text[<span class="hljs-number">0</span>], <span class="hljs-string">'.'</span>}
+    <span class="hljs-keyword">return</span> first_match <span class="hljs-keyword">and</span> match(text[<span class="hljs-number">1</span>:], pattern[<span class="hljs-number">1</span>:])
+</code></pre>
+</div>
+<p>如果模式串中有星号，它会出现在第二个位置，即&nbsp;<span class="katex"><span class="katex-mathml">\text{pattern[1]}</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord text"><span class="mord">pattern[1]</span></span></span></span></span>&nbsp;。这种情况下，我们可以直接忽略模式串中这一部分，或者删除匹配串的第一个字符，前提是它能够匹配模式串当前位置字符，即&nbsp;<span class="katex"><span class="katex-mathml">\text{pattern[0]}</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord text"><span class="mord">pattern[0]</span></span></span></span></span>&nbsp;。如果两种操作中有任何一种使得剩下的字符串能匹配，那么初始时，匹配串和模式串就可以被匹配。</p>
+<div class="css-15qy69s-container">
+<ul class="css-1o8dlik-navigationBar">
+<li><label for="group-34-0">Java</label></li>
+<li><label for="group-34-6">Python</label></li>
+</ul>
+<pre><code class="language-Java"><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Solution</span> </span>{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">boolean</span> <span class="hljs-title">isMatch</span><span class="hljs-params">(String text, String pattern)</span> </span>{
+        <span class="hljs-keyword">if</span> (pattern.isEmpty()) <span class="hljs-keyword">return</span> text.isEmpty();
+        <span class="hljs-keyword">boolean</span> first_match = (!text.isEmpty() &amp;&amp;
+                               (pattern.charAt(<span class="hljs-number">0</span>) == text.charAt(<span class="hljs-number">0</span>) || pattern.charAt(<span class="hljs-number">0</span>) == <span class="hljs-string">'.'</span>));
+
+        <span class="hljs-keyword">if</span> (pattern.length() &gt;= <span class="hljs-number">2</span> &amp;&amp; pattern.charAt(<span class="hljs-number">1</span>) == <span class="hljs-string">'*'</span>){
+            <span class="hljs-keyword">return</span> (isMatch(text, pattern.substring(<span class="hljs-number">2</span>)) ||
+                    (first_match &amp;&amp; isMatch(text.substring(<span class="hljs-number">1</span>), pattern)));
+        } <span class="hljs-keyword">else</span> {
+            <span class="hljs-keyword">return</span> first_match &amp;&amp; isMatch(text.substring(<span class="hljs-number">1</span>), pattern.substring(<span class="hljs-number">1</span>));
+        }
+    }
+}
+</code></pre>
+</div>
+<p><strong>复杂度分析</strong></p>
+<ul>
+<li>
+<p>时间复杂度：用&nbsp;<span class="katex"><span class="katex-mathml">T</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">T</span></span></span></span>&nbsp;和&nbsp;<span class="katex"><span class="katex-mathml">P</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">P</span></span></span></span>&nbsp;分别表示匹配串和模式串的长度。在最坏情况下，函数&nbsp;<code>match(text[i:], pattern[2j:])</code>&nbsp;会被调用&nbsp;<span class="katex"><span class="katex-mathml">\binom{i+j}{i}</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord"><span class="mopen delimcenter"><span class="delimsizing size1">(</span></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist"><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span><span class="mbin mtight">+</span><span class="mord mathdefault mtight">j</span></span></span></span><span class="vlist-s">​</span></span></span></span><span class="mclose delimcenter"><span class="delimsizing size1">)</span></span></span></span></span></span>&nbsp;次，并留下长度为&nbsp;<span class="katex"><span class="katex-mathml">O(T - i)</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">O</span><span class="mopen">(</span><span class="mord mathdefault">T</span><span class="mbin">&minus;</span></span><span class="base"><span class="mord mathdefault">i</span><span class="mclose">)</span></span></span></span>&nbsp;和&nbsp;<span class="katex"><span class="katex-mathml">O(P - 2*j)</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">O</span><span class="mopen">(</span><span class="mord mathdefault">P</span><span class="mbin">&minus;</span></span><span class="base"><span class="mord">2</span><span class="mbin">&lowast;</span></span><span class="base"><span class="mord mathdefault">j</span><span class="mclose">)</span></span></span></span>&nbsp;长度的字符串。因此，总时间为&nbsp;<span class="katex"><span class="katex-mathml">\sum_{i = 0}^T \sum_{j = 0}^{P/2} \binom{i+j}{i} O(T+P-i-2j)</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mop"><span class="mop op-symbol small-op">&sum;</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist"><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span><span class="mrel mtight">=</span>0</span></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathdefault mtight">T</span></span></span><span class="vlist-s">​</span></span></span></span></span><span class="mop"><span class="mop op-symbol small-op">&sum;</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist"><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">j</span><span class="mrel mtight">=</span>0</span></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">P</span>/2</span></span></span><span class="vlist-s">​</span></span></span></span></span><span class="mord"><span class="mopen delimcenter"><span class="delimsizing size1">(</span></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist"><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span><span class="mbin mtight">+</span><span class="mord mathdefault mtight">j</span></span></span></span><span class="vlist-s">​</span></span></span></span><span class="mclose delimcenter"><span class="delimsizing size1">)</span></span></span><span class="mord mathdefault">O</span><span class="mopen">(</span><span class="mord mathdefault">T</span><span class="mbin">+</span></span><span class="base"><span class="mord mathdefault">P</span><span class="mbin">&minus;</span></span><span class="base"><span class="mord mathdefault">i</span><span class="mbin">&minus;</span></span><span class="base"><span class="mord">2</span><span class="mord mathdefault">j</span><span class="mclose">)</span></span></span></span>&nbsp;。通过本文以外的一些知识，我们可以证明它的时间复杂度为&nbsp;<span class="katex"><span class="katex-mathml">O\big((T+P)2^{T + \frac{P}{2}}\big)</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">O</span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mopen">(</span><span class="mord mathdefault">T</span><span class="mbin">+</span></span><span class="base"><span class="mord mathdefault">P</span><span class="mclose">)</span><span class="mord">2<span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist"><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">T</span><span class="mbin mtight">+</span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="sizing reset-size3 size1 mtight">2</span><span class="sizing reset-size3 size1 mtight"><span class="mord mathdefault mtight">P</span></span><span class="vlist-s">​</span></span></span></span></span></span></span></span></span></span><span class="mord"><span class="delimsizing size1">)</span></span></span></span></span>&nbsp;。</p>
+</li>
+<li>
+<p>空间复杂度：对于&nbsp;<code>match</code>&nbsp;函数的每一次调用，我们都会产生如上所述的字符串，可能还会产生重复的字符串。如果内存没有被重复利用，那么即使只有总量为&nbsp;<span class="katex"><span class="katex-mathml">O(T^2 + P^2)</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">O</span><span class="mopen">(</span><span class="mord"><span class="mord mathdefault">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist"><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span><span class="mbin">+</span></span><span class="base"><span class="mord"><span class="mord mathdefault">P</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist"><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>&nbsp;个不同的后缀，也会花费总共&nbsp;<span class="katex"><span class="katex-mathml">O\big((T+P)2^{T + \frac{P}{2}}\big)</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">O</span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mopen">(</span><span class="mord mathdefault">T</span><span class="mbin">+</span></span><span class="base"><span class="mord mathdefault">P</span><span class="mclose">)</span><span class="mord">2<span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist"><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">T</span><span class="mbin mtight">+</span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="sizing reset-size3 size1 mtight">2</span><span class="sizing reset-size3 size1 mtight"><span class="mord mathdefault mtight">P</span></span><span class="vlist-s">​</span></span></span></span></span></span></span></span></span></span><span class="mord"><span class="delimsizing size1">)</span></span></span></span></span>&nbsp;的空间。</p>
+</li>
+</ul>
+<h4 id="方法-2-动态规划">方法 2: 动态规划</h4>
+<p><strong>想法</strong></p>
+<p>因为题目拥有&nbsp;<strong>最优子结构</strong>&nbsp;，一个自然的想法是将中间结果保存起来。我们通过用&nbsp;<span class="katex"><span class="katex-mathml">\text{dp(i,j)}</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord text"><span class="mord">dp(i,j)</span></span></span></span></span>&nbsp;表示&nbsp;<span class="katex"><span class="katex-mathml">\text{text[i:]}</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord text"><span class="mord">text[i:]</span></span></span></span></span>&nbsp;和&nbsp;<span class="katex"><span class="katex-mathml">\text{pattern[j:]}</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord text"><span class="mord">pattern[j:]</span></span></span></span></span>&nbsp;是否能匹配。我们可以用更短的字符串匹配问题来表示原本的问题。</p>
+<p><strong>算法</strong></p>
+<p>我们用 [方法 1] 中同样的回溯方法，除此之外，因为函数&nbsp;<code>match(text[i:], pattern[j:])</code>&nbsp;只会被调用一次，我们用&nbsp;<span class="katex"><span class="katex-mathml">\text{dp(i, j)}</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord text"><span class="mord">dp(i,&nbsp;j)</span></span></span></span></span>&nbsp;来应对剩余相同参数的函数调用，这帮助我们节省了字符串建立操作所需要的时间，也让我们可以将中间结果进行保存。</p>
+<p><em>自顶向下的方法</em></p>
+<div class="css-15qy69s-container">
+<ul class="css-1o8dlik-navigationBar">
+<li><label for="group-35-0">Java</label></li>
+<li><label for="group-35-6">Python</label></li>
+</ul>
+<pre><code class="language-Java"><span class="hljs-keyword">enum</span> Result {
+    TRUE, FALSE
+}
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Solution</span> </span>{
+    Result[][] memo;
+
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">boolean</span> <span class="hljs-title">isMatch</span><span class="hljs-params">(String text, String pattern)</span> </span>{
+        memo = <span class="hljs-keyword">new</span> Result[text.length() + <span class="hljs-number">1</span>][pattern.length() + <span class="hljs-number">1</span>];
+        <span class="hljs-keyword">return</span> dp(<span class="hljs-number">0</span>, <span class="hljs-number">0</span>, text, pattern);
+    }
+
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">boolean</span> <span class="hljs-title">dp</span><span class="hljs-params">(<span class="hljs-keyword">int</span> i, <span class="hljs-keyword">int</span> j, String text, String pattern)</span> </span>{
+        <span class="hljs-keyword">if</span> (memo[i][j] != <span class="hljs-keyword">null</span>) {
+            <span class="hljs-keyword">return</span> memo[i][j] == Result.TRUE;
+        }
+        <span class="hljs-keyword">boolean</span> ans;
+        <span class="hljs-keyword">if</span> (j == pattern.length()){
+            ans = i == text.length();
+        } <span class="hljs-keyword">else</span>{
+            <span class="hljs-keyword">boolean</span> first_match = (i &lt; text.length() &amp;&amp;
+                                   (pattern.charAt(j) == text.charAt(i) ||
+                                    pattern.charAt(j) == <span class="hljs-string">'.'</span>));
+
+            <span class="hljs-keyword">if</span> (j + <span class="hljs-number">1</span> &lt; pattern.length() &amp;&amp; pattern.charAt(j+<span class="hljs-number">1</span>) == <span class="hljs-string">'*'</span>){
+                ans = (dp(i, j+<span class="hljs-number">2</span>, text, pattern) ||
+                       first_match &amp;&amp; dp(i+<span class="hljs-number">1</span>, j, text, pattern));
+            } <span class="hljs-keyword">else</span> {
+                ans = first_match &amp;&amp; dp(i+<span class="hljs-number">1</span>, j+<span class="hljs-number">1</span>, text, pattern);
+            }
+        }
+        memo[i][j] = ans ? Result.TRUE : Result.FALSE;
+        <span class="hljs-keyword">return</span> ans;
+    }
+}
+</code></pre>
+</div>
+<p><em>自底向上的方法</em></p>
+<div class="css-15qy69s-container">
+<ul class="css-1o8dlik-navigationBar">
+<li><label for="group-36-0">Java</label></li>
+<li><label for="group-36-6">Python</label></li>
+</ul>
+<pre><code class="language-Java"><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Solution</span> </span>{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">boolean</span> <span class="hljs-title">isMatch</span><span class="hljs-params">(String text, String pattern)</span> </span>{
+        <span class="hljs-keyword">boolean</span>[][] dp = <span class="hljs-keyword">new</span> <span class="hljs-keyword">boolean</span>[text.length() + <span class="hljs-number">1</span>][pattern.length() + <span class="hljs-number">1</span>];
+        dp[text.length()][pattern.length()] = <span class="hljs-keyword">true</span>;
+
+        <span class="hljs-keyword">for</span> (<span class="hljs-keyword">int</span> i = text.length(); i &gt;= <span class="hljs-number">0</span>; i--){
+            <span class="hljs-keyword">for</span> (<span class="hljs-keyword">int</span> j = pattern.length() - <span class="hljs-number">1</span>; j &gt;= <span class="hljs-number">0</span>; j--){
+                <span class="hljs-keyword">boolean</span> first_match = (i &lt; text.length() &amp;&amp;
+                                       (pattern.charAt(j) == text.charAt(i) ||
+                                        pattern.charAt(j) == <span class="hljs-string">'.'</span>));
+                <span class="hljs-keyword">if</span> (j + <span class="hljs-number">1</span> &lt; pattern.length() &amp;&amp; pattern.charAt(j+<span class="hljs-number">1</span>) == <span class="hljs-string">'*'</span>){
+                    dp[i][j] = dp[i][j+<span class="hljs-number">2</span>] || first_match &amp;&amp; dp[i+<span class="hljs-number">1</span>][j];
+                } <span class="hljs-keyword">else</span> {
+                    dp[i][j] = first_match &amp;&amp; dp[i+<span class="hljs-number">1</span>][j+<span class="hljs-number">1</span>];
+                }
+            }
+        }
+        <span class="hljs-keyword">return</span> dp[<span class="hljs-number">0</span>][<span class="hljs-number">0</span>];
+    }
+}
+</code></pre>
+</div>
+<p><strong>复杂度分析</strong></p>
+<ul>
+<li>
+<p>时间复杂度：用&nbsp;<span class="katex"><span class="katex-mathml">T</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">T</span></span></span></span>&nbsp;和&nbsp;<span class="katex"><span class="katex-mathml">P</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">P</span></span></span></span>&nbsp;分别表示匹配串和模式串的长度。对于<span class="katex"><span class="katex-mathml">i=0, ... , T</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">i</span><span class="mrel">=</span></span><span class="base"><span class="mord">0</span><span class="mpunct">,</span><span class="mord">.</span><span class="mord">.</span><span class="mord">.</span><span class="mpunct">,</span><span class="mord mathdefault">T</span></span></span></span>&nbsp;和&nbsp;<span class="katex"><span class="katex-mathml">j=0, ... , P</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">j</span><span class="mrel">=</span></span><span class="base"><span class="mord">0</span><span class="mpunct">,</span><span class="mord">.</span><span class="mord">.</span><span class="mord">.</span><span class="mpunct">,</span><span class="mord mathdefault">P</span></span></span></span>&nbsp;每一个&nbsp;<code>dp(i, j)</code>只会被计算一次，所以后面每次调用都是&nbsp;<span class="katex"><span class="katex-mathml">O(1)</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">O</span><span class="mopen">(</span><span class="mord">1</span><span class="mclose">)</span></span></span></span>&nbsp;的时间。因此，总时间复杂度为&nbsp;<span class="katex"><span class="katex-mathml">O(TP)</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">O</span><span class="mopen">(</span><span class="mord mathdefault">T</span><span class="mord mathdefault">P</span><span class="mclose">)</span></span></span></span>&nbsp;。</p>
+</li>
+<li>
+<p>空间复杂度：我们用到的空间仅有&nbsp;<span class="katex"><span class="katex-mathml">O(TP)</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">O</span><span class="mopen">(</span><span class="mord mathdefault">T</span><span class="mord mathdefault">P</span><span class="mclose">)</span></span></span></span>&nbsp;个 boolean 类型的缓存变量。所以，空间复杂度为&nbsp;<span class="katex"><span class="katex-mathml">O(TP)</span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathdefault">O</span><span class="mopen">(</span><span class="mord mathdefault">T</span><span class="mord mathdefault">P</span><span class="mclose">)</span></span></span></span>&nbsp;。</p>
+</li>
+</ul>
+<p>来源：力扣（LeetCode）<br />链接：https://leetcode-cn.com/problems/regular-expression-matching<br />著作权归领扣网络所有。商业转载请联系官方授权，非商业转载请注明出处。</p>
+</div>
+</div>
