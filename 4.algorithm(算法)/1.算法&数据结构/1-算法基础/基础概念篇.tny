@@ -1,0 +1,31 @@
+<div class="article-header-box">
+<div class="article-header">
+<div class="article-title-box">
+<h1 class="title-article">数据结构与算法---基础概念篇</h1>
+</div>
+<div class="article-info-box">
+<div class="article-bar-top"><span class="time">2018年06月28日 11:41:48</span>&nbsp;<a class="follow-nickName" href="https://me.csdn.net/tanrui519521" target="_blank" rel="noopener">芮小谭</a>&nbsp;<span class="read-count">阅读数 118</span><span class="article_info_click">更多</span>
+<div class="tags-box space"><span class="label">所属专栏：</span>&nbsp;<a class="tag-link" href="https://blog.csdn.net/column/details/26429.html" target="_blank" rel="noopener">数据结构</a></div>
+</div>
+<div class="operating">&nbsp;</div>
+</div>
+</div>
+</div>
+<article class="baidu_pl">
+<div id="article_content" class="article_content clearfix csdn-tracking-statistics" data-pid="blog" data-mod="popu_307" data-dsm="post">
+<div class="article-copyright">版权声明：本文为博主原创文章，未经博主允许不得转载。 https://blog.csdn.net/tanrui519521/article/details/80840015</div>
+<div id="content_views" class="markdown_views prism-atom-one-dark">
+<p>我们都知道&nbsp;<br /><span style="color: red;">程序设计 = 数据结构 + 算法</span>&nbsp;<br />首先我们先来认识数据结构和算法的基本概念。&nbsp;<br />相关概念：&nbsp;<br />数据：是描述客观事物的符号，是计算机中能够操作的对象，能够被计算机所识别、并输入给计算机处理的符号集合。&nbsp;<br />数据元素：是组成数据，有一定意义的基本单位，在计算机中常被作为整体处理，也被称之为记录。&nbsp;<br />数据项：一个数据元素有若干个数据项组成，是数据不可再分的最小单位。</p>
+<p>说明：&nbsp;<br />数据元素都不是孤立存在的，而是他们之间存在着某些关系，这些数据元素相互之间的关系称之为结构。</p>
+<h4 id="数据结构"><span style="color: blue;">数据结构：</span></h4>
+<p>定义1&mdash;&nbsp;<br /><strong>数据结构是相互之间存在一种或者多种特定关系的数据元素的集合。</strong>&nbsp;<br />定义2&mdash;&nbsp;<br /><strong>按某种逻辑关系组织起来的一批数据（或称带结构的数据元素的集合）应用计算机语言并按一定的存储表示 方式把它们存储在计算机的存储器中，并在其上定义了一个运算的集合。</strong></p>
+<p>数据结构分为逻辑结构和物理结构（存储结构）。</p>
+<p>逻辑结构描述的是数据元素之间的逻辑关系。&nbsp;<br />物理结构（存储结构）是指数据结构在计算机中的表示，它包括数据元素的表示和关系的表示。&nbsp;<br />存储结构两方面的内容：&nbsp;<br />（1）数据元素自身值的表示（数据域）&nbsp;<br />（2）该结点与其它结点关系的表示（链域）&nbsp;<br /><img title="" src="https://img-blog.csdn.net/20180628111314857?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3RhbnJ1aTUxOTUyMQ==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="这里写图片描述" />&nbsp;<br /><strong>逻辑结构：</strong>&nbsp;<br /><img title="" src="https://img-blog.csdn.net/20180628112945953?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3RhbnJ1aTUxOTUyMQ==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="这里写图片描述" />&nbsp;<br /><img title="" src="https://img-blog.csdn.net/20180628112956419?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3RhbnJ1aTUxOTUyMQ==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="这里写图片描述" />&nbsp;<br /><img title="" src="https://img-blog.csdn.net/20180628113003673?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3RhbnJ1aTUxOTUyMQ==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="这里写图片描述" />&nbsp;<br /><img title="" src="https://img-blog.csdn.net/20180628113011424?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3RhbnJ1aTUxOTUyMQ==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="这里写图片描述" />&nbsp;<br /><strong>物理结构：</strong>&nbsp;<br />逻辑数据在计算机中的存储形式：&nbsp;<br />顺序存储结构：数据元素存储在地址连续的单元里，数据的逻辑关系和物理关系是一致的。&nbsp;<br /><img title="" src="https://img-blog.csdn.net/20180628114108750?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3RhbnJ1aTUxOTUyMQ==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="这里写图片描述" />&nbsp;<br />链式存储结构：：数据元素存储在任意的单元里，存储单元可以连续也可以不连续。&nbsp;<br /><img title="" src="https://img-blog.csdn.net/20180628114119487?watermark/2/text/aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3RhbnJ1aTUxOTUyMQ==/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="这里写图片描述" /></p>
+<h4 id="算法"><span style="color: blue;">算法：</span></h4>
+<p><strong>所谓算法（Algorithm)是对特定问题求解方法(步骤)的一种描述。</strong>&nbsp;<br />为解决某一特定问题而由若干条指令组成的有穷序列。&nbsp;<br />适合于计算机程序实现的求解问题的方法</p>
+<p><span style="color: blue;">算法的特性：</span>&nbsp;<br />一个算法必须满足以下五个准则：&nbsp;<br />（1）有穷性 : 执行了有限条指令后一定要终止。&nbsp;<br />（2）确定性 : 算法的每一步操作都必须有确切定义，不得有任何歧义性。&nbsp;<br />（3）可行性 : 算法的每一步操作都必须是可行的，即每步操作均能在有限时间内完成。&nbsp;<br />（4）输入 : 一个算法有n（n&gt;=0)个初始数据的输入。&nbsp;<br />（5）输出 : 一个算法有一个或多个与输入有某种关系的有效信息的输出。</p>
+<p>设计算法的要求：</p>
+<p>正确性、可读性、健壮性、时间效率高且空间使用率低、简单性。</p>
+</div>
+</div>
+</article>
