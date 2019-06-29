@@ -1,0 +1,239 @@
+<div class="content-title">
+<div class="content-title"><strong>&nbsp; 1.先入先出的数据结构</strong></div>
+<hr />
+<div class="block-markdown">
+<p><img src="https://aliyun-lc-upload.oss-cn-hangzhou.aliyuncs.com/aliyun-lc-upload/uploads/2018/08/14/screen-shot-2018-05-03-at-151021.png" alt="" /></p>
+<p>在 FIFO 数据结构中，将<code>首先处理添加到队列中的第一个元素</code>。</p>
+<p>如上图所示，队列是典型的 FIFO 数据结构。插入（insert）操作也称作入队（enqueue），新元素始终被添加在<code>队列的末尾</code>。 删除（delete）操作也被称为出队（dequeue)。 你只能移除<code>第一个元素</code>。</p>
+<p>&nbsp;</p>
+<h3>示例 - 队列</h3>
+<hr />
+<p>1. 入队：您可以单击下面的&nbsp;<code>Enqueue</code>&nbsp;以查看如何将新元素 6 添加到队列中。</p>
+<p><img id="queue-img" src="https://aliyun-lc-upload.oss-cn-hangzhou.aliyuncs.com/aliyun-lc-upload/uploads/2018/08/14/screen-shot-2018-05-02-at-174355.png" alt="" />&nbsp; &nbsp;&nbsp;<button id="queue-btn1" type="button">Enqueue</button></p>
+<p>2. 出队：您可以单击下面的&nbsp;<code>Dequeue</code>&nbsp;以查看将删除哪个元素。</p>
+<p><img id="queue-img2" src="https://aliyun-lc-upload.oss-cn-hangzhou.aliyuncs.com/aliyun-lc-upload/uploads/2018/08/14/screen-shot-2018-05-02-at-172840.png" alt="" />&nbsp; &nbsp;<button id="queue-btn3" type="button">Dequeue</button></p>
+</div>
+</div>
+<div class="content-title"><strong>2.队列 - 实现</strong></div>
+<hr />
+<div class="block-markdown">
+<p>为了实现队列，我们可以使用动态数组和指向队列头部的索引。</p>
+<p>如上所述，队列应支持两种操作：入队和出队。入队会向队列追加一个新元素，而出队会删除第一个元素。 所以我们需要一个索引来指出起点。</p>
+<p>这是一个供你参考的实现：</p>
+<pre class="language-java"><code>// "static void main" must be defined in a public class.
+
+class MyQueue {
+    // store elements
+    private List&lt;Integer&gt; data;         
+    // a pointer to indicate the start position
+    private int p_start;            
+    public MyQueue() {
+        data = new ArrayList&lt;Integer&gt;();
+        p_start = 0;
+    }
+    /** Insert an element into the queue. Return true if the operation is successful. */
+    public boolean enQueue(int x) {
+        data.add(x);
+        return true;
+    };    
+    /** Delete an element from the queue. Return true if the operation is successful. */
+    public boolean deQueue() {
+        if (isEmpty() == true) {
+            return false;
+        }
+        p_start++;
+        return true;
+    }
+    /** Get the front item from the queue. */
+    public int Front() {
+        return data.get(p_start);
+    }
+    /** Checks whether the queue is empty or not. */
+    public boolean isEmpty() {
+        return p_start &gt;= data.size();
+    }     
+};
+
+public class Main {
+    public static void main(String[] args) {
+        MyQueue q = new MyQueue();
+        q.enQueue(5);
+        q.enQueue(3);
+        if (q.isEmpty() == false) {
+            System.out.println(q.Front());
+        }
+        q.deQueue();
+        if (q.isEmpty() == false) {
+            System.out.println(q.Front());
+        }
+        q.deQueue();
+        if (q.isEmpty() == false) {
+            System.out.println(q.Front());
+        }
+    }
+}</code></pre>
+<h3>缺点</h3>
+<hr />
+<p>上面的实现很简单，但在某些情况下效率很低。 随着起始指针的移动，浪费了越来越多的空间。 当我们有空间限制时，这将是难以接受的。</p>
+<p><img src="https://aliyun-lc-upload.oss-cn-hangzhou.aliyuncs.com/aliyun-lc-upload/uploads/2018/07/21/screen-shot-2018-07-21-at-153558.png" alt="" /></p>
+<p>让我们考虑一种情况，即我们只能分配一个最大长度为 5 的数组。当我们只添加少于 5 个元素时，我们的解决方案很有效。 例如，如果我们只调用入队函数四次后还想要将元素 10 入队，那么我们可以成功。</p>
+<p>但是我们不能接受更多的入队请求，这是合理的，因为现在队列已经满了。但是如果我们将一个元素出队呢？</p>
+<p><img src="https://aliyun-lc-upload.oss-cn-hangzhou.aliyuncs.com/aliyun-lc-upload/uploads/2018/07/21/screen-shot-2018-07-21-at-153713.png" alt="" /><br />实际上，在这种情况下，我们应该能够再接受一个元素。</p>
+</div>
+<div class="content-title">&nbsp;&nbsp;循环队列</div>
+<div class="block-markdown">
+<p>&nbsp;</p>
+<p>此前，我们提供了一种简单但低效的队列实现。</p>
+<p>更有效的方法是使用循环队列。 具体来说，我们可以使用<code>固定大小的数组</code>和<code>两个指针</code>来指示起始位置和结束位置。 目的是<code>重用</code>我们之前提到的<code>被浪费的存储</code>。</p>
+<p>让我们通过一个示例来查看循环队列的工作原理。 你应该注意我们<code>入队</code>或<code>出队</code>元素时使用的策略。</p>
+<p>&nbsp;</p>
+<center>
+<p>&nbsp;</p>
+<div>
+<div>
+<div class="dia-container__T7JA">
+<div class="diaporama__1x84"><img class="dia-img__3-yE" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAtAAAAGVCAYAAADXKsbeAAAgAElEQVR4Xu3dB7gdRf0//gkkpAEBQgu9F+kKUr40AakCgkovgvQuIl2wgCJFaSIqIFVBEClKEakCgiKCVCFCCIQiCRAgvdzf89n/c/JPLjd6Jzm7uXvPa58nDyGZM7vzmrk5750zO6dHW1tbW3IQIECAAAECBAgQINApgR4CdKecFCJAgAABAgQIECBQCAjQBgIBAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQIECBAgIEAbAwQIECBAgAABAgQyBAToDCxFCRAgQIAAAQIECAjQxgABAgQIECBAgACBDAEBOgNLUQIECBAgQIAAAQICtDFAgAABAgQIECBAIENAgM7AUpQAAQIECBAgQICAAG0MECBAgAABAgQIEMgQEKAzsBQlQIAAAQJ1FBg7dmzac88906mnnprWWmutOjbBNRPoUgICdJfqDhdDYMYE7rzzzjRs2LB0wAEHzFgFM/mqIUOGpN/+9rfpG9/4xkzW5OUECDRD4Kqrrkqnn356evTRR9MiiyySRowYkeaff/503XXXpT322KMZp1AHgZYWEKBbuvs1vrsIRHB+6qmn0hNPPDFLmnTTTTel3XffPU2YMGGWnN9JCXRXgXvvvTcdc8wx6fHHH0/9+vXrdDMjOF9++eXp4osvTn379hWgOy2nIIHOCQjQnXNSikCXFhCgu3T3uDgCMyxw/fXXFzenH3zwQRowYMAn6pk4cWLxZz179vyv5zADPcNd4IUEOhQQoA0MAt1AQIDuBp2oCQTaCWy//fbpb3/7W3rnnXfS0ksvnWabbbZ05ZVXpg033DC9+eab6dBDD02333578aptt9023XjjjcVscxz33HNPsaTrtddeK/5fgDa8CDRXQIBurqfaCMwSgUaAfvDBB9MRRxyRnnzyybTFFlukc845p3jTnfq47bbb0vnnn5/ef//9tMkmm6Szzjor9enTZ0qRWApy5plnpueffz71798/7b///umQQw6Zpo4o8+1vfzu9+uqraa+99ire3C3hmCVd76TdWODWW29N8euXv/xlOvfcc4uf05133jkNGjQoLb/88sXP+D777JM+/vjjdPDBBxdLPJ599tlCJGau42ezMUMtQHfjgaJps0RAgJ4l7E5KoLkCEaAjGM8zzzxplVVWKd5gr7jiirTlllsWf944TjvttHT22Wen448/Pg0cODDFg0bjx4+f8qb70ksvpfXWWy998YtfTGuuuWaK///Zz36WjjvuuPSDH/ygqOahhx5KO+ywQ1p22WXT5z//+XTzzTcXb9JDhw6d8mbd3NapjUDrCkxvCcfw4cOLhwIbx2WXXZaOOuqoNHr0aAG6dYeLllco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/QUE6Pr3oRYQIECAAAECBAhUKCBAV4jtVAQIECBAgAABAvUXEKDr34daQIAAAQIECBAgUKGAAF0htlMRIECAAAECBAjUX0CArn8fagEBAgQIECBAgECFAgJ0hdhORYAAAQIECBAgUH8BAbr+fagFBAgQIECAAAECFQoI0BViOxUBAgQIECBAgED9BQTo+vehFhAgQIAAAQIECFQoIEBXiO1UBAgQIECAAAEC9RcQoOvfh1pAgAABAgQIECBQoYAAXSG2UxEgQIAAAQIECNRfQICufx9qAQECBAgQIECAQIUCAnSF2E5FgAABAgQIECBQfwEBuv59qAUECBAgQIAAAQIVCgjQFWI7FQECBAgQIECAQP0FBOj696EWECBAgAABAgQIVCggQFeI7VQECBAgQIAAAQL1FxCg69+HWkCAAAECBAgQIFChgABdIbZTESBAgAABAgQI1F9AgK5/H2oBAQIECBAgQIBAhQICdIXYTkWAAAECBAgQIFB/AQG6/n2oBQQIECBAgAABAhUKCNAVYjsVAQIECBAgQIBA/QUE6Pr3oRYQIECAAAECBAhUKCBAV4jtVAQIECBAgAABAvUXEKDr34daQIAAAQIECBAgUKGAAF0htlMRIECAAAECBAjUX0CArn8fagEBAgQIECBAgECFAgJ0hdhORYAAAQIECBAgUH8BAbr+fagFBAgQIECAAAECFQoI0BViOxUBAgQIECBAgED9BQTo+vehFhAgQIAAAQIECFQoIEBXiO1UBAgQIECAAAEC9RcQoOvfh1pAgAABAgQIECBQoYAAXSG2UxEgQIAAAQIECNRfQICufx9qAQECBAgQIECAQIUCAnSF2E5FgAABAgQIECBQfwEBuv59qAUECBAgQIAAAQIVCgjQFWI7FQECBAgQIECAQP0FBOj696EWECBAgAABAgQIVCggQFeI7VQECBAgQIAAAQL1FxCg69+HWkCAAAECBAgQIFChgABdIbZTESBAgAABAgQI1F9AgK5/H2oBAQIECBAgQIBAhQICdIXYTkWAAAECBAgQIFB/AQG6/n2oBQQIECBAgAABAhUKCNAVYjsVAQIECBAgQIBA/QUE6Pr3oRYQIECAAAECBAhUKCBAV4jtVAQIECBAgAABAvUXEKDr34daQIAAAQIECBAgUKGAAF0htlMRIECAAAECBAjUX0CArn8fagEBAgQIECBAgECFAgJ0hdhORYAAAQIECBAgUH8BAbr+fagFBAgQIECAAAECFQoI0BViOxUBAgQIECBAgED9BQTo+vehFhAgQIAAAQIECFQoIEBXiO1UBAg0T2D8+PHp3XffTX369Enzzjtvmm222ZpXeUU1tbW1pVdffTX1798/LbTQQjN01qeeeip985vfTIMHD07HHntsOvLIIztVz0knnZT+8Y9/pLvuuqsof9NNN6Wf/OQn6e67705zzDFHp+pQiAABAq0qIEC3as9rN4GaCkycODHttdde6YYbbpjSggjQf/zjH9Paa69dq1aNGjUqLbjggmmNNdZIjz76aPa1RwBfbLHFipuHiy++OL3zzjvpoIMO6lQ9X/jCF9K9996bxowZU5T/8Y9/nL73ve+lN998s7gpcRAgQIDA9AUEaKODAIHaCLz22mvp//7v/4rQ98Mf/jCtt956RWiM8Bczqaeeemr69re/XZv2TJ48Of3ud79Liy66aNGW3OP5559Pq6yySnrggQfSJptskvVyATqLS2ECBAhMIyBAGxAECNRGYNddd01//vOfi9nmVVdddcp1x0zu/vvvXyxDePnll9MyyywzQ22KZSGzzz578WtmjgjGo0ePTnPOOecMV/Phhx+mfv36pZ49e063jrDYeOONizYvt9xyWeea2QAd7evbt2/q0aPHdM8b/RLLUxwECBDobgICdHfrUe0h0E0FYrnCXHPNlQ4//PBi9rn9MXTo0CI4xzregw8+uAiwsbzh5JNPTscdd9yU4scff3z6zW9+k4YMGTLlz55++ul0wgknFOF80qRJxSz3JZdcklZcccWizEsvvVQsD3niiSfSCiusMOV1n/rUp4rriV9xjBgxIn3rW98q6v/444+L6znrrLPSDjvs0GGvxLmWX375tP3226cLLrggRfC+/vrri2sZPnx46t27d/H7WK/c/thvv/3SLbfckj744IM0cODAYhnHH/7wh/T2228XNxOxPrxxxLUsscQS6Qc/+EFhE0dugL799tuLa7ntttvS1772tWLJyQILLJDOPPPMFNfSOOK83/3ud9ONN95YfDoQs+vx9+ESa6vjk4Ldd9+9WH+91FJLFS+Lurbeeuv0q1/9qriuOOIGIqyj/4466qhuOqo1iwCBugoI0HXtOddNoMUEXnnllbTssssWoXHHHXf8ROsjcC28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XfFpQzxc6CBAgEBXFBCgu2KvuCYCBGZIIAJbLB+IZRkxOzz1bhgzVKEXESBAgACBDgQEaMOCAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBAQIA2BggQIECAAAECBAhkCAjQGViKEiBAgAABAgQIEBCgjQECBAgQIECAAAECGQICdAaWogQIECBAgAABAgQEaGOAAAECBAgQIECAQIaAAJ2BpSgBAgQIECBAgAABAdoYIECAAAECBAgQIJAhIEBnYClKgAABAgQIECBA4P8BLy+Y1+km/1IAAAAASUVORK5CYII=" alt="Current" /></div>
+<div class="control-panel__zPwY">
+<div class="controls__1q0X">
+<div class="control-group__16z9 fa fa-step-backward">&nbsp;</div>
+<div class="fa fa-pause toggle-play__3DqW control-group__16z9">&nbsp;</div>
+<div class="fa fa-step-forward control-group__16z9">&nbsp;</div>
+</div>
+<div class="frame-counter__1YA2">6 / 17</div>
+</div>
+</div>
+<div class="erd_scroll_detection_container erd_scroll_detection_container_animation_active">
+<div class="erd_scroll_detection_container" dir="ltr">
+<div class="erd_scroll_detection_container">
+<div>
+<div>&nbsp;</div>
+</div>
+<div>
+<div>&nbsp;</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>&nbsp;</p>
+</center>
+<p>&nbsp;</p>
+<p>仔细检查动画，找出我们用来检查队列是<code>空</code>还是<code>满</code>的策略。</p>
+<p>下一个练习，我们将让你自己尝试实现循环队列，之后会提供给你一个解决方案。</p>
+</div>
+<div class="content-title"><strong>3.循环队列 - 实现</strong></div>
+<hr />
+<div class="block-markdown">
+<p>在循环队列中，我们使用一个<code>数组</code>和两个指针（<code>head</code>&nbsp;和&nbsp;<code>tail</code>）。&nbsp;<code>head</code>&nbsp;表示队列的起始位置，<code>tail</code>&nbsp;表示队列的结束位置。</p>
+<p>这里我们提供了代码供你参考：</p>
+<pre class="language-java"><code>class MyCircularQueue {
+    
+    private int[] data;
+    private int head;
+    private int tail;
+    private int size;
+
+    /** Initialize your data structure here. Set the size of the queue to be k. */
+    public MyCircularQueue(int k) {
+        data = new int[k];
+        head = -1;
+        tail = -1;
+        size = k;
+    }
+    
+    /** Insert an element into the circular queue. Return true if the operation is successful. */
+    public boolean enQueue(int value) {
+        if (isFull() == true) {
+            return false;
+        }
+        if (isEmpty() == true) {
+            head = 0;
+        }
+        tail = (tail + 1) % size;
+        data[tail] = value;
+        return true;
+    }
+    
+    /** Delete an element from the circular queue. Return true if the operation is successful. */
+    public boolean deQueue() {
+        if (isEmpty() == true) {
+            return false;
+        }
+        if (head == tail) {
+            head = -1;
+            tail = -1;
+            return true;
+        }
+        head = (head + 1) % size;
+        return true;
+    }
+    
+    /** Get the front item from the queue. */
+    public int Front() {
+        if (isEmpty() == true) {
+            return -1;
+        }
+        return data[head];
+    }
+    
+    /** Get the last item from the queue. */
+    public int Rear() {
+        if (isEmpty() == true) {
+            return -1;
+        }
+        return data[tail];
+    }
+    
+    /** Checks whether the circular queue is empty or not. */
+    public boolean isEmpty() {
+        return head == -1;
+    }
+    
+    /** Checks whether the circular queue is full or not. */
+    public boolean isFull() {
+        return ((tail + 1) % size) == head;
+    }
+}
+
+/**
+ * Your MyCircularQueue object will be instantiated and called as such:
+ * MyCircularQueue obj = new MyCircularQueue(k);
+ * boolean param_1 = obj.enQueue(value);
+ * boolean param_2 = obj.deQueue();
+ * int param_3 = obj.Front();
+ * int param_4 = obj.Rear();
+ * boolean param_5 = obj.isEmpty();
+ * boolean param_6 = obj.isFull();
+ */</code></pre>
+</div>
+<div class="content-title">&nbsp;4.队列 - 用法</div>
+<hr />
+<div class="block-markdown">
+<p>大多数流行语言都提供内置的队列库，因此您无需重新发明轮子。</p>
+<p>如前所述，队列有两个重要的操作，<code>入队&nbsp;enqueue</code>&nbsp;和<code>出队&nbsp;dequeue</code>。 此外，我们应该能够<code>获得队列中的第一个元素</code>，因为应该首先处理它。</p>
+<p>下面是使用内置队列库及其常见操作的一些示例：</p>
+<pre class="language-java"><code>// "static void main" must be defined in a public class.
+public class Main {
+    public static void main(String[] args) {
+        // 1. Initialize a queue.
+        Queue&lt;Integer&gt; q = new LinkedList();
+        // 2. Get the first element - return null if queue is empty.
+        System.out.println("The first element is: " + q.peek());
+        // 3. Push new element.
+        q.offer(5);
+        q.offer(13);
+        q.offer(8);
+        q.offer(6);
+        // 4. Pop an element.
+        q.poll();
+        // 5. Get the first element.
+        System.out.println("The first element is: " + q.peek());
+        // 7. Get the size of the queue.
+        System.out.println("The size is: " + q.size());
+    }
+}</code></pre>
+</div>
+<p>&nbsp;</p>
+<p>参考：</p>
+<p><a href="https://leetcode-cn.com/explore/learn/card/queue-stack/216/queue-first-in-first-out-data-structure/867/">https://leetcode-cn.com/explore/learn/card/queue-stack/216/queue-first-in-first-out-data-structure/867/</a></p>
