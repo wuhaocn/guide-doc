@@ -1,4 +1,0 @@
-<p>git clone https://github.com/nacos-group/nacos-docker.git</p>
-<p>cd nacos-docker</p>
-<p>docker-compose -f example/standalone-mysql.yaml up</p>
-<p>浏览器访问：http://yourip:8848/nacos<br />登录用户名和密码都为:nacos<br />--------------------- <br />作者：没有格子衬衫的小伙子 <br />来源：CSDN <br />原文：https://blog.csdn.net/qq_33282573/article/details/86573714 <br />版权声明：本文为博主原创文章，转载请附上博文链接！</p>

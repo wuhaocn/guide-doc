@@ -1,5 +1,5 @@
 ### 计算
-#### Amazon EC2
+#### Amazon EC2【重点】
     Amazon Elastic Compute Cloud (Amazon EC2) 是一种提供可调节计算容量的 Web 服务,
     简单来说，就是 Amazon 数据中心里的服务器 – 您可以使用它来构建和托管您的软件系统。
 [详细介绍](http://docs.amazonaws.cn/AWSEC2/latest/UserGuide/ec2-instances-and-amis.html)
@@ -8,17 +8,17 @@
     AWS Elastic Beanstalk
     AWS Lambda
 存储
-    Amazon S3
+    Amazon S3【重点】
     Amazon S3 Glacier
     AWS Snowball
     AWS Storage Gateway
     
 Database
-    Amazon Aurora
+    Amazon Aurora【重点】
     Amazon DynamoDB
     Amazon ElastiCache
     Amazon RDS
-    Amazon Redshift 
+    Amazon Redshift 【重点】
 开发人员工具
     AWS CodeBuild
     AWS CodeDeploy
@@ -34,7 +34,7 @@ Database
     Amazon  Polly
 
 管理与监管
-    AWS Auto Scaling
+    AWS Auto Scaling【重点】
     AWS CloudFormation
     AWS CloudTrail
     Amazon  CloudWatch
