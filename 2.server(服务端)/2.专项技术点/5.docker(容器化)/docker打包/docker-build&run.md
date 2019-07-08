@@ -1,7 +1,7 @@
 ### docker打包运行参照
 
 #### 1. 目录结构
-![docker打包项目目录结构](../images/docker-build.jpg)
+![docker打包项目目录结构](../resources/images/docker-build.jpg)
 
 
 #### 2. 打包流程
@@ -28,7 +28,7 @@
         重启docker
     2.2.2.2 配置私服【mac】
     
- ![docker打包项目目录结构](images/docker-setting.jpg)  
+ ![docker打包项目目录结构](../resources/images/docker-setting.jpg)  
 
 
 ##### 2.3. Dockerfile
