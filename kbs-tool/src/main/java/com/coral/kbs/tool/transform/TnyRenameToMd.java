@@ -6,7 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
-public class RenameFile {
+public class TnyRenameToMd {
     public static void main(String[] args) throws IOException {
         findAnrWrite(new File("/Users/wuhao/data/code/github/book/guide-doc"));
     }
