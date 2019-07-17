@@ -8,8 +8,7 @@ import java.util.List;
 
 public class DocIndexUtils {
 
-    public static boolean containUrl = true;
-    public static String baseUrl = "https://github.com/wuhaocn/guide-doc/tree/master/";
+
 
     public static List<String> sort(String[] unSortStringArray) {
         List<String> unSortStringList = Arrays.asList(unSortStringArray);
