@@ -4,9 +4,7 @@
 ### 内容
 - atomic包
     - AtomicBoolean 
-        - 一般情况下，使用 AtomicBoolean 高效并发处理 “只初始化一次” 的功能要求  
     - AtomicInteger
-        - 一般情况下，在应用程序中以原子的方式更新int值。
     - AtomicIntegerArray
     - AtomicIntegerFieldUpdater
     - AtomicLong
