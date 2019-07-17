@@ -19,8 +19,6 @@
 
         * [7.io(流)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/1.base(基础知识)/7.io(流))
 
-          * [refer](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/1.base(基础知识)/7.io(流)/refer)
-
         * [8.reflect(反射)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/1.base(基础知识)/8.reflect(反射))
 
         * [9.proxy(动态代理)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/1.base(基础知识)/9.proxy(动态代理))
@@ -31,8 +29,6 @@
 
           * [threadlocal](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/1.thread(线程)/threadlocal)
 
-            * [images](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/1.thread(线程)/threadlocal/images)
-
         * [2.jvm(Java虚拟机)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.jvm(Java虚拟机))
 
         * [3.juc(并发包)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/3.juc(并发包))
@@ -41,7 +37,7 @@
 
         * [5.并发](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发)
 
-          * [1-Java 并发](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java 并发)
+          * [1-Java并发](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发)
 
           * [2-多线程](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/2-多线程)
 
@@ -81,8 +77,6 @@
 
           * [refer](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/10.(devtool)开发工具/2.gradle/refer)
 
-        * [3.maven](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/10.(devtool)开发工具/3.maven)
-
     * [2.c(高效语言)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/2.c(高效语言))
 
     * [3.javascript(前端语言)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/3.javascript(前端语言))
@@ -109,9 +103,13 @@
 
       * [3.spring-boot](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/3.spring-boot)
 
+      * [4.spring-cloud](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/4.spring-cloud)
+
     * [11.framework(框架)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架))
 
       * [1.spring(应用框架)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/1.spring(应用框架))
+
+        * [0.spring](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/1.spring(应用框架)/0.spring)
 
         * [1.spring-data-jpa](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/1.spring(应用框架)/1.spring-data-jpa)
 
@@ -167,8 +165,6 @@
 
           * [back](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/1.auth(权限认证)/shiro/back)
 
-        * [统一认证](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/1.auth(权限认证)/统一认证)
-
       * [2.cache(缓存)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/2.cache(缓存))
 
         * [1.基础知识](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/2.cache(缓存)/1.基础知识)
@@ -187,8 +183,6 @@
 
         * [nacos](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/3.configcenter(配置中心)/nacos)
 
-        * [spring-cloud-config](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/3.configcenter(配置中心)/spring-cloud-config)
-
         * [zookeeper](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/3.configcenter(配置中心)/zookeeper)
 
       * [4.database(数据库)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/4.database(数据库))
@@ -196,8 +190,6 @@
         * [关系型数据库](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/4.database(数据库)/关系型数据库)
 
           * [mysql](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/4.database(数据库)/关系型数据库/mysql)
-
-            * [refer](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/4.database(数据库)/关系型数据库/mysql/refer)
 
           * [tidb](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/4.database(数据库)/关系型数据库/tidb)
 
@@ -341,15 +333,33 @@
 
       * [11.文档管理](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维&统计&技术支持/11.文档管理)
 
+  * [3.frontend(前端)](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端))
+
+    * [android](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端)/android)
+
+    * [component(组件集合)](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端)/component(组件集合))
+
+      * [富文本编辑器](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端)/component(组件集合)/富文本编辑器)
+
+        * [tinymce](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端)/component(组件集合)/富文本编辑器/tinymce)
+
+    * [跨平台解决方案](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端)/跨平台解决方案)
+
   * [4.algorithm(算法)](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法))
 
     * [1.算法&数据结构](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构)
 
+      * [1-算法基础](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/1-算法基础)
+
+      * [11-排序](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/11-排序)
+
+      * [12-查找](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/12-查找)
+
       * [13-推荐算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/13-推荐算法)
 
-      * [15-贪心算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/15-贪心算法)
+      * [14-剪枝算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/14-剪枝算法)
 
-      * [19-朴素贝叶斯](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/19-朴素贝叶斯)
+      * [15-贪心算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/15-贪心算法)
 
       * [16-回溯算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/16-回溯算法)
 
@@ -357,17 +367,7 @@
 
         * [优化](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/18-动态规划/优化)
 
-      * [11-排序](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/11-排序)
-
-      * [1-算法基础](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/1-算法基础)
-
-      * [14-剪枝算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/14-剪枝算法)
-
-      * [12-查找](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/12-查找)
-
-      * [21-倍增、ST表、RMQ](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/21-倍增、ST表、RMQ)
-
-      * [20-并查集](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/20-并查集)
+      * [19-朴素贝叶斯](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/19-朴素贝叶斯)
 
       * [2-线性表](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/2-线性表)
 
@@ -448,10 +448,6 @@
     * [4.通用算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/4.通用算法)
 
       * [01 - 算法基础](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/4.通用算法/01 - 算法基础)
-
-    * [5.实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/5.实现)
-
-      * [1.Java集合](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/5.实现/1.Java集合)
 
   * [5.computer(编程基础知识)](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识))
 
@@ -553,35 +549,17 @@
 
   * [9.tool](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool)
 
-    * [1.开发工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/1.开发工具)
-
-      * [1.java技术体系](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/1.开发工具/1.java技术体系)
-
-      * [2.c技术体系](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/1.开发工具/2.c技术体系)
-
     * [2.构建工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具)
 
-      * [1.gradle工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/1.gradle工具)
-
       * [1.gradle](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/1.gradle)
+
+      * [1.gradle工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/1.gradle工具)
 
       * [2.maven](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/2.maven)
 
       * [3.nexus](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/3.nexus)
 
     * [3.在线工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/3.在线工具)
-
-  * [3.frontend(前端)](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端))
-
-    * [android](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端)/android)
-
-    * [component(组件集合)](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端)/component(组件集合))
-
-      * [富文本编辑器](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端)/component(组件集合)/富文本编辑器)
-
-        * [tinymce](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端)/component(组件集合)/富文本编辑器/tinymce)
-
-    * [跨平台解决方案](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(前端)/跨平台解决方案)
 
 ## 参考
 

@@ -23,7 +23,7 @@ public class BuildIndex {
         if (isGuide){
             writeHeader();
         }
-        writeContent(file, 0, isGuide, "", false, 6);
+        writeContent(file, 0, isGuide, "", false, 5);
         //底部标题
         if (isGuide){
             writeBoot();
