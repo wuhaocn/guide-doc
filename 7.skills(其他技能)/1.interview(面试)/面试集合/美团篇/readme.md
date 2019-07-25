@@ -23,7 +23,7 @@ OK
 ##### 5.1.6 jvm的垃圾回收机制？
 OK
 ##### 5.1.7 java类加载机制？如何实现自定义类加载器？findClass与loadClass的区别？
-
+ok
 ##### 5.1.8 String、StringBuffer、StringBuilder的区别？对应的使用场景？
 
 ##### 5.1.9 如何实现不可变的类？
