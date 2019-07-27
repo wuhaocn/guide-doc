@@ -23,18 +23,19 @@ OK
 ##### 5.1.6 jvm的垃圾回收机制？
 OK
 ##### 5.1.7 java类加载机制？如何实现自定义类加载器？findClass与loadClass的区别？
-ok
+OK
 ##### 5.1.8 String、StringBuffer、StringBuilder的区别？对应的使用场景？
-
+OK
 ##### 5.1.9 如何实现不可变的类？
-
+OK
 ##### 5.2.0 浅复制和深复制？怎样实现深复制？
-
+OK
 ##### 5.2.1 HashMap、HashTable、ConcurrentHashMap的区别？
-
+OK
 ##### 5.2.2 CAS是一种什么样的同步机制？
-
+OK
 ##### 5.2.3 NIO的原理，包括哪几个组件？
+OK
 
 ##### 5.2.4 简单介绍一下java的反射机制？反射在哪些地方有应用场景？
 
