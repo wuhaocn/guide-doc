@@ -1,0 +1,35 @@
+redis-slave1:
+  build: ./slave1
+  ports:
+    - 6061:6061
+    - 16061:16061
+redis-slave2:
+  build: ./slave2
+  ports:
+    - 6062:6062
+    - 16062:16062
+redis-slave3:
+  build: ./slave3
+  ports:
+    - 6063:6063
+    - 16063:16063
+redis-slave4:
+  build: ./slave4
+  ports:
+    - 6064:6064
+    - 16064:16064
+redis-slave5:
+  build: ./slave5
+  ports:
+    - 6065:6065
+    - 16065:16065
+redis-slave6:
+  build: ./slave6
+  ports:
+    - 6066:6066
+    - 16066:16066
+  ---------------------
+  作者：鲸临于空
+  来源：CSDN
+  原文：https://blog.csdn.net/alinyua/article/details/80936940
+  版权声明：本文为博主原创文章，转载请附上博文链接！

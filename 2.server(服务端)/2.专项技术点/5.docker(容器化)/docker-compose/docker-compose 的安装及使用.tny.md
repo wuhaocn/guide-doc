@@ -32,14 +32,14 @@ chmod +x /usr/<span class="hljs-built_in">local</span>/bin/docker-compose</code>
 <p>通过以下配置，在运行后可以创建两个站点(只为演示)</p>
 <pre><code class="hljs less"><span class="hljs-attribute">version</span>: <span class="hljs-string">"3"</span>
 <span class="hljs-attribute">services</span>:
-  <span class="hljs-attribute">web1</span>:
-    <span class="hljs-attribute">image</span>: registry.cn-hangzhou.aliyuncs.com/yimo_public/<span class="hljs-attribute">docker-nginx-test</span>:latest
-    <span class="hljs-attribute">ports</span>:
-      - <span class="hljs-string">"4466:80"</span>
-  <span class="hljs-attribute">web2</span>:
-    <span class="hljs-attribute">image</span>: registry.cn-hangzhou.aliyuncs.com/yimo_public/<span class="hljs-attribute">docker-nginx-test</span>:latest
-    <span class="hljs-attribute">ports</span>:
-      - <span class="hljs-string">"4477:80"</span></code></pre>
+<span class="hljs-attribute">web1</span>:
+<span class="hljs-attribute">image</span>: registry.cn-hangzhou.aliyuncs.com/yimo_public/<span class="hljs-attribute">docker-nginx-test</span>:latest
+<span class="hljs-attribute">ports</span>:
+- <span class="hljs-string">"4466:80"</span>
+<span class="hljs-attribute">web2</span>:
+<span class="hljs-attribute">image</span>: registry.cn-hangzhou.aliyuncs.com/yimo_public/<span class="hljs-attribute">docker-nginx-test</span>:latest
+<span class="hljs-attribute">ports</span>:
+- <span class="hljs-string">"4477:80"</span></code></pre>
 <p>此处只是简单演示写法，说明 docker-compose 的方便</p>
 <h4 id="构建完成后台运行镜像">2.构建完成，后台运行镜像</h4>
 <pre><code class="hljs">docker-compose up -d</code></pre>
