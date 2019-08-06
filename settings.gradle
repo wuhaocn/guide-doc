@@ -1,2 +1,3 @@
 rootProject.name = 'guide-doc'
 include 'kbs-tool'
+include 'kbs-source'
