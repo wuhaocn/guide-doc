@@ -34,6 +34,7 @@ public class DocIndexUtils {
     }
 
     public static List<File> sortFile(List<File> unSortFileList) {
+        System.setProperty("java.util.Arrays.useLegacyMergeSort", "true");
         unSortFileList.sort(new Comparator<File>() {
             public int compare(File o1, File o2) {
                 if (o1.isDirectory() && o2.isFile()){
