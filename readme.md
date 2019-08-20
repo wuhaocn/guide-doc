@@ -19,6 +19,8 @@
 
         * [7.io(流)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/1.base(基础知识)/7.io(流))
 
+          * [refer](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/1.base(基础知识)/7.io(流)/refer)
+
         * [8.reflect(反射)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/1.base(基础知识)/8.reflect(反射))
 
         * [9.proxy(动态代理)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/1.base(基础知识)/9.proxy(动态代理))
@@ -77,6 +79,8 @@
 
           * [refer](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/10.(devtool)开发工具/2.gradle/refer)
 
+        * [3.maven](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/10.(devtool)开发工具/3.maven)
+
     * [2.c(高效语言)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/2.c(高效语言))
 
     * [3.javascript(前端语言)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/3.javascript(前端语言))
@@ -102,8 +106,6 @@
         * [1.问题点汇总](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/2.dubbo/1.问题点汇总)
 
       * [3.spring-boot](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/3.spring-boot)
-
-      * [4.spring-cloud](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/4.spring-cloud)
 
     * [11.framework(框架)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架))
 
@@ -135,7 +137,9 @@
 
         * [1.springcloud](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/1.微服务/1.springcloud)
 
-        * [2.helium微服务解决方案](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/1.微服务/2.helium微服务解决方案)
+        * [2.dubbo](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/1.微服务/2.dubbo)
+
+        * [3.springcloud-alibaba](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/1.微服务/3.springcloud-alibaba)
 
       * [2.自动化运维](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/2.自动化运维)
 
@@ -165,6 +169,8 @@
 
           * [back](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/1.auth(权限认证)/shiro/back)
 
+        * [统一认证](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/1.auth(权限认证)/统一认证)
+
       * [2.cache(缓存)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/2.cache(缓存))
 
         * [1.基础知识](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/2.cache(缓存)/1.基础知识)
@@ -182,6 +188,8 @@
         * [apollo](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/3.configcenter(配置中心)/apollo)
 
         * [nacos](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/3.configcenter(配置中心)/nacos)
+
+        * [spring-cloud-config](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/3.configcenter(配置中心)/spring-cloud-config)
 
         * [zookeeper](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/3.configcenter(配置中心)/zookeeper)
 
@@ -203,9 +211,9 @@
 
       * [5.docker(容器化)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/5.docker(容器化))
 
-        * [dockercompose](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/5.docker(容器化)/dockercompose)
+        * [docker-compose](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/5.docker(容器化)/docker-compose)
 
-          * [常用软件安装](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/5.docker(容器化)/dockercompose/常用软件安装)
+          * [install](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/5.docker(容器化)/docker-compose/install)
 
         * [docker打包](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/5.docker(容器化)/docker打包)
 
@@ -251,6 +259,8 @@
 
         * [kafka](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/8.mq(消息队列)/kafka)
 
+          * [resources](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/8.mq(消息队列)/kafka/resources)
+
       * [9.分布式事务处理](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/9.分布式事务处理)
 
       * [10.分布式链路追踪](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/10.分布式链路追踪)
@@ -272,6 +282,8 @@
         * [zookeeper](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/16.服务注册中心/zookeeper)
 
       * [17.问题诊断](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/17.问题诊断)
+
+      * [18.网关](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.专项技术点/18.网关)
 
     * [3.分布式](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/3.分布式)
 
@@ -347,107 +359,125 @@
 
   * [4.algorithm(算法)](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法))
 
-    * [1.算法&数据结构](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构)
+    * [1.算法基础](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法基础)
 
-      * [1-算法基础](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/1-算法基础)
+    * [2.数据结构](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构)
 
-      * [11-排序](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/11-排序)
+      * [1.线性表](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/1.线性表)
 
-      * [12-查找](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/12-查找)
+        * [算法实例](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/1.线性表/算法实例)
 
-      * [13-推荐算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/13-推荐算法)
+      * [2.栈与队列](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/2.栈与队列)
 
-      * [14-剪枝算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/14-剪枝算法)
+      * [3.数组](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/3.数组)
 
-      * [15-贪心算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/15-贪心算法)
+      * [4.字符串](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/4.字符串)
 
-      * [16-回溯算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/16-回溯算法)
+      * [5.树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树)
 
-      * [18-动态规划](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/18-动态规划)
+        * [1-二叉树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/1-二叉树)
 
-        * [优化](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/18-动态规划/优化)
+        * [10-LCA](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/10-LCA)
 
-      * [19-朴素贝叶斯](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/19-朴素贝叶斯)
+        * [2-完全二叉树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/2-完全二叉树)
 
-      * [2-线性表](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/2-线性表)
+        * [3-平衡二叉树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/3-平衡二叉树)
 
-        * [链表](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/2-线性表/链表)
+        * [4-二叉查找树（BST）](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/4-二叉查找树（BST）)
 
-      * [3-栈与队列](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/3-栈与队列)
+        * [5-红黑树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/5-红黑树)
 
-      * [4-数组](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/4-数组)
+        * [6-B-B+B树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/6-B-B+B树)
 
-      * [5-字符串](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/5-字符串)
+        * [7-LSM树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/7-LSM树)
 
-      * [6-树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树)
+        * [8-最小生成树算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/8-最小生成树算法)
 
-        * [1-二叉树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/1-二叉树)
+        * [9-哈夫曼树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/9-哈夫曼树)
 
-        * [10-LCA](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/10-LCA)
+        * [AC自动机](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/AC自动机)
 
-        * [2-完全二叉树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/2-完全二叉树)
+        * [K-D树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/K-D树)
 
-        * [3-平衡二叉树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/3-平衡二叉树)
+        * [SBT树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/SBT树)
 
-        * [4-二叉查找树（BST）](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/4-二叉查找树（BST）)
+        * [Treap树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/Treap树)
 
-        * [5-红黑树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/5-红黑树)
+        * [伸展树Splay](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/伸展树Splay)
 
-        * [6-B-B+B树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/6-B-B+B树)
+        * [分块](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/分块)
 
-        * [7-LSM树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/7-LSM树)
+        * [动态树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/动态树)
 
-        * [8-最小生成树算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/8-最小生成树算法)
+        * [可持久化数据结构](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/可持久化数据结构)
 
-        * [9-哈夫曼树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/9-哈夫曼树)
+        * [字典树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/字典树)
 
-        * [AC自动机](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/AC自动机)
+        * [左偏树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/左偏树)
 
-        * [K-D树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/K-D树)
+        * [树套树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/树套树)
 
-        * [SBT树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/SBT树)
+        * [树链剖分](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/树链剖分)
 
-        * [Treap树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/Treap树)
+        * [点分治](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/点分治)
 
-        * [伸展树Splay](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/伸展树Splay)
+        * [边分治](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/5.树/边分治)
 
-        * [分块](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/分块)
+      * [6.哈希](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/6.哈希)
 
-        * [动态树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/动态树)
+      * [7.图](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/7.图)
 
-        * [可持久化数据结构](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/可持久化数据结构)
+        * [17-最短路径算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/7.图/17-最短路径算法)
 
-        * [字典树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/字典树)
+        * [5-深度优先、广度优先](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/7.图/5-深度优先、广度优先)
 
-        * [左偏树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/左偏树)
+      * [8.BitSet](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/8.BitSet)
 
-        * [树套树](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/树套树)
+      * [9.布隆过滤器](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.数据结构/9.布隆过滤器)
 
-        * [树链剖分](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/树链剖分)
+    * [3.常用算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法)
 
-        * [点分治](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/点分治)
+      * [1.排序](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/1.排序)
 
-        * [边分治](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/6-树/边分治)
+      * [2.查找](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/2.查找)
 
-      * [7-图](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/7-图)
+      * [3.推荐算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/3.推荐算法)
 
-        * [17-最短路径算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/7-图/17-最短路径算法)
+      * [4.剪枝算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/4.剪枝算法)
 
-        * [5-深度优先、广度优先](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/7-图/5-深度优先、广度优先)
+      * [5.贪心算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/5.贪心算法)
 
-      * [8-BitSet](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/8-BitSet)
+      * [6.回溯算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/6.回溯算法)
 
-      * [9-布隆过滤器](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/1.算法&数据结构/9-布隆过滤器)
+      * [7.分治算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/7.分治算法)
 
-    * [2.加解密算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/2.加解密算法)
+      * [8.动态规划](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/8.动态规划)
 
-    * [3.分布式算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.分布式算法)
+        * [优化](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/8.动态规划/优化)
 
-    * [4.人工智能](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/4.人工智能)
+      * [9.分支限界法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/9.分支限界法)
 
-    * [4.通用算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/4.通用算法)
+      * [10.朴素贝叶斯](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/10.朴素贝叶斯)
 
-      * [01 - 算法基础](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/4.通用算法/01 - 算法基础)
+      * [11.并查集](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/11.并查集)
+
+      * [12.倍增、ST表、RMQ](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/3.常用算法/12.倍增、ST表、RMQ)
+
+    * [4.分布式算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/4.分布式算法)
+
+    * [5.人工智能算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/5.人工智能算法)
+
+    * [6.加解密算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/6.加解密算法)
+
+    * [7.常用语言实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用语言实现)
+
+      * [1.Java实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用语言实现/1.Java实现)
+
+      * [2.redis实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用语言实现/2.redis实现)
+
+      * [3.mysql实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用语言实现/3.mysql实现)
+
+      * [4.kafka实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用语言实现/4.kafka实现)
 
   * [5.computer(编程基础知识)](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识))
 
@@ -515,6 +545,8 @@
 
       * [2.mqtt](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/4.protocol/2.mqtt)
 
+        * [images](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/4.protocol/2.mqtt/images)
+
       * [3.rpc](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/4.protocol/3.rpc)
 
       * [4.rtp](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/4.protocol/4.rtp)
@@ -529,7 +561,49 @@
 
       * [algotithm](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/algotithm)
 
+      * [es](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/es)
+
       * [index](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/index)
+
+      * [kafka](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/kafka)
+
+      * [redis](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/redis)
+
+      * [zookeeper](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/zookeeper)
+
+      * [分布式算法](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/分布式算法)
+
+      * [面试集合](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合)
+
+        * [docs](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs)
+
+          * [database](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs/database)
+
+          * [dataStructures-algorithms](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs/dataStructures-algorithms)
+
+          * [data](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs/data)
+
+          * [essential-content-for-interview](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs/essential-content-for-interview)
+
+          * [github-trending](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs/github-trending)
+
+          * [java](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs/java)
+
+          * [network](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs/network)
+
+          * [operating-system](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs/operating-system)
+
+          * [system-design](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs/system-design)
+
+          * [tools](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/docs/tools)
+
+        * [epoll](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/epoll)
+
+        * [interview_internal](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/interview_internal)
+
+        * [jvm](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/jvm)
+
+        * [集合](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/面试集合/集合)
 
     * [2.project(项目)](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/2.project(项目))
 
@@ -549,17 +623,25 @@
 
   * [9.tool](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool)
 
+    * [1.开发工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/1.开发工具)
+
+      * [1.java技术体系](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/1.开发工具/1.java技术体系)
+
+      * [2.c技术体系](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/1.开发工具/2.c技术体系)
+
     * [2.构建工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具)
 
-      * [1.gradle](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/1.gradle)
-
       * [1.gradle工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/1.gradle工具)
+
+      * [1.gradle](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/1.gradle)
 
       * [2.maven](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/2.maven)
 
       * [3.nexus](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/3.nexus)
 
     * [3.在线工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/3.在线工具)
+
+  * [kbs-source](https://github.com/wuhaocn/guide-doc/tree/master/./kbs-source)
 
 ## 参考
 

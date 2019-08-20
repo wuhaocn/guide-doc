@@ -1,14 +1,57 @@
-group 'kbs'
-version '1.0-SNAPSHOT'
+buildscript {
+    project.ext {
+        repoClosure = {
 
-apply plugin: 'java'
-
-sourceCompatibility = 1.8
-
-repositories {
-    mavenCentral()
+            maven { url "http://maven.aliyun.com/nexus/content/groups/public/" }
+            maven { url "http://repo.spring.io/milestone/" }
+            maven { url "https://repo.spring.io/snapshot/" }
+            maven { url "http://central.maven.org/maven2/" }
+            mavenCentral()
+            mavenLocal()
+        }
+    }
+    repositories repoClosure
 }
 
-dependencies {
-    testCompile group: 'junit', name: 'junit', version: '4.11'
+allprojects { project ->
+
+    project.repositories rootProject.repoClosure
+    group = 'com.coral'
+    version = '1.0.0-SNAPSHOT'
+}
+
+// gradle构建对外接口依赖包时,排除下面不需要的Module,只暴露接口
+def mavenPublishIgnoreList = ['']
+
+subprojects { project ->
+
+    apply plugin: 'java'
+    apply plugin: 'maven-publish'
+
+    tasks.withType(JavaCompile) {
+        sourceCompatibility = 1.8
+        options.encoding = "UTF-8"
+    }
+
+    tasks.withType(Test) {
+        defaultCharacterEncoding = "UTF-8"
+    }
+
+
+    task sourceJar(type: Jar) {
+        from sourceSets.main.allJava
+        classifier = 'sources'
+    }
+
+    if (!(project.name in mavenPublishIgnoreList)) {
+        publishing {
+
+            publications {
+                maven(MavenPublication) {
+                    from components.java
+                    artifact sourceJar
+                }
+            }
+        }
+    }
 }

@@ -192,7 +192,7 @@ OK
 4) "982"
 
 > zrangebyscore zset-key 0 800 withscores
-1) "member1"
+1)  "member1"
 2) "728"
 
 > zrem zset-key member1
