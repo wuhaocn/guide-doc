@@ -49,47 +49,18 @@ public class BuildIndex {
         if (DocIndexUtils.isIgnoreFile(file, level, maxLevel, referIndex)){
             return false;
         }
+        String aPath = file.getAbsolutePath();
+        if (aPath.contains(" ")){
+            File fileT = new File(aPath.replace(" ", ""));
+            file.renameTo(fileT);
+            file.delete();
+            file = fileT;
+        }
 
         String fileName = "" + file.getName();
-
+        appendFileItem(file, level, guide, index, fileName, maxLevel);
         if (file.isDirectory()) {
             List<File> fileList = DocIndexUtils.sortFile(file.listFiles());
-            if (level  > 0) {
-                StringBuilder sb = new StringBuilder();
-                //dir
-                if (guide){
-                    for (int i = 0; i < level; i++){
-                        sb.append("  ");
-                    }
-                    sb.append("*");
-                } else {
-                    for (int i = 0; i < level; i++){
-                        sb.append("#");
-                    }
-                }
-                String pathNoWin =  file.getPath().replace("\\", "/");
-                if (containUrl){
-                    sb.append(" [");
-                } else {
-                    sb.append(" ");
-                }
-
-
-                sb.append(fileName);
-                if (containUrl){
-                    sb.append("](");
-                    sb.append(baseUrl);
-                    sb.append(pathNoWin);
-                    sb.append(")\n");
-                    sb.append("\n");
-                }else {
-                    sb.append("\n");
-                }
-
-                getFileStream().write(sb.toString().getBytes());
-                getFileStream().flush();
-            }
-
             int subIndex = 1;
             //write file
             for (File fileItem : fileList) {
@@ -98,15 +69,47 @@ public class BuildIndex {
                     subIndex ++;
                 }
             }
-        } else if (!guide){
-            StringBuilder sb = new StringBuilder();
-            sb.append("    ").append(fileName).append("\n");
-            getFileStream().write(sb.toString().getBytes());
-            getFileStream().flush();
         }
         return true;
     }
 
+    private static void appendFileItem(File file, int level, boolean guide, String index, String fileName, int maxLevel) throws IOException {
+        if (level  > 0) {
+            StringBuilder sb = new StringBuilder();
+            //dir
+            if (guide){
+                for (int i = 0; i < level; i++){
+                    sb.append("  ");
+                }
+                sb.append("*");
+            } else {
+                for (int i = 0; i < level; i++){
+                    sb.append("#");
+                }
+            }
+            String pathNoWin =  file.getPath().replace("\\", "/");
+            if (containUrl){
+                sb.append(" [");
+            } else {
+                sb.append(" ");
+            }
+
+
+            sb.append(fileName);
+            if (containUrl){
+                sb.append("](");
+                sb.append(baseUrl);
+                sb.append(pathNoWin);
+                sb.append(")\n");
+
+            }else {
+                sb.append("\n");
+            }
+
+            getFileStream().write(sb.toString().getBytes());
+            getFileStream().flush();
+        }
+    }
     /**
      * 头部标题
      * @throws IOException
