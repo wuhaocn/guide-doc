@@ -8,7 +8,7 @@ kafka is a distributed,partitioned,replicated commit logservice。它提供了�
 ### kafka关键概念
     生产者
     消费者
-    k'f
+    
 
 
 参考：
