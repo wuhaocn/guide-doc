@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * Created by Administrator on 2019/4/3.
  */
-public class BuildIndex {
+public class ReadmeBuild {
     static boolean isGuide = true;
     static boolean containUrl = true;
     static String baseUrl = "https://github.com/wuhaocn/guide-doc/tree/master/";

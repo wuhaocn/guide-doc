@@ -1,4 +1,4 @@
-package com.coral.kbs.tool.transform;
+package com.coral.kbs.tool;
 
 import com.coral.kbs.tool.sort.DocIndexUtils;
 import com.coral.kbs.tool.transform.html2markdown.TraTool;
@@ -7,7 +7,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
-public class TnyMdToMd {
+public class TnyTraToMd {
     public static void main(String[] args) throws IOException {
         findAnrWrite(new File("/Users/wuhao/data/code/github/book/guide-doc"));
     }
@@ -29,7 +29,10 @@ public class TnyMdToMd {
                 String fileName = file.getAbsolutePath();
                 String fileTarget =  fileName.replace(".tny.md", ".md");
                 TraTool.tra(fileName, fileTarget);
+                file.delete();
             }
+
+
         }
         return true;
     }
