@@ -1,32 +1,17 @@
-# MySQL-InnoDB-MVCC多版本并发控制
+### MySQL-InnoDB-MVCC多版本并发控制
 
-阅读 1159
 
-收藏 46
-2018-01-02
-
-原文链接：[segmentfault.com](https://link.juejin.im?target=https%3A%2F%2Fsegmentfault.com%2Fa%2F1190000012650596)
-[如何通过 RESTful API 玩转Agora云录制juejin.im](https://juejin.im/post/5d381e8051882541175c0fd0)
-
-## MVCC
+#### MVCC
 
 (Multiversion Concurrency Control)1.先引用《高性能MySQL》中对MVCC的部分介绍
+
 * MySQL的大多数事务型存储引擎实现的其实都不是简单的行级锁。**基于提升并发性能的考虑**, 它们一般都同时实现了多版本并发控制(MVCC)。不仅是MySQL, 包括Oracle,PostgreSQL等其他数据库系统也都实现了MVCC, 但各自的实现机制不尽相同, 因为MVCC没有一个统一的实现标准。
 * 可以认为MVCC是行级锁的一个变种, 但是它在很多情况下避免了加锁操作, 因此开销更低。虽然实现机制有所不同, 但大都实现了非阻塞的读操作，写操作也只锁定必要的行。
 * MVCC的实现方式有多种, 典型的有乐观(optimistic)并发控制 和 悲观(pessimistic)并发控制。
-* MVCC只在
-
-READ COMMITTED
-和
-
-REPEATABLE READ
-两个隔离级别下工作。其他两个隔离级别够和MVCC不兼容, 因为
-
-READ UNCOMMITTED
-总是读取最新的数据行, 而不是符合当前事务版本的数据行。而
-
-SERIALIZABLE
-则会对所有读取的行都加锁。
+* MVCC只在READ COMMITTED和REPEATABLE READ两个隔离级别下工作。
+    其他两个隔离级别够和MVCC不兼容, 
+    因为READ UNCOMMITTED总是读取最新的数据行, 而不是符合当前事务版本的数据行。
+    而SERIALIZABLE则会对所有读取的行都加锁。
 
 2.可以了解到:
 
