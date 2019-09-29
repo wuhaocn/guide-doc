@@ -41,7 +41,14 @@ Redis 源码中包含了一个名为 sentinel.conf 的文件， 这个文件是�
 
 运行一个 Sentinel 所需的最少配置如下所示：
 ```
-sentinel monitor mymaster 127.0.0.1 6379 2 sentinel down-after-milliseconds mymaster 60000 sentinel failover-timeout mymaster 180000 sentinel parallel-syncs mymaster 1 sentinel monitor resque 192.168.1.3 6380 4 sentinel down-after-milliseconds resque 10000 sentinel failover-timeout resque 180000 sentinel parallel-syncs resque 5
+sentinel monitor mymaster 127.0.0.1 6379 2 
+sentinel down-after-milliseconds mymaster 60000 
+sentinel failover-timeout mymaster 180000 
+sentinel parallel-syncs mymaster 1 
+sentinel monitor resque 192.168.1.3 6380 4 
+sentinel down-after-milliseconds resque 10000 
+sentinel failover-timeout resque 180000 
+sentinel parallel-syncs resque 5
 ```
 
 第一行配置指示 Sentinel 去监视一个名为 mymaster 的主服务器， 这个主服务器的 IP 地址为 127.0.0.1 ， 端口号为 6379 ， 而将这个主服务器判断为失效至少需要 2 个 Sentinel 同意 （只要同意 Sentinel 的数量不达标，自动故障迁移就不会执行）。
@@ -272,7 +279,3 @@ TILT 模式是一种特殊的保护模式： 当 Sentinel 发现系统有些不�
 
 关于[topics/sentinel互动](http://bbs.redis.cn/forum.php?mod=viewthread&tid=870)的最新评论
 
-geelou 发布于 2016-8-31 17:59:49
-
-topics/sentinel互动
-发表评论
