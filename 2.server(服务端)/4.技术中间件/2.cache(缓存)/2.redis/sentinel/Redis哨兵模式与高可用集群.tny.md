@@ -1,3 +1,7 @@
+
+摘录：https://www.jianshu.com/p/0f58475c6918
+
+
 <article class="_2rhmJa"><h1>前言</h1>
 <p><code>Redis</code> 的 <strong>主从复制</strong> 模式下，一旦 <strong>主节点</strong> 由于故障不能提供服务，需要手动将 <strong>从节点</strong> 晋升为 <strong>主节点</strong>，同时还要通知 <strong>客户端</strong> 更新 <strong>主节点地址</strong>，这种故障处理方式从一定程度上是无法接受的。<code>Redis 2.8</code> 以后提供了 <code>Redis Sentinel</code> <strong>哨兵机制</strong> 来解决这个问题。</p>
 <div class="image-package">
