@@ -1,9 +1,16 @@
 ### 搭建nexus 
+    mkdir /home/feinno/nexus
     docker stop nexus
     docker rm nexus
-    docker run -d --name nexus -p 5000:5000 -p 8081:8081 -p 8082:8082 -p 8083:8083 -p 8084:8084 sonatype/nexus3
+    docker run -d --name nexus -p 5260:8081 -p 5261:8082 -p 5262:8083 -p 5263:8084  -p 5264:5000 -v /home/feinno/nexus:/var/nexus-data sonatype/nexus3
     docker logs -f nexus
     启动成功
+    
+    访问
+    
+    http://10.10.208.193:5260/
+    
+    查看密码:
     
     bash-4.2$ cd /nexus-data/
     
