@@ -1,10 +1,12 @@
 ## 选举算法源码中的总思路
 
-Zookeeper 的 Leader 选举类是 FastLeaderElection，该类是 ZAB 协议在 Leader 选举中的工 程应用，所以直接找到该类对其进行分析。该类中的最为重要的方法为 lookForLeader()，是选举 Leader 的核心方法。该方法大体思路可以划分为以下几块：
+Zookeeper 的 Leader 选举类是 FastLeaderElection，
+该类是 ZAB 协议在 Leader 选举中的工 程应用，所以直接找到该类对其进行分析。
+该类中的最为重要的方法为 lookForLeader()，是选举 Leader 的核心方法。该方法大体思路可以划分为以下几块：
 
 
 
-## 选举前的准备工作
+### 选举前的准备工作
 
 选举前需要做一些准备工作，例如，创建选举对象、创建选举过程中需要用到的集合、 初始化选举时限等。
 
