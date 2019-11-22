@@ -1,4 +1,5 @@
 ### 搭建nexus 
+    rm -rf /home/feinno/nexus
     mkdir /home/feinno/nexus
     docker stop nexus
     docker rm nexus
@@ -18,7 +19,17 @@
     admin.password	blobs  cache  db  elasticsearch  etc  generated-bundles  instances  javaprefs  kar  keystores  lock  log  orient  port	restore-from-backup  tmp
     
     bash-4.2$ cat admin.password 
+    
     51a030af-f7ab-43d5-875e-3c2775dbae2c
     
     
     登录进去修改密码~~
+    
+    注意修改密码之后，提示是否开启anonymous模式，这个要勾选，否则public需要密码访问
+    
+    admin
+    urcs@2018
+    
+    
+    helium
+    helium.123
