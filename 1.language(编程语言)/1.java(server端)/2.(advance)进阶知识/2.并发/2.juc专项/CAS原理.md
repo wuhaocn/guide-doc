@@ -2,9 +2,12 @@
     CAS(compare-and-swap)直译即比较并交换，提供原子化的读改写能力，是Java 并发中所谓 lock-free 机制的基础。
     CAS的思想很简单：三个参数，一个当前内存值V、旧的预期值A、即将更新的值B，当且仅当预期值A和内存值V相同时，
     将内存值修改为B并返回true，否则什么都不做，并返回false。
-    可能会有面试官问 CAS 底层是如何实现的，在JAVA中,CAS通过调用C++库实现，由C++库再去调用CPU指令集。
-    不同体系结构中，cpu指令还存在着明显不同。比如，x86 CPU 提供 cmpxchg 指令；而在精简指令集的体系架构中，
-    （如“load and reserve”和“store conditional”）实现的，在大多数处理器上 CAS 都是个非常轻量级的操作，
+    可能会有面试官问 CAS 底层是如何实现的，
+    在JAVA中,CAS通过调用C++库实现，由C++库再去调用CPU指令集。
+    不同体系结构中，cpu指令还存在着明显不同。比如，
+    x86 CPU 提供 cmpxchg 指令；
+    而在精简指令集的体系架构中，（如“load and reserve”和“store conditional”）实现的，
+    在大多数处理器上 CAS 都是个非常轻量级的操作，
     这也是其优势所在。
     
    #### CAS的缺点有以下几个方面：
