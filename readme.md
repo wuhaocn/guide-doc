@@ -1,9 +1,4 @@
- [.](https://github.com/wuhaocn/guide-doc/tree/master/.)
-    readme.md
-    header.md
-    reg-match-refer.md
-    settings.gradle
-    boot.md
+
 # [1.language(编程语言)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言))
     readme.md
 ## [1.java(server端)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端))
@@ -56,109 +51,77 @@
     9.2java动态代理.md
     9.1静态代理与动态代理.md
 ### [2.(advance)进阶知识](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识)
-#### [1.thread(线程)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/1.thread(线程))
-    0.线程并发概览.md
-##### [threadlocal](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/1.thread(线程)/threadlocal)
-    ThreadLocal.md
-###### [images](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/1.thread(线程)/threadlocal/images)
-#### [2.jvm(Java虚拟机)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.jvm(Java虚拟机))
+#### [1.jvm(Java虚拟机)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/1.jvm(Java虚拟机))
+    2.5.内存与线程.md
     2.1.jvm内存模型.md
     2.4.类加载机制.md
     2.3JVM性能监控及故障分析工具.md
     2.2JVM垃圾回收.md
     readme.md
-    2.5内存与线程.md
     2.11.jvmargs(jvm参数).md
-#### [3.juc(并发包)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/3.juc(并发包))
+#### [2.并发](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发)
+    readme.md
+##### [1.java并发](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发)
+    readme.md
+###### [01.并发编程的优缺点](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/01.并发编程的优缺点)
+###### [02.线程的状态转换以及基本操作](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/02.线程的状态转换以及基本操作)
+###### [03.java内存模型以及happens-before规则](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/03.java内存模型以及happens-before规则)
+###### [04.彻底理解synchronized](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/04.彻底理解synchronized)
+###### [05.彻底理解volatile](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/05.彻底理解volatile)
+###### [06.你以为你真的了解final吗？](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/06.你以为你真的了解final吗？)
+###### [07.三大性质总结：原子性、可见性以及有序性](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/07.三大性质总结：原子性、可见性以及有序性)
+###### [08.初识Lock与AbstractQueuedSynchronizer(AQS)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/08.初识Lock与AbstractQueuedSynchronizer(AQS))
+###### [09.深入理解AbstractQueuedSynchronizer(AQS)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/09.深入理解AbstractQueuedSynchronizer(AQS))
+###### [10.彻底理解ReentrantLock](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/10.彻底理解ReentrantLock)
+###### [11.深入理解读写锁ReentrantReadWriteLock](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/11.深入理解读写锁ReentrantReadWriteLock)
+###### [12.详解Condition的await和signal等待通知机制](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/12.详解Condition的await和signal等待通知机制)
+###### [13.LockSupport工具](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/13.LockSupport工具)
+###### [14.并发容器之ConcurrentHashMap(JDK 1.8版本)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/14.并发容器之ConcurrentHashMap(JDK 1.8版本))
+###### [15.并发容器之ConcurrentLinkedQueue](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/15.并发容器之ConcurrentLinkedQueue)
+###### [16.并发容器之CopyOnWriteArrayList](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/16.并发容器之CopyOnWriteArrayList)
+###### [17.并发容器之ThreadLocal](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/17.并发容器之ThreadLocal)
+###### [18.一篇文章，从源码深入详解ThreadLocal内存泄漏问题](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/18.一篇文章，从源码深入详解ThreadLocal内存泄漏问题)
+###### [19.并发容器之BlockingQueue](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/19.并发容器之BlockingQueue)
+###### [20.并发容器之ArrayBlockingQueue和LinkedBlockingQueue实现原理详解](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/20.并发容器之ArrayBlockingQueue和LinkedBlockingQueue实现原理详解)
+###### [21.线程池ThreadPoolExecutor实现原理](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/21.线程池ThreadPoolExecutor实现原理)
+###### [22.线程池之ScheduledThreadPoolExecutor](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/22.线程池之ScheduledThreadPoolExecutor)
+###### [23.FutureTask基本操作总结](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/23.FutureTask基本操作总结)
+###### [24.Java中atomic包中的原子操作类总结](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/24.Java中atomic包中的原子操作类总结)
+###### [25.大白话说java并发工具类-CountDownLatch，CyclicBarrier](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/25.大白话说java并发工具类-CountDownLatch，CyclicBarrier)
+###### [26.大白话说java并发工具类-Semaphore，Exchanger](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/26.大白话说java并发工具类-Semaphore，Exchanger)
+###### [27.一篇文章，让你彻底弄懂生产者--消费者问题](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/27.一篇文章，让你彻底弄懂生产者--消费者问题)
+###### [threadlocal](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/1.java并发/threadlocal)
+##### [2.juc专项](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/2.juc专项)
+    acid.md
     readme.md
     cas原理.md
-##### [1.atomic](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/3.juc(并发包)/1.atomic)
-    AtomicInteger.md
+###### [1.atomic](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/2.并发/2.juc专项/1.atomic)
+#### [3.字节码操作](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/3.字节码操作)
     readme.md
-    AtomicIntegerArray.md
-    AtomicBoolean.md
-#### [5.并发](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发)
+##### [1.javassist](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/3.字节码操作/1.javassist)
     readme.md
-##### [1-Java并发](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发)
-    readme.md
-###### [01.并发编程的优缺点](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/01.并发编程的优缺点)
-###### [02.线程的状态转换以及基本操作](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/02.线程的状态转换以及基本操作)
-###### [03.java内存模型以及happens-before规则](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/03.java内存模型以及happens-before规则)
-###### [04.彻底理解synchronized](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/04.彻底理解synchronized)
-###### [05.彻底理解volatile](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/05.彻底理解volatile)
-###### [06.你以为你真的了解final吗？](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/06.你以为你真的了解final吗？)
-###### [07.三大性质总结：原子性、可见性以及有序性](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/07.三大性质总结：原子性、可见性以及有序性)
-###### [08.初识Lock与AbstractQueuedSynchronizer(AQS)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/08.初识Lock与AbstractQueuedSynchronizer(AQS))
-###### [09.深入理解AbstractQueuedSynchronizer(AQS)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/09.深入理解AbstractQueuedSynchronizer(AQS))
-###### [10.彻底理解ReentrantLock](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/10.彻底理解ReentrantLock)
-###### [11.深入理解读写锁ReentrantReadWriteLock](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/11.深入理解读写锁ReentrantReadWriteLock)
-###### [12.详解Condition的await和signal等待通知机制](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/12.详解Condition的await和signal等待通知机制)
-###### [13.LockSupport工具](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/13.LockSupport工具)
-###### [14.并发容器之ConcurrentHashMap(JDK 1.8版本)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/14.并发容器之ConcurrentHashMap(JDK 1.8版本))
-###### [15.并发容器之ConcurrentLinkedQueue](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/15.并发容器之ConcurrentLinkedQueue)
-###### [16.并发容器之CopyOnWriteArrayList](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/16.并发容器之CopyOnWriteArrayList)
-###### [17.并发容器之ThreadLocal](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/17.并发容器之ThreadLocal)
-###### [18.一篇文章，从源码深入详解ThreadLocal内存泄漏问题](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/18.一篇文章，从源码深入详解ThreadLocal内存泄漏问题)
-###### [19.并发容器之BlockingQueue](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/19.并发容器之BlockingQueue)
-###### [20.并发容器之ArrayBlockingQueue和LinkedBlockingQueue实现原理详解](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/20.并发容器之ArrayBlockingQueue和LinkedBlockingQueue实现原理详解)
-###### [21.线程池ThreadPoolExecutor实现原理](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/21.线程池ThreadPoolExecutor实现原理)
-###### [22.线程池之ScheduledThreadPoolExecutor](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/22.线程池之ScheduledThreadPoolExecutor)
-###### [23.FutureTask基本操作总结](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/23.FutureTask基本操作总结)
-###### [24.Java中atomic包中的原子操作类总结](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/24.Java中atomic包中的原子操作类总结)
-###### [25.大白话说java并发工具类-CountDownLatch，CyclicBarrier](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/25.大白话说java并发工具类-CountDownLatch，CyclicBarrier)
-###### [26.大白话说java并发工具类-Semaphore，Exchanger](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/26.大白话说java并发工具类-Semaphore，Exchanger)
-###### [27.一篇文章，让你彻底弄懂生产者--消费者问题](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/1-Java并发/27.一篇文章，让你彻底弄懂生产者--消费者问题)
-##### [2-多线程](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/2-多线程)
-    readme.md
-##### [3-线程安全](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/3-线程安全)
-    readme.md
-##### [4-一致性、事务](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/4-一致性、事务)
-    readme.md
-##### [5-锁](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/5.并发/5-锁)
-    4-乐观锁 & CAS.md
-    8-可重入锁 & 不可重入锁.md
-    10-死锁.md
-    2-公平锁 & 非公平锁.md
-    1-Java中的锁和同步类.md
-    6-CopyOnWrite容器.md
-    5-ABA 问题.md
-    3-悲观锁.md
-    9-互斥锁 & 共享锁.md
-    7-RingBuffer.md
-### [3.(Bottom)底层知识](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/3.(Bottom)底层知识)
-    readme.md
-#### [1.字节码操作](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/3.(Bottom)底层知识/1.字节码操作)
-    readme.md
-##### [1.javassist](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/3.(Bottom)底层知识/1.字节码操作/1.javassist)
-    readme.md
-#### [2.java编译原理](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/3.(Bottom)底层知识/2.java编译原理)
+#### [4.java编译原理](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/2.(advance)进阶知识/4.java编译原理)
     Java的编译原理.md
-### [4.application(应用知识)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/4.application(应用知识))
-    readme.md
-### [5.Java新特性&修改](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/5.Java新特性&修改)
-#### [1.java8](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/5.Java新特性&修改/1.java8)
+### [3.Java新特性&修改](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/3.Java新特性&修改)
+#### [1.java8](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/3.Java新特性&修改/1.java8)
     1.optional.md
     readme.md
-##### [2.lamdba](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/5.Java新特性&修改/1.java8/2.lamdba)
+##### [2.lamdba](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/3.Java新特性&修改/1.java8/2.lamdba)
     1.基础介绍
     2.异常处理.md
-### [7.comlib(常用类库)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/7.comlib(常用类库))
+#### [java13](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/3.Java新特性&修改/java13)
+    java13新特性.md
+### [4.lib(常用类库)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/4.lib(常用类库))
     readme.md
-#### [1.yaml](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/7.comlib(常用类库)/1.yaml)
+#### [1.yaml](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/4.lib(常用类库)/1.yaml)
     1.snakeyaml.md
-### [8.test(测试)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/8.test(测试))
+### [5.test(测试)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/5.test(测试))
     1.junit().md
     2.mock().md
     3.mockito().md
     4.memorybase(内存数据库).md
     5.Jupiter.md
     7.hamcrest.md
-### [10.(devtool)开发工具](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/10.(devtool)开发工具)
-    readme.md
-#### [1.git](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/10.(devtool)开发工具/1.git)
-    readme.md
-#### [2.gradle](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/10.(devtool)开发工具/2.gradle)
-##### [refer](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/1.java(server端)/10.(devtool)开发工具/2.gradle/refer)
 ## [2.c(高效语言)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/2.c(高效语言))
     readme.md
 ## [3.javascript(前端语言)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/3.javascript(前端语言))
@@ -173,11 +136,103 @@
     readme.md
     1.常用命令.md
     2.权限篇.md
+    7.修改机器服务端IP.md
 ## [6.go](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/6.go)
     readme.md
-## [10.(code)源码分析](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析)
+## [11.(devtool)开发工具](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.(devtool)开发工具)
     readme.md
-### [1.spring](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/1.spring)
+### [1.git](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.(devtool)开发工具/1.git)
+    readme.md
+### [2.gradle](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.(devtool)开发工具/2.gradle)
+#### [refer](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.(devtool)开发工具/2.gradle/refer)
+# [2.server(服务端)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端))
+    .DS_Store
+    readme.md
+## [1.solution(解决方案)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案))
+    .DS_Store
+### [1.微服务](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/1.微服务)
+    readme.md
+### [3.AWS云平台](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/3.AWS云平台)
+    day1.md
+    readme.md
+    day3.md
+    guide.md
+    备考.md
+    day2.md
+### [4.即时通讯](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/4.即时通讯)
+    .DS_Store
+    readme.md
+#### [1.RCS](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/4.即时通讯/1.RCS)
+    readme.md
+#### [2.MQTT](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/4.即时通讯/2.MQTT)
+    readme.md
+#### [技术点实现](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/4.即时通讯/技术点实现)
+    1.链接类型划分.tny.md
+    2.长链接保活方案.tny.md
+### [5.音视频](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/5.音视频)
+    readme.md
+    webrtc.md
+### [6.大数据](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/6.大数据)
+    readme.md
+### [7.安全](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/7.安全)
+    web安全.md
+    readme.md
+### [8.性能调优](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/8.性能调优)
+    readme.md
+### [10.人工智能](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/10.人工智能)
+    人工智能三大基石-数据.md
+    人工智能三大基石-算法.md
+### [11.数据容灾](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/11.数据容灾)
+    概述.md
+## [2.技术组件](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件)
+    readme.md
+### [1.spring(应用框架)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/1.spring(应用框架))
+    readme.md
+#### [0.spring](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/1.spring(应用框架)/0.spring)
+    ImportBeanDefinitionRegistrar.md
+    BeanDefinitionRegistryPostProcessor.md
+#### [1.spring-data-jpa](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/1.spring(应用框架)/1.spring-data-jpa)
+    深入介绍.md
+    使用说明.md
+    1.spring-data-jpa.md
+    常用注解.md
+#### [2.spring-data-jpa-mybatis](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/1.spring(应用框架)/2.spring-data-jpa-mybatis)
+    使用说明.md
+#### [3.spring-data-mybatis](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/1.spring(应用框架)/3.spring-data-mybatis)
+    使用说明.md
+    源码分析.md
+### [2.springboot(微服务基础组件)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/2.springboot(微服务基础组件))
+    readme.md
+#### [1.condition](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/2.springboot(微服务基础组件)/1.condition)
+    1.ConditionalOnProperty.md
+### [3.springcloud(微服务应用框架)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/3.springcloud(微服务应用框架))
+    readme.md
+### [4.dubbo(rpc)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/4.dubbo(rpc))
+    使用技巧.md
+    readme.md
+    dubbo-spi.md
+    dubbo泛化调用.md
+    dubbo路由规则.md
+### [5.mybatis](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/5.mybatis)
+    0.资源目录.md
+    1.学习指南.md
+    mybatis多数据源配置.md
+#### [源码分析](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/5.mybatis/源码分析)
+    1.mybatis概览.tny.md
+    2.mybatis调试环境搭建.tny.md
+    3.mybatis源码目录概览.tny.md
+    4.mybatis解析器模块.tny.md
+    5.mybatis反射模块.tny.md
+    6.mybatis异常模块.tny.md
+    7.mybatis数据源模块.md
+    8.mybatis事务模块.md
+### [6.springcloud-alibaba](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/6.springcloud-alibaba)
+    readme.md
+### [7.helium](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/7.helium)
+    readme.md
+### [10.(code)源码分析](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.(code)源码分析)
+    readme.md
+#### [1.spring](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.(code)源码分析/1.spring)
     Spring.md
     spring-mvc.uml
     spring-boot.md
@@ -192,18 +247,16 @@
     spring-boot.uml
     guava-cache.md
     spring-mvc.md
-#### [flows](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/1.spring/flows)
+##### [flows](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.(code)源码分析/1.spring/flows)
     guava-cache.vsdx
     spring-task.vsdx
     spring_application_run.gliffy
-#### [images](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/1.spring/images)
+##### [images](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.(code)源码分析/1.spring/images)
     local_variable_tables.PNG
     mvc_input_output.PNG
     idea_debug_info.PNG
     debug_info_error.PNG
-#### [refer](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/1.spring/refer)
-    refer.md
-### [2.dubbo](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/2.dubbo)
+#### [2.dubbo](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.(code)源码分析/2.dubbo)
     0.整体概览.md
     1.源码分析指南.md
     2.调试环境搭建.md
@@ -278,95 +331,22 @@
     69.优雅停机.md
     70.日志适配.md
     71.集成SpringCloud.md
-#### [1.问题点汇总](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/2.dubbo/1.问题点汇总)
+##### [1.问题点汇总](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.(code)源码分析/2.dubbo/1.问题点汇总)
     1.dubbo-config问题点汇总.md
-### [3.spring-boot](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/10.(code)源码分析/3.spring-boot)
+#### [3.spring-boot](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.(code)源码分析/3.spring-boot)
     11.1.自定义配置源.md
     11.配置加载.md
-## [11.framework(框架)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架))
-    readme.md
-### [1.spring(应用框架)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/1.spring(应用框架))
-    readme.md
-#### [0.spring](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/1.spring(应用框架)/0.spring)
-    ImportBeanDefinitionRegistrar.md
-    BeanDefinitionRegistryPostProcessor.md
-#### [1.spring-data-jpa](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/1.spring(应用框架)/1.spring-data-jpa)
-    深入介绍.md
-    使用说明.md
-    1.spring-data-jpa.md
-    常用注解.md
-#### [2.spring-data-jpa-mybatis](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/1.spring(应用框架)/2.spring-data-jpa-mybatis)
-    使用说明.md
-#### [3.spring-data-mybatis](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/1.spring(应用框架)/3.spring-data-mybatis)
-    使用说明.md
-    源码分析.md
-### [2.springboot(微服务基础组件)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/2.springboot(微服务基础组件))
-    readme.md
-#### [1.condition](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/2.springboot(微服务基础组件)/1.condition)
-    1.ConditionalOnProperty.md
-### [3.springcloud(微服务应用框架)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/3.springcloud(微服务应用框架))
-    readme.md
-### [4.dubbo(rpc)](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/4.dubbo(rpc))
-    使用技巧.md
-    readme.md
-    dubbo-spi.md
-    dubbo泛化调用.md
-    dubbo路由规则.md
-### [5.mybatis](https://github.com/wuhaocn/guide-doc/tree/master/./1.language(编程语言)/11.framework(框架)/5.mybatis)
-    0.资源目录.md
-    1.学习指南.md
-    mybatis多数据源配置.md
-# [2.server(服务端)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端))
-    readme.md
-## [1.solution(解决方案)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案))
-### [1.微服务](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/1.微服务)
-#### [1.springcloud](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/1.微服务/1.springcloud)
-    readme.md
-#### [2.dubbo](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/1.微服务/2.dubbo)
-    readme.md
-#### [3.springcloud-alibaba](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/1.微服务/3.springcloud-alibaba)
-    readme.md
-#### [4.helium](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/1.微服务/4.helium)
-    readme.md
-### [3.AWS云平台](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/3.AWS云平台)
-    day1.md
-    readme.md
-    day3.md
-    guide.md
-    备考.md
-    day2.md
-### [4.即时通讯](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/4.即时通讯)
-    readme.md
-#### [1.RCS](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/4.即时通讯/1.RCS)
-    readme.md
-#### [2.MQTT](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/4.即时通讯/2.MQTT)
-    readme.md
-### [5.音视频](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/5.音视频)
-    readme.md
-    webrtc.md
-### [6.大数据](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/6.大数据)
-    readme.md
-### [7.安全](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/7.安全)
-    web安全.md
-    readme.md
-### [8.性能调优](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/8.性能调优)
-    readme.md
-### [10.人工智能](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/1.solution(解决方案)/10.人工智能)
-    人工智能三大基石-数据.md
-    人工智能三大基石-算法.md
-## [2.技术组件](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件)
-    readme.md
-### [1.auth(权限认证)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/1.auth(权限认证))
-#### [1.shiro](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/1.auth(权限认证)/1.shiro)
+### [10.应用组件](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.应用组件)
+#### [1.auth(权限认证)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.应用组件/1.auth(权限认证))
+##### [1.shiro](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.应用组件/1.auth(权限认证)/1.shiro)
     1.Shiro简介.md
     2.Shiro身份验证.md
     3.Shiro授权.md
     4.ShiroInI配置.md
-##### [back](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/1.auth(权限认证)/1.shiro/back)
-    1.shiro介绍.md
-    1.Shiro详细介绍.md
-    Shiro详细介绍.md
-#### [2.统一认证](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/1.auth(权限认证)/2.统一认证)
+###### [back](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.应用组件/1.auth(权限认证)/1.shiro/back)
+##### [2.统一认证](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.应用组件/1.auth(权限认证)/2.统一认证)
+    readme.md
+#### [2.日志组件](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/2.技术组件/10.应用组件/2.日志组件)
     readme.md
 ## [3.分布式](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/3.分布式)
     2.分布式基础理论.md
@@ -382,12 +362,12 @@
 #### [关系型数据库](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/关系型数据库)
     readme.md
 ##### [mysql](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/关系型数据库/mysql)
-    MySQL基本操作.md
     readme.md
 ###### [refer](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/关系型数据库/mysql/refer)
-###### [优化](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/关系型数据库/mysql/优化)
-###### [使用](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/关系型数据库/mysql/使用)
 ###### [原理分析](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/关系型数据库/mysql/原理分析)
+###### [基本使用](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/关系型数据库/mysql/基本使用)
+###### [常见优化](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/关系型数据库/mysql/常见优化)
+###### [源码分析](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/关系型数据库/mysql/源码分析)
 ##### [tidb](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/关系型数据库/tidb)
     readme.md
 #### [图数据库](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/1.database(数据库)/图数据库)
@@ -410,7 +390,9 @@
 ##### [code](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/2.cache(缓存)/2.redis/code)
     readme.md
 ##### [sentinel](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/2.cache(缓存)/2.redis/sentinel)
-    readme.tny.md
+    readme.md
+    redis-sentinel配置及java示例.md
+    Redis哨兵模式与高可用集群.md
 ### [3.configcenter(配置中心)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/3.configcenter(配置中心))
     readme.md
 #### [apollo](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/3.configcenter(配置中心)/apollo)
@@ -428,6 +410,7 @@
 #### [elasticsearch](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/4.logcenter(日志中心)/elasticsearch)
     elasticsearch安装.md
     elasticsearch介绍.md
+##### [源码分析](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/4.logcenter(日志中心)/elasticsearch/源码分析)
 #### [filebeat](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/4.logcenter(日志中心)/filebeat)
     filebeat介绍.md
     filebeat模块与配置.md
@@ -445,15 +428,23 @@
 ### [5.mq(消息队列)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/5.mq(消息队列))
 #### [kafka](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/5.mq(消息队列)/kafka)
     readme.md
+    概览.tny.md
+##### [images](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/5.mq(消息队列)/kafka/images)
+##### [源码分析](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/5.mq(消息队列)/kafka/源码分析)
 ### [6.服务注册中心](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/6.服务注册中心)
     服务注册中心对比.md
+#### [nacos](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/6.服务注册中心/nacos)
+    readme.md
 #### [zookeeper](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/6.服务注册中心/zookeeper)
-    ZK集群搭建和部署.md
-    ZK源码.md
-    Zookeeper 理论基础.md
-    README.md
+    Zookeeper集群搭建和部署.md
+    readme.md
+    概览.tny.md
+    Zookeeper理论基础.md
+    Zookeeper源码.md
     ZAB协议.md
 ##### [images](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/6.服务注册中心/zookeeper/images)
+##### [源码分析](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/6.服务注册中心/zookeeper/源码分析)
+    readme.md
 ### [7.链路追踪](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/7.链路追踪)
 #### [1.SkyWalking](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/4.技术中间件/7.链路追踪/1.SkyWalking)
     使用指南.md
@@ -469,29 +460,56 @@
     arthas.md
 ## [5.运维](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维)
     readme.md
-### [1.常规监控](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.常规监控)
+### [1.容器技术](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.容器技术)
     readme.md
-### [2.APM](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/2.APM)
+#### [1.docker(容器化)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.容器技术/1.docker(容器化))
+    0.docker概览.md
+    1.docker常用命令.md
+    readme.md
+##### [docker-compose](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.容器技术/1.docker(容器化)/docker-compose)
+    readme.md
+###### [app](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.容器技术/1.docker(容器化)/docker-compose/app)
+##### [docker打包](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.容器技术/1.docker(容器化)/docker打包)
+    docker-build-java.md
+###### [resources](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.容器技术/1.docker(容器化)/docker打包/resources)
+##### [参考示例](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.容器技术/1.docker(容器化)/参考示例)
+    数据环境.md
+    基础环境.md
+    ftp服务器搭建.md
+    国内仓库.md
+    实例参考.md
+    nexus服务搭建.md
+##### [常见应用](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.容器技术/1.docker(容器化)/常见应用)
+    Docker容器日志管理最佳实践.md
+##### [常见问题](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.容器技术/1.docker(容器化)/常见问题)
+    readme.md
+#### [2.k8s](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/1.容器技术/2.k8s)
+    概览.tny.md
+### [2.自动化运维](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/2.自动化运维)
+    readme.md
+#### [1.jenkins](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/2.自动化运维/1.jenkins)
+    readme.md
+##### [refer](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/2.自动化运维/1.jenkins/refer)
+#### [2.kubernetes(k8s)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/2.自动化运维/2.kubernetes(k8s))
+    k8s.md
+#### [3.salt](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/2.自动化运维/3.salt)
+    salt_install.md
+#### [4.ansible](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/2.自动化运维/4.ansible)
+    readme.md
+#### [5.chef](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/2.自动化运维/5.chef)
+    readme.md
+#### [6.puppet](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/2.自动化运维/6.puppet)
     readme.md
 ### [3.统计分析](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/3.统计分析)
     readme.md
-### [4.持续集成(CICD)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/4.持续集成(CICD))
+### [3.APM](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/3.APM)
+    readme.tny.md
+### [4.持续集成](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/4.持续集成)
     readme.md
-### [5.自动化运维](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/5.自动化运维)
+### [5.监控](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/5.监控)
     readme.md
-#### [1.jenkins](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/5.自动化运维/1.jenkins)
-    readme.md
-##### [refer](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/5.自动化运维/1.jenkins/refer)
-#### [2.kubernetes(k8s)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/5.自动化运维/2.kubernetes(k8s))
-    k8s.md
-#### [3.salt](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/5.自动化运维/3.salt)
-    salt_install.md
-#### [4.Ansible](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/5.自动化运维/4.Ansible)
-    readme.md
-#### [5.chef](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/5.自动化运维/5.chef)
-    readme.md
-#### [6.puppet](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/5.自动化运维/6.puppet)
-    readme.md
+    Zabbix.md
+    Prometheus.tny.md
 ### [6.测试](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/6.测试)
 #### [AB&灰度&蓝绿测试](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/6.测试/AB&灰度&蓝绿测试)
     readme.md
@@ -502,6 +520,7 @@
 #### [单元测试](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/6.测试/单元测试)
     readme.md
 #### [压力测试](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/6.测试/压力测试)
+    ngrinder.md
     readme.md
 ### [7.虚拟化](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/7.虚拟化)
 #### [KVM](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/7.虚拟化/KVM)
@@ -510,29 +529,6 @@
     readme.md
 #### [Xen](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/7.虚拟化/Xen)
     readme.md
-### [8.容器技术](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/8.容器技术)
-#### [1.docker(容器化)](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/8.容器技术/1.docker(容器化))
-    1.docker常用命令.md
-    readme.md
-    0.docker概览.md
-##### [docker-compose](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/8.容器技术/1.docker(容器化)/docker-compose)
-    readme.md
-    docker-compose的安装及使用.md
-###### [install](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/8.容器技术/1.docker(容器化)/docker-compose/install)
-##### [docker打包](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/8.容器技术/1.docker(容器化)/docker打包)
-    docker-build&run.md
-##### [resources](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/8.容器技术/1.docker(容器化)/resources)
-###### [images](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/8.容器技术/1.docker(容器化)/resources/images)
-##### [参考资源](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/8.容器技术/1.docker(容器化)/参考资源)
-    数据环境.md
-    基础环境.md
-    国内仓库.md
-    实例参考.md
-    nexus服务搭建.md
-##### [技术点解析](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/8.容器技术/1.docker(容器化)/技术点解析)
-    Docker容器日志管理最佳实践.md
-##### [问题](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/8.容器技术/1.docker(容器化)/问题)
-    readme.md
 ### [9.云技术](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/9.云技术)
 #### [OpenStack](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/9.云技术/OpenStack)
     readme.md
@@ -540,11 +536,12 @@
     readme.md
 ### [11.文档管理](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/5.运维/11.文档管理)
     readme.md
+## [6.中台](https://github.com/wuhaocn/guide-doc/tree/master/./2.server(服务端)/6.中台)
+    阿里中台架构.tny.md
 # [3.frontend(端)](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(端))
     readme.md
 ## [android](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(端)/android)
     readme.md
-## [ios](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(端)/ios)
 ## [web](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(端)/web)
 ### [component(组件集合)](https://github.com/wuhaocn/guide-doc/tree/master/./3.frontend(端)/web/component(组件集合))
     awsome-js.md
@@ -695,6 +692,7 @@
 ## [4.分布式算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/4.分布式算法)
     1.CAP原则.md
     3.0.分布式Paxos.md
+    11.一致性哈希算法-1.md
     readme.md
     2.BASE理论.md
     3.1.分布式raft算法.md
@@ -704,45 +702,71 @@
 ## [6.加解密算法](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/6.加解密算法)
     SHA1算法分析及实现.md
     算法概要.md
-## [7.常用语言实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用语言实现)
-### [1.Java实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用语言实现/1.Java实现)
+## [7.常用实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用实现)
+### [1.Java实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用实现/1.Java实现)
     哈希.md
     队列.md
     树.md
     集合.md
     栈.md
-### [2.redis实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用语言实现/2.redis实现)
+### [2.redis实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用实现/2.redis实现)
     跳跃表.md
-### [3.mysql实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用语言实现/3.mysql实现)
+### [3.mysql实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用实现/3.mysql实现)
     树.md
+### [4.zookeeper实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用实现/4.zookeeper实现)
+    zab.md
+    paxos.md
+### [5.kafka实现](https://github.com/wuhaocn/guide-doc/tree/master/./4.algorithm(算法)/7.常用实现/5.kafka实现)
 # [5.computer(编程基础知识)](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识))
     readme.md
-## [1.design(设计模式)](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式))
+## [1.design(设计思想)](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想))
     readme.md
-### [1-设计模式的六大原则](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/1-设计模式的六大原则)
+### [1.设计模式](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/1.设计模式)
     readme.md
-### [10-微服务思想](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/10-微服务思想)
-    readme.md
-### [2-23种常见设计模式](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/2-23种常见设计模式)
-    readme.md
-### [3-应用场景](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/3-应用场景)
-    readme.md
+    设计模式六大原则.md
+#### [1.创建型](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/1.设计模式/1.创建型)
+    1.单例模式.md
+    2.简单工厂.md
+    3.工厂方法.md
+    4.抽象工厂.md
+    5.生成器.md
+    6.原型模式.md
+#### [2.行为型](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/1.设计模式/2.行为型)
+    1.责任链.md
+    2.命令.md
+    3.解释器.md
+    4.迭代器.md
+    5.中介者.md
+    6.备忘录.md
+    7.观察者.md
+    8.状态.md
+    9.策略.md
+    10.模板方法.md
+    11.访问.md
+    12.空对象.md
+#### [3.结构型](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/1.设计模式/3.结构型)
+    1.适配器.md
+    2.桥接.md
+    3.组合.md
+    4.装饰.md
+    5.外观.md
+    6.享元.md
+    7.代理.md
+#### [4.应用场景](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/1.设计模式/4.应用场景)
     Mybatis使用的9种设计模式.md
-### [4-单例模式](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/4-单例模式)
+### [2.MVC](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/2.MVC)
     readme.md
-### [5-责任链模式](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/5-责任链模式)
+### [3.IOC](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/3.IOC)
     readme.md
-### [6-MVC](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/6-MVC)
+### [4.AOP](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/4.AOP)
     readme.md
-### [7-IOC](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/7-IOC)
+### [5.UML](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/5.UML)
     readme.md
-### [8-AOP](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/8-AOP)
+### [服务设计](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/服务设计)
     readme.md
-### [9-UML](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/9-UML)
+#### [1.微服务思想](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/服务设计/1.微服务思想)
     readme.md
-### [designpattern](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/designpattern)
-    readme.md
-### [领域驱动](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计模式)/领域驱动)
+#### [2.领域驱动](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/1.design(设计思想)/服务设计/2.领域驱动)
     readme.md
 ## [2.coder](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/2.coder)
     0.readme.md
@@ -762,22 +786,23 @@
     readme.md
 ### [6-Linux](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/3.operatingsystem(操作系统)/6-Linux)
     readme.md
-## [4.设计思想&开发模式](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/4.设计思想&开发模式)
-    readme.md
-## [5.编程规范](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/5.编程规范)
+## [4.编程规范](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/4.编程规范)
     代码规范.md
     代码可读性.md
+## [10.开发环境](https://github.com/wuhaocn/guide-doc/tree/master/./5.computer(编程基础知识)/10.开发环境)
+    update_brew.md
 # [6.network(网络)](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络))
     readme.md
 ## [1.base](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/1.base)
     epoll详解.md
+    ipv4&ipv6.md
 ## [2.coder](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/2.coder)
     SSL重协商攻击.md
 ## [3.netty](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/3.netty)
     readme.md
     0.Netty源码分析-概览篇.md
 ### [1.netty-guide](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/3.netty/1.netty-guide)
-    新建文档.md
+    1.netty技术点总结.tny.md
 ### [2.netty-refer](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/3.netty/2.netty-refer)
     1.Future和Promise组件.md
 ## [4.protocol](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/4.protocol)
@@ -785,6 +810,8 @@
 ### [1.http](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/4.protocol/1.http)
     0.http概览.md
     1.http方法概述.md
+#### [常见问题](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/4.protocol/1.http/常见问题)
+    1.跨域问题.md
 ### [2.mqtt](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/4.protocol/2.mqtt)
     03-ControlPackets.md
     0301-CONNECT.md
@@ -822,6 +849,7 @@
 ## [负载](https://github.com/wuhaocn/guide-doc/tree/master/./6.network(网络)/负载)
     f5访问的真实源IP解决方案.md
 # [7.skills(其他技能)](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能))
+    .DS_Store
 ## [1.interview(面试)](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试))
     readme.md
 ### [algotithm](https://github.com/wuhaocn/guide-doc/tree/master/./7.skills(其他技能)/1.interview(面试)/algotithm)
@@ -1112,8 +1140,6 @@
     readme.md
 # [9.tool](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool)
 ## [2.构建工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具)
-### [1.gradle工具](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/1.gradle工具)
-    readme.md
 ### [1.gradle](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/1.gradle)
     readme.md
 ### [2.maven](https://github.com/wuhaocn/guide-doc/tree/master/./9.tool/2.构建工具/2.maven)
