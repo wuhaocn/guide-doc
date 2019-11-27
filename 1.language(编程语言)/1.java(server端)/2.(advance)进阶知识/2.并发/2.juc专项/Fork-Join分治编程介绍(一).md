@@ -1,5 +1,7 @@
 # [Fork-Join分治编程介绍（一）](https://www.cnblogs.com/jinggod/p/8490511.html)
 
+[目录](readme.md)
+
 ### **一、Fork-Join 框架介绍**
 
 ### **1. 什么是 Fork-Join 分治编程框架**
@@ -215,6 +217,7 @@ class CountTask extends RecursiveTask<Integer>{
 ```
 
 **运行结果：**
+```java
 任务过大，切割的任务： 1加到 12的和 执行此任务的线程：ForkJoinPool-1-worker-1
 任务过大，切割的任务： 7加到 12的和 执行此任务的线程：ForkJoinPool-1-worker-3
 任务过大，切割的任务： 1加到 6的和 执行此任务的线程：ForkJoinPool-1-worker-2
@@ -223,6 +226,7 @@ class CountTask extends RecursiveTask<Integer>{
 执行计算任务，计算 4到 6的和 ，结果是：15 执行此任务的线程：ForkJoinPool-1-worker-1
 执行计算任务，计算 10到 12的和 ，结果是：33 执行此任务的线程：ForkJoinPool-1-worker-3
 最终的计算结果：78
+```
 
 从结果可以看出，提交的计算任务是由线程1执行，线程1进行了第一次切割，切割成两个子任务 “7加到12“ 和 ”1加到6“，并提交这两个子任务。然后这两个任务便被 线程2、线程3 给窃取了。线程1 的内部队列中已经没有任务了，这时候，线程2、线程3 也分别进行了一次任务切割并各自提交了两个子任务，于是线程1也去窃取任务（这里窃取的都是线程2的子任务）。
 
