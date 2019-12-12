@@ -638,11 +638,6 @@ http://www.zsythink.net/archives/1182/
 
 https://www.cnblogs.com/xxdfly/p/5641719.html
 
-**创作不易，如果文章对你有帮助，就点个赞、评个论呗~**
-
-**创作不易，如果文章对你有帮助，就点个赞、评个论呗~**
-
-**创作不易，如果文章对你有帮助，就点个赞、评个论呗~**
 
 分类: [Redis](https://www.cnblogs.com/kismetv/category/1186633.html)
 
