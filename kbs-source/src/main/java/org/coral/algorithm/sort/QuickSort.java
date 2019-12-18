@@ -1,0 +1,191 @@
+package org.coral.algorithm.sort;
+
+/**
+ * 快速排序：
+ *
+ * 快速排序（Quicksort）是对冒泡排序的一种改进。
+ * 由C. A. R. Hoare在1962年提出。
+ * 它的基本思想是：通过一趟排序将要排序的数据分割成独立的两部分，其中一部分的所有数据都比另外一部分的所有数据都要小，
+ * 然后再按此方法对这两部分数据分别进行快速排序，整个排序过程可以递归进行，以此达到整个数据变成有序序列。
+ * <p>
+ * 选择一个关键值作为基准值。比基准值小的都在左边序列（一般是无序的），
+ * 比基准值大的都在右边（一般是无序的）。
+ * 一般选择序列的第一个元素。
+ * 一次循环： 从后往前比较，用基准值和最后一个值比较，如果比基准值小的交换位置，如果没有
+ * 继续比较下一个，直到找到第一个比基准值小的值才交换。 找到这个值之后，又从前往后开始比
+ * 较，如果有比基准值大的，交换位置，如果没有继续比较下一个，直到找到第一个比基准值大的
+ * 值才交换。直到从前往后的比较索引>从后往前比较的索引，结束第一次循环，此时，对于基准值
+ * 来说，左右两边就是有序的了。
+ * 算法分析：
+ * 1.当分区选取的基准元素为待排序元素中的最大或最小值时，为最坏的情况，时间复杂度和直接插入排序的一样，移动次数达到最大值
+ * Cmax = 1+2+...+(n-1) = n*(n-1)/2 = O(n2) 此时最好时间复杂为O(n2)
+ * 2.当分区选取的基准元素为待排序元素中的"中值"，为最好的情况，时间复杂度为O(nlog2n)。
+ * 3.快速排序的空间复杂度为O(log2n).
+ * 4.当待排序元素类似[6,1,3,7,3]且基准元素为6时，经过分区，形成[1,3,3,6,7],两个3的相对位置发生了改变，所是快速排序是一种不稳定排序。
+ */
+public class QuickSort implements Sort{
+    public static void main(String[] args) {
+        int[] numbers1 = new int[]{1, 10, 6, 3, 4, 4, 5};
+        int[] numbers2 = new int[]{1, 10, 6, 3, 4, 4, 5, 10};
+        int[] numbers3 = new int[]{1, 10, 6, 3, 4, 4, 5};
+
+        QuickSort quickSort = new QuickSort();
+        System.out.println("quick sortOne");
+        quickSort.sortOne(numbers1, 0, numbers1.length - 1);
+        System.out.println("quick sortTwo");
+        quickSort.sortTwo(numbers2, 0, numbers2.length - 1);
+        System.out.println("quick sortTree");
+        quickSort.sortThree(numbers3, 0, numbers3.length - 1);
+    }
+
+    @Override
+    public void sort(int[] numbers) {
+        sortOne(numbers, 0, numbers.length - 1);
+    }
+
+    /**
+     * 快速排序
+     *
+     * @param numbers
+     * @param sign
+     * @param length
+     */
+    public void sortOne(int[] numbers, int sign, int length) {
+        int start = sign; //start为最小值
+        int end = length; //end为最大值
+        int key = numbers[sign];
+        while (start < end) {
+            print(numbers);
+            //比较右侧
+            while (key <= numbers[end] && start < end) {
+                end--;
+            }
+            if (key >= numbers[end]) {
+                swap(numbers, start, end);
+            }
+
+            //比较左侧
+            while (key >= numbers[start] && start < end) {
+                start++;
+            }
+            if (key <= numbers[start]) {
+                swap(numbers, start, end);
+            }
+
+            //进行左侧串比较
+            if (start > sign) {
+                sortOne(numbers, sign, start - 1);
+            }
+
+
+            //进行右侧串比较
+            if (end < length) {
+                sortOne(numbers, start + 1, length);
+            }
+
+        }
+    }
+
+
+    /**
+     * 更高效点的代码
+     *
+     * @param targetArr
+     * @return
+     */
+    void sortTwo(int[] targetArr, int start, int end) {
+        int i = start + 1, j = end;
+        int key = targetArr[start];
+
+        if (start >= end) {
+            return;
+        }
+
+
+        /*从i++和j--两个方向搜索不满足条件的值并交换
+        *
+        *条件为：i++方向小于key，j--方向大于key
+        */
+        while (true) {
+            print(targetArr);
+            while (targetArr[j] > key) {
+                j--;
+            }
+            while (targetArr[i] < key && i < j) {
+                i++;
+            }
+            if (i > j) {
+                break;
+            }
+            swap(targetArr, i, j);
+            if (targetArr[i] == key) {
+                j--;
+            } else {
+                i++;
+            }
+        }
+
+        /*关键数据放到‘中间’*/
+        swap(targetArr, start, j);
+
+        if (start < i - 1) {
+            sortTwo(targetArr, start, i - 1);
+        }
+        if (j + 1 < end) {
+            sortTwo(targetArr, j + 1, end);
+        }
+
+    }
+
+    /**
+     * 方式三：减少交换次数，提高效率
+     *
+     * @param targetArr
+     */
+    void sortThree(int[] targetArr, int start, int end) {
+        int i = start, j = end;
+        int key = targetArr[start];
+
+        while (i < j) {
+            print(targetArr);
+            /*按j--方向遍历目标数组，直到比key小的值为止*/
+            while (j > i && targetArr[j] >= key) {
+                j--;
+            }
+            if (i < j) {
+                /*targetArr[i]已经保存在key中，可将后面的数填入*/
+                targetArr[i] = targetArr[j];
+                i++;
+            }
+            /*按i++方向遍历目标数组，直到比key大的值为止*/
+            while (i < j && targetArr[i] <= key)
+                /*此处一定要小于等于零，假设数组之内有一亿个1，0交替出现的话，而key的值又恰巧是1的话，那么这个小于等于的作用就会使下面的if语句少执行一亿次。*/ {
+                i++;
+            }
+            if (i < j) {
+                /*targetArr[j]已保存在targetArr[i]中，可将前面的值填入*/
+                targetArr[j] = targetArr[i];
+                j--;
+            }
+        }
+        /*此时i==j*/
+        targetArr[i] = key;
+
+
+        /*递归调用，把key前面的完成排序*/
+        if (i > start) {
+            sortThree(targetArr, start, i - 1);
+        }
+
+
+        /*递归调用，把key后面的完成排序*/
+        if (j < end) {
+            sortThree(targetArr, j + 1, end);
+        }
+
+
+    }
+
+
+
+}
