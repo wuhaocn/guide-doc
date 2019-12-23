@@ -23,7 +23,7 @@ public class ReadmeBuild {
         if (isGuide){
             writeHeader();
         }
-        writeContent(file, 0, isGuide, "", true, 3);
+        writeContent(file, 0, isGuide, "", true, 5);
         //底部标题
         if (isGuide){
             writeBoot();
