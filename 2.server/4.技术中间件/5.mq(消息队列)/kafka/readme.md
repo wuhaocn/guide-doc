@@ -8,18 +8,15 @@ kafka对消息保存时根据Topic进行归类，发送消息者成为Producer,�
 
 ### 2. Kafka 概念
     
-    1. broker:Kafka 服务器，负责消息存储和转发
-    2. topic:消息类别，Kafka 按照 topic 来分类消息
-    3. partition:topic 的分区，一个 topic 可以包含多个 partition，topic 消息保存在各个
-    partition 上
-    4. offset:消息在日志中的位置，可以理解是消息在 partition 上的偏移量，也是代表该消息的
-    唯一序号
-    5. Producer:消息生产者
-    6. Consumer:消息消费者
-    7. Consumer Group:消费者分组，每个 Consumer 必须属于一个 group
-    8. Zookeeper:保存着集群 broker、topic、partition 等 meta 数据;
-        另外，还负责broker故障发现，partition leader 选举，负载均衡等功能
-    9.副本：分为leader、flower
+* 1. broker:Kafka 服务器，负责消息存储和转发
+* 2. topic:消息类别，Kafka 按照 topic 来分类消息
+* 3. partition:topic 的分区，一个 topic 可以包含多个 partition，topic 消息保存在各个partition 上
+* 4. offset:消息在日志中的位置，可以理解是消息在 partition 上的偏移量，也是代表该消息的唯一序号
+* 5. Producer:消息生产者
+* 6. Consumer:消息消费者
+* 7. Consumer Group:消费者分组，每个 Consumer 必须属于一个 group
+* 8. Zookeeper:保存着集群 broker、topic、partition 等 meta 数据;另外，还负责broker故障发现，partition leader 选举，负载均衡等功能
+* 9.副本：分为leader、flower
  组网结构图
  ![](images/kafka_net.png)
 ### 3. kafka适用场景
