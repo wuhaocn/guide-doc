@@ -23,7 +23,9 @@
     - LongAccumulator
     - LongAdder
     - Striped64
-
+- 队列
+  - [BlockingQueue](队列-BlockingQueue.md)
+    
 - locks包
 - 集合
     - [集合-CopyOnWriteArrayList和CopyOnWriteArraySet](集合-CopyOnWriteArrayList和CopyOnWriteArraySet.md)
@@ -33,7 +35,8 @@
     - 分治框架
         - [Fork-Join分治编程介绍(一)](Fork-Join分治编程介绍(一).md)
         - [Fork-Join原理深入分析(二)](Fork-Join原理深入分析(二).md)
-    
+- 常见场景
+    - [生产者消费者](示例/生产者消费者.md)    
 - 
 ### 备注
     知识点大部分来源于网络，如果知识点侵害到您的权益，请反馈。
