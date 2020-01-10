@@ -11,3 +11,10 @@
 
 ### JSR规范
 [JSR规范](JSR规范.md)
+
+### 软件实现(java及衍生语言)
+* zookeeper
+* kafka
+* rocket-mq
+* hbase
+* es
