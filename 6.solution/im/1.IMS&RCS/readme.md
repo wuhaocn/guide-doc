@@ -120,7 +120,7 @@ docker run --name mysql.5.6.40 --privileged=true -p 3306:3306 -e MYSQL_ROOT_PASS
 docker exec -it mysql.5.6.40 bash
            
 ```
-数据库导入[资源文件](sql)
+
 
 ##### redis
 

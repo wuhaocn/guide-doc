@@ -13,8 +13,6 @@ http://www.3glteinfo.com/volte-call-flow-procedures/
 https://www.etsi.org/deliver/etsi_ts/129200_129299/129211/06.02.00_60/ts_129211v060200p.pdf
 https://www.netmanias.com/en/post/blog/11082/lte-pcrf-volte/policy-control-over-the-rx-interface-using-diameter-for-volte
 
-
-
 #### 呼叫振铃及接听
 * 流程图
 ```puml
