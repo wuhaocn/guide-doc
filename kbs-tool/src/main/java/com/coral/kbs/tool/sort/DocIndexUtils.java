@@ -67,12 +67,13 @@ public class DocIndexUtils {
 
     public static boolean isIndex(String name) {
         try {
-            String[] itemArray = name.split("\\.");
-            if (itemArray.length >= 2) {
-                int itemInt = Integer.parseInt(itemArray[0]);
-                return true;
-            }
-            return false;
+//            String[] itemArray = name.split("\\.");
+//            if (itemArray.length >= 1) {
+//                int itemInt = Integer.parseInt(itemArray[0]);
+//                return true;
+//            }
+//            return false;
+            return true;
         } catch (Exception e){
             return false;
         }
@@ -125,6 +126,13 @@ public class DocIndexUtils {
             "0.awesome",
             "nodejs",
             "1.csnotes",
+            ".DS_Store",
+            "readme.md",
+            "header.md",
+            "reg-match-refer.md",
+            "settings.gradle",
+            "boot.md",
+            "build.gradle",
             "build",
             "tmp" ,
             "out",
