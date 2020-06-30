@@ -29,7 +29,7 @@ public class L0302MinStackList {
                 node.min = header.min;
             }
             node.value = x;
-            header.next = node;
+            node.next = header;
             header = node;
         }
 
