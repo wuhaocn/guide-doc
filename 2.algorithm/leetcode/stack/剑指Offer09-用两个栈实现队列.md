@@ -25,7 +25,6 @@
 ```
 ### 官方解说
 
-保证stackQueue没有数据
 
 ![](https://assets.leetcode-cn.com/solution-static/jianzhi_09/jianzhi_9.gif)
 
