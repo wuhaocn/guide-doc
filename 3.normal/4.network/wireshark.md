@@ -1,0 +1,1 @@
+ssh xgc@172.16.106.65 "echo xgc| sudo -S tcpdump -i any -l -w - " | wireshark -k -i -
