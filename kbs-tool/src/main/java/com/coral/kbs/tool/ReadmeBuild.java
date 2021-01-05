@@ -14,11 +14,11 @@ import java.util.List;
 public class ReadmeBuild {
     static boolean isGuide = true;
     static boolean containUrl = true;
-    static String baseUrl = "https://github.com/wuhaocn/guide-doc/tree/master/";
+    static String baseUrl = "https://github.com/wuhaocn/guide-doc/blob/master/";
     static FileOutputStream fileStream = null;
 
     public static void main(String[] args) throws IOException {
-        File file = new File("./");
+        File file = new File("docs");
         //头部标题
         if (isGuide){
             writeHeader();
