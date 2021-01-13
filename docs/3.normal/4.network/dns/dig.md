@@ -49,6 +49,8 @@ $ dig abc.filterinto.com CNAME
 
 ```
 $ dig @8.8.8.8 abc.filterinto.com
+
+dig @172.16.106.68 bsf.mnc000.mcc460.pub.3gppnetwork.org
 ```
 
 从上图可以看到本次查询的 DNS 服务器为 8.8.8.8。
