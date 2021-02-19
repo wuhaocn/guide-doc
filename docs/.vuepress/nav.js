@@ -6,15 +6,15 @@ var LanguageNav = [
     items: [
       {
         text: '基础',
-        link: '/xg/5gc.md'
+        link: '/1.language/1.java/1.基础知识/readme.md'
       },
       {
         text: '进阶',
-        link: '/xg/gnode.md'
+        link: '/1.language/1.java/2.进阶知识/readme.md'
       },
       {
         text: 'JVM',
-        link: '/xg/device.md'
+        link: '/1.language/1.java/2.进阶知识/jvm/readme.md'
       }
     ]
   },

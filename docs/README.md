@@ -14,5 +14,5 @@ features:
     details: 智能分析平台
   - title: 人工智能
     details: 智能控制，深度学习，智能建模
-footer: MIT Licensed | Copyright © 2020-present wuhao
+footer: MIT Licensed | Copyright © 2021-present wuhao
 ---
