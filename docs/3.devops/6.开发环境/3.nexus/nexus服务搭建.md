@@ -7,7 +7,6 @@ docker stop nexus
 docker rm nexus
 docker run -d --name nexus -p 5260:8081 -p 5261:8082 -p 5262:8083 -p 5263:8084  -p 5264:5000 -v /home/ubuntu/nexus:/var/nexus-data sonatype/nexus3
 docker logs -f nexus
-
 ```
 
 ### 2.配置

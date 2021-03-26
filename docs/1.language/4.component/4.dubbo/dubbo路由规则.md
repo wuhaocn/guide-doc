@@ -74,27 +74,19 @@ host != 172.22.3._ => host != 172.22.3._
 脚本路由规则 [4] 支持 JDK 脚本引擎的所有脚本，比如：javascript, jruby, groovy 等，通过 type=javascript 参数设置脚本类型，缺省为 javascript。
 
 "script://0.0.0.0/com.foo.BarService?category=routers&dynamic=false&rule=" + URL.encode("（function route(invokers) { ... } (invokers)）")
-1
+
 基于脚本引擎的路由规则，如：
 
 （function route(invokers) {
 var result = new java.util.ArrayList(invokers.size());
 for (i = 0; i < invokers.size(); i ++) {
-if ("10.20.153.10".equals(invokers.get(i).getUrl().getHost())) {
-result.add(invokers.get(i));
-}
-}
-return result;
+    if ("10.20.153.10".equals(invokers.get(i).getUrl().getHost())) {
+        result.add(invokers.get(i));
+        }
+    }
+    return result;
 } (invokers)）; // 表示立即执行方法
-1
-2
-3
-4
-5
-6
-7
-8
-9
+
 标签路由规则
 标签路由规则 ，当应用选择装配标签路由(TagRouter)之后，一次 dubbo 调用能够根据请求携带的 tag 标签智能地选择对应 tag 的服务提供者进行调用。
 
@@ -103,30 +95,30 @@ return result;
 
 @Bean
 public ApplicationConfig applicationConfig() {
-ApplicationConfig applicationConfig = new ApplicationConfig();
-applicationConfig.setName(“provider-book”);
-applicationConfig.setQosEnable(false);
-// instruct tag router
-Map<String,String> parameters = new HashMap<>();
-parameters.put(Constants.ROUTER_KEY, “tag”);
-applicationConfig.setParameters(parameters);
-return applicationConfig;
+    ApplicationConfig applicationConfig = new ApplicationConfig();
+    applicationConfig.setName(“provider-book”);
+    applicationConfig.setQosEnable(false);
+    // instruct tag router
+    Map<String,String> parameters = new HashMap<>();
+    parameters.put(Constants.ROUTER_KEY, “tag”);
+    applicationConfig.setParameters(parameters);
+    return applicationConfig;
 }
 
 给应用设置具体的标签：
 
 @Bean
 public ProviderConfig providerConfig(){
-ProviderConfig providerConfig = new ProviderConfig();
-providerConfig.setTag(“red”);
-return providerConfig;
+    ProviderConfig providerConfig = new ProviderConfig();
+    providerConfig.setTag(“red”);
+    return providerConfig;
 }
 
 应用未装配 tag 属性或服务提供者未设置 tag 属性，都将被认为是默认的应用，这些默认应用将会在调用无法匹配 provider 时当作降级方案。
 
 服务消费者
 RpcContext.getContext().setAttachment(Constants.REQUEST_TAG_KEY,"red");
-1
+
 请求标签的作用域为每一次 invocation，使用 attachment 来传递请求标签，注意保存在 attachment 中的值将会在一次完整的远程调用中持续传递，得益于这样的特性，我们只需要在起始调用时，通过一行代码的设置，达到标签的持续传递。
 
 目前仅仅支持 hardcoding 的方式设置 requestTag。注意到 RpcContext 是线程绑定的，优雅的使用 TagRouter 特性，建议通过 servlet 过滤器(在 web 环境下)，或者定制的 SPI 过滤器设置 requestTag。

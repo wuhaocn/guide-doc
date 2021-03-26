@@ -1,93 +1,424 @@
 #### 事务隔离级别
 
-#### 什么是事务?
+#### 1.什么是事务?
 
-    事务是逻辑上的一组操作，要么都执行，要么都不执行。
+本文所说的 MySQL 事务都是指在 InnoDB 引擎下，MyISAM 引擎是不支持事务的。
+数据库事务指的是一组数据操作，事务内的操作要么就是全部成功，要么就是全部失败，
+什么都不做，其实不是没做，是可能做了一部分但是只要有一步失败，就要回滚所有操作，有点一不做二不休的意思。
+假设一个网购付款的操作，用户付款后要涉及到订单状态更新、扣库存以及其他一系列动作，这就是一个事务，如果一切正常那就相安无事，
+一旦中间有某个环节异常，那整个事务就要回滚，总不能更新了订单状态但是不扣库存吧，这问题就大了。
 
-    事务最经典也经常被拿出来说例子就是转账了。假如小明要给小红转账1000元，这个转账会涉及到两个关键操作就是：将小明的余额减少1000元，将小红的余额增加1000元。万一在这两个操作之间突然出现错误比如银行系统崩溃，导致小明余额减少而小红的余额没有增加，这样就不对了。事务就是保证这两个关键操作要么都成功，要么都要失败。
+事务具有原子性（Atomicity）、一致性（Consistency）、隔离性（Isolation）、持久性（Durability）四个特性，简称 ACID，缺一不可。
 
-    事物的特性(ACID)
-    •原子性： 事务是最小的执行单位，不允许分割。事务的原子性确保动作要么全部完成，要么完全不起作用；
-    •一致性： 执行事务前后，数据保持一致；
-    •隔离性： 并发访问数据库时，一个用户的事物不被其他事物所干扰，各并发事务之间数据库是独立的；
-    •持久性: 一个事务被提交之后。它对数据库中数据的改变是持久的，即使数据库发生故障也不应该对其有任何影响。
+#### 2.概念说明
 
-#### 并发事务带来的问题
+以下几个概念是事务隔离级别要实际解决的问题，所以需要搞清楚都是什么意思。
 
-    在典型的应用程序中，多个事务并发运行，经常会操作相同的数据来完成各自的任务（多个用户对统一数据进行操作）。并发虽然是必须的，但可能会导致以下的问题。
+- 脏读
 
-    •脏读（Dirty read）: 当一个事务正在访问数据并且对数据进行了修改，而这种修改还没有提交到数据库中，这时另外一个事务也访问了这个数据，然后使用了这个数据。因为这个数据是还没有提交的数据，那么另外一个事务读到的这个数据是“脏数据”，依据“脏数据”所做的操作可能是不正确的。
-    •丢失修改（Lost to modify）: 指在一个事务读取一个数据时，另外一个事务也访问了该数据，那么在第一个事务中修改了这个数据后，第二个事务也修改了这个数据。这样第一个事务内的修改结果就被丢失，因此称为丢失修改。 例如：事务1读取某表中的数据A=20，事务2也读取A=20，事务1修改A=A-1，事务2也修改A=A-1，最终结果A=19，事务1的修改被丢失。
-    •不可重复读（Unrepeatableread）: 指在一个事务内多次读同一数据。在这个事务还没有结束时，另一个事务也访问该数据。那么，在第一个事务中的两次读数据之间，由于第二个事务的修改导致第一个事务两次读取的数据可能不太一样。这就发生了在一个事务内两次读到的数据是不一样的情况，因此称为不可重复读。
-    •幻读（Phantom read）: 幻读与不可重复读类似。它发生在一个事务（T1）读取了几行数据，接着另一个并发事务（T2）插入了一些数据时。在随后的查询中，第一个事务（T1）就会发现多了一些原本不存在的记录，就好像发生了幻觉一样，所以称为幻读。
+脏读指的是读到了其他事务未提交的数据，未提交意味着这些数据可能会回滚，
+也就是可能最终不会存到数据库中，也就是不存在的数据。读到了并一定最终存在的数据，这就是脏读。
 
-#### 不可重复度和幻读区别：
+- 不可重复读
 
-    不可重复读的重点是修改，幻读的重点在于新增或者删除。
+对比可重复读，不可重复读指的是在同一事务内，不同的时刻读到的同一批数据可能是不一样的，
+可能会受到其他事务的影响，比如其他事务改了这批数据并提交了。通常针对数据更新（UPDATE）操作。
 
-    例1（同样的条件, 你读取过的数据, 再次读取出来发现值不一样了 ）：事务1中的A先生读取自己的工资为 1000的操作还没完成，事务2中的B先生就修改了A的工资为2000，导 致A再读自己的工资时工资变为 2000；这就是不可重复读。
+- 幻读
 
-    例2（同样的条件, 第1次和第2次读出来的记录数不一样 ）：假某工资单表中工资大于3000的有4人，事务1读取了所有工资大于3000的人，共查到4条记录，这时事务2 又插入了一条工资大于3000的记录，事务1再次读取时查到的记录就变为了5条，这样就导致了幻读。
+幻读是针对数据插入（INSERT）操作来说的。
+假设事务 A 对某些行的内容作了更改，但是还未提交，此时事务 B 插入了与事务 A 更改前的记录相同的记录行，
+并且在事务 A 提交之前先提交了，而这时，在事务 A 中查询，会发现好像刚刚的更改对于某些数据未起作用，
+但其实是事务 B 刚插入进来的，让用户感觉很魔幻，感觉出现了幻觉，这就叫幻读。
 
-#### 事务隔离级别
+- 可重复读
 
-    SQL 标准定义了四个隔离级别：
+可重复读指的是在一个事务内，最开始读到的数据和事务结束前的任意时刻读到的同一批数据都是一致的。
+通常针对数据更新（UPDATE）操作。
 
-    •READ-UNCOMMITTED(读取未提交)： 最低的隔离级别，允许读取尚未提交的数据变更，可能会导致脏读、幻读或不可重复读
-    •READ-COMMITTED(读取已提交): 允许读取并发事务已经提交的数据，可以阻止脏读，但是幻读或不可重复读仍有可能发生
-    •REPEATABLE-READ（可重读）: 对同一字段的多次读取结果都是一致的，除非数据是被本身事务自己所修改，可以阻止脏读和不可重复读，但幻读仍有可能发生。
-    •SERIALIZABLE(可串行化): 最高的隔离级别，完全服从ACID的隔离级别。所有的事务依次逐个执行，这样事务之间就完全不可能产生干扰，也就是说，该级别可以防止脏读、不可重复读以及幻读。
+#### 3.隔离级别：
 
-    MySQL InnoDB 存储引擎的默认支持的隔离级别是 REPEATABLE-READ（可重读）。我们可以通过SELECT @@tx_isolation;命令来查看
+事务隔离级别
+SQL 标准定义了四种隔离级别，MySQL 全都支持。这四种隔离级别分别是：
 
-    mysql> SELECT @@tx_isolation;
-    +-----------------+
-    | @@tx_isolation  |
-    +-----------------+
-    | REPEATABLE-READ |
-    +-----------------+
-    这里需要注意的是：与 SQL 标准不同的地方在于InnoDB 存储引擎在 REPEATABLE-READ（可重读）事务隔离级别下使用的是Next-Key Lock 锁算法，因此可以避免幻读的产生，这与其他数据库系统(如 SQL Server)是不同的。所以说InnoDB 存储引擎的默认支持的隔离级别是 REPEATABLE-READ（可重读） 已经可以完全保证事务的隔离性要求，即达到了 SQL标准的SERIALIZABLE(可串行化)隔离级别。
+读未提交（READ UNCOMMITTED）
+读提交 （READ COMMITTED）
+可重复读 （REPEATABLE READ）
+串行化 （SERIALIZABLE）
 
-    因为隔离级别越低，事务请求的锁越少，所以大部分数据库系统的隔离级别都是READ-COMMITTED(读取提交内容):，但是你要知道的是InnoDB 存储引擎默认使用 REPEATABLE-READ（可重读）并不会有任何性能损失。
+从上往下，隔离强度逐渐增强，性能逐渐变差。采用哪种隔离级别要根据系统需求权衡决定，其中，可重复读是 MySQL 的默认级别。
 
-    InnoDB 存储引擎在 分布式事务 的情况下一般会用到SERIALIZABLE(可串行化)隔离级别。
+事务隔离其实就是为了解决上面提到的脏读、不可重复读、幻读这几个问题，下面展示了 4 种隔离级别对这三个问题的解决程度。
 
-    实际情况演示
-    MySQL 命令行的默认配置中事务都是自动提交的，即执行SQL语句后就会马上执行 COMMIT 操作。如果要显式地开启一个事务需要使用命令：START TARNSACTION。
+| 隔离级别 | 脏读   | 不可重复读 | 幻读   | 可重复读 |
+| -------- | ------ | ---------- | ------ | -------- |
+| 读未提交 | 可能   | 可能       | 可能   |
+| 读已提交 | 不可能 | 可能       | 可能   |
+| 可重复读 | 不可能 | 不可能     | 可能   |
+| 串行化   | 不可能 | 不可能     | 不可能 |
 
-    我们可以通过下面的命令来设置隔离级别。
+只有串行化的隔离级别解决了全部这 3 个问题，其他的 3 个隔离级别都有缺陷。
 
-    SET [SESSION|GLOBAL] TRANSACTION ISOLATION LEVEL [READ UNCOMMITTED|READ COMMITTED|REPEATABLE READ|SERIALIZABLE]
-    我们再来看一下我们在下面实际操作中使用到的一些并发控制语句:
+#### 4.示例
 
-    •START TARNSACTION |BEGIN:显式地开启一个事务。
-    •COMMIT:提交事务，使得对数据库做的所有修改成为永久性。
-    •ROLLBACK 回滚会结束用户的事务，并撤销正在进行的所有未提交的修改。
+##### 4.1 事务查询&设置
 
-    在下面我会使用 2 个命令行 MySQL ，模拟多线程（多事务）。
-    脏读(读未提交)
+- 查询事务隔离级别
+
+```
+SELECT @@tx_isolation
+```
+
+```
+@@tx_isolation
+REPEATABLE-READ
+```
+
+- 设置事务隔离级别
+
+```
+set global transaction isolation level read uncommitted;
+```
+
+- 查询正在运行事务
+
+```
+select * from information_schema.innodb_trx;
+```
+
+- 查询全局等待事务锁超时时间
+  默认参数:innodb_lock_wait_timeout 设置锁等待的时间是 50s
+
+```
+SHOW GLOBAL VARIABLES LIKE 'innodb_lock_wait_timeout';
+```
+
+- 设置全局等待事务锁超时时间
+
+```
+SET  GLOBAL innodb_lock_wait_timeout=100;
+```
+
+- 查询当前会话等待事务锁超时时间
+
+```
+SHOW VARIABLES LIKE 'innodb_lock_wait_timeout';
+```
+
+- 事务
+
+```
+begin;
+select * from user;
+commit;
+```
+
+##### 4.2 初始化数据
+
+```
+CREATE TABLE `user` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(30) DEFAULT NULL,
+  `age` tinyint(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8
+
+INSERT INTO `user` (`id`, `name`, `age`) VALUES (1, '张三', 1);
+INSERT INTO `user` (`id`, `name`, `age`) VALUES (2, '李四', 2);
+INSERT INTO `user` (`id`, `name`, `age`) VALUES (3, '王五', 3);
+```
+
+###### 4.3 读未提交
+
+MySQL 事务隔离其实是依靠锁来实现的，加锁自然会带来性能的损失。
+而读未提交隔离级别是不加锁的，所以它的性能是最好的，没有加锁、解锁带来的性能开销。
+但有利就有弊，这基本上就相当于裸奔啊，所以它连脏读的问题都没办法解决。
+
+任何事务对数据的修改都会第一时间暴露给其他事务，即使事务还没有提交。
+
+下面来做个简单实验验证一下，首先设置全局隔离级别为读未提交。
+
+```
+set global transaction isolation level read uncommitted;
+```
+
+设置完成后，只对之后新起的 session 才起作用，对已经启动 session 无效。
+如果用 shell 客户端那就要重新连接 MySQL，如果用 Navicat 那就要创建新的查询窗口。
+
+启动两个事务，分别为事务 A 和事务 B，在事务 A 中使用 update 语句，修改 age 的值为 10，初始是 1 ，在执行完 update 语句之后，
+在事务 B 中查询 user 表，会看到 age 的值已经是 10 了，这时候事务 A 还没有提交，而此时事务 B 有可能拿着已经修改过的 age=10 去进行其他操作了。
+在事务 B 进行操作的过程中，很有可能事务 A 由于某些原因，
+进行了事务回滚操作，那其实事务 B 得到的就是脏数据了，拿着脏数据去进行其他的计算，那结果肯定也是有问题的。
+
+顺着时间轴往表示两事务中操作的执行顺序，重点看图中 age 字段的值。
+
+```
+事务A
+
+  begin;
+  select * from user;
+  update user set age = 10 where id = 1
+  rollback;
+  
+  |
+  1. begin;
+  |
+  |
+  2. select * from user;
+  |
+  |
+  3. update user set age = 10 where id = 1
+  |
+  |
+  4. rollback;
+  |
+  |
+  5. select * from user;
+
+事务B
+   begin;
+   select * from user;
+   select * from user;
+   select * from user;
+   
+  |
+  1. begin;
+  |
+  |
+  2.1. select * from user;  【事务A [2] 步骤之后】【1, '张三', 1】
+  |
+  |
+  3.1. select * from user;  【事务A [3] 步骤之后】【1, '张三', 10】【脏数据】
+  |
+  |
+  4.1 select * from user;   【事务A [4] 步骤之后】【1, '张三', 1】
+```
+
+###### 4.3 读已提交
+
+set global transaction isolation level read committed;
+READ-COMMITTED
+
+```
+事务A
+
+  begin;
+  select * from user;
+  update user set age = 10 where id = 1
+  rollback;
+  
+  |
+  1. begin;
+  |
+  |
+  2. select * from user;
+  |
+  |
+  3. update user set age = 10 where id = 1
+  |
+  |
+  4. rollback;
+  |
+  |
+  5. select * from user;
+
+事务B
+   begin;
+   select * from user;
+   select * from user;
+   select * from user;
+   
+  |
+  1. begin;
+  |
+  |
+  2.1. select * from user;  【事务A [2] 步骤之后】【1, '张三', 1】
+  |
+  |
+  3.1. select * from user;  【事务A [3] 步骤之后】【1, '张三', 1】【无胀数据】
+  |
+  |
+  4.1 select * from user;   【事务A [4] 步骤之后】【10, '张三', 1】【】
+```
 
 
-    避免脏读(读已提交)
+###### 4.4 幻读
+
+set global transaction isolation level SERIALIZABLE;
+SERIALIZABLE
+
+```
+事务A
+
+  begin;
+  select * from user;
+  update user set age = 10 where id = 1
+  rollback;
+  
+  |
+  1. begin;
+  |
+  |
+  2. select * from user;
+  |
+  |
+  3. update user set age = 10 where id = 1
+  |
+  |
+  4. rollback;
+  |
+  |
+  5. select * from user;
+
+事务B
+   begin;
+   select * from user;
+   select * from user;
+   select * from user;
+   
+  |
+  1. begin;
+  |
+  |
+  2.1. select * from user;  【事务A [2] 步骤之后】【1, '张三', 1】
+  |
+  |
+  3.1. select * from user;  【事务A [3] 步骤之后】【1, '张三', 1】【无胀数据】
+  |
+  |
+  4.1 select * from user;   【事务A [4] 步骤之后】【10, '张三', 1】【】
+```
 
 
-    不可重复读
-    还是刚才上面的读已提交的图，虽然避免了读未提交，但是却出现了，一个事务还没有结束，就发生了 不可重复读问题。
+###### 4.3 可重复读
+
+set global transaction isolation level REPEATABLE READ;
+REPEATABLE-READ
+
+```
+事务A
+
+  begin;
+  select * from user;
+  update user set age = 10 where id = 1
+  rollback;
+  
+  |
+  1. begin;
+  |
+  |
+  2. select * from user;
+  |
+  |
+  3. update user set age = 10 where id = 1
+  |
+  |
+  4. commit;
+  |
+  |
+  5. select * from user;
+
+事务B
+   begin;
+   select * from user;
+   select * from user;
+   select * from user;
+   
+  |
+  1. begin;
+  |
+  |
+  2.1. select * from user;  【事务A [2] 步骤之后】【1, '张三', 1】
+  |
+  |
+  3.1. select * from user;  【事务A [3] 步骤之后】【1, '张三', 1】【无胀数据】
+  |
+  |
+  commit
+  
+  4.1 select * from user;   【事务A [4] 步骤之后】【10, '张三', 1】【】
+```
+
+
+### mysql锁
+Mysql中的锁可以分为：
+「享锁/读锁（Shared Locks）」
+「排他锁/写锁（Exclusive Locks）」 
+ [间隙锁」
+ 「行锁（Record Locks）」
+ 「表锁」。
+
+### 备注
+```
+SELECT @@tx_isolation
+
+
+CREATE TABLE `user` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(30) DEFAULT NULL,
+  `age` tinyint(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8
+
+INSERT INTO `user` (`id`, `name`, `age`) VALUES (2, '李四', 2);
+INSERT INTO `user` (`id`, `name`, `age`) VALUES (3, '王五', 3);
+
+select * from information_schema.innodb_trx;
+
+
+set global transaction isolation level read uncommitted;
+
+
+begin;
+select * from user; 
+commit; 
 
 
 
-    可重复读
+SHOW GLOBAL VARIABLES LIKE 'innodb_lock_wait_timeout';
+
+### 读未提交
 
 
-    防止幻读(可重复读)
+begin;
+select * from user;
+update user set age = 11 where id = 1
+commit;
 
-![](refer/2-pre_read.jpg)
 
-一个事务对数据库进行操作，这种操作的范围是数据库的全部行，然后第二个事务也在对这个数据库操作，这种操作可以是插入一行记录或删除一行记录，那么第一个是事务就会觉得自己出现了幻觉，怎么还有没有处理的记录呢? 或者 怎么多处理了一行记录呢?
 
-幻读和不可重复读有些相似之处 ，但是不可重复读的重点是修改，幻读的重点在于新增或者删除。
+begin;
+select * from user;
+commit;
 
-参考
+### 读已提交
+set global transaction isolation level read committed;
+SELECT @@tx_isolation
+begin;
+select * from user;
+update user set age = 10 where id = 1
+rollback;
 
-    •《MySQL技术内幕：InnoDB存储引擎》
-    •https://dev.mysql.com/doc/refman/5.7/en/[1]
+
+
+begin;
+select * from user;
+commit;
+
+### 可重复读
+set global transaction isolation level REPEATABLE READ;
+SELECT @@tx_isolation
+begin;
+select * from user;
+update user set age = 10 where id = 1
+rollback;
+
+
+
+begin;
+select * from user;
+commit;
+
+
+
+```
