@@ -1,7 +1,6 @@
-package org.coral.test;
+package org.coral.test.asm;
 
 
-import com.rcloud.error.APIException;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 
@@ -14,7 +13,7 @@ import java.io.IOException;
  * @createTime 2021-04-25 15:40:00
  */
 public class AppAdapterInfoTest {
-    public static void main(String[] args) throws APIException, IOException {
+    public static void main(String[] args) throws IOException {
         //AppInfoAdapter appInfoAdapter = new AppInfoAdapter();
         /**
          * https://juejin.cn/post/6844904112396615688
