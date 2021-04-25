@@ -1,3 +1,5 @@
 rootProject.name = 'guide-doc'
 include 'kbs-tool'
 include 'kbs-source'
+include 'kbs-source:kbs-java'
+include 'kbs-source:kbs-algorithm'
