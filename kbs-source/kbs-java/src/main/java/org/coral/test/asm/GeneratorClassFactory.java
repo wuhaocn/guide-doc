@@ -24,21 +24,25 @@ public class GeneratorClassFactory {
 //            FileOutputStream fout = new FileOutputStream(file);
 //            fout.write(data);
 //            fout.close();
-            rename("org.coral.test.asm.AppInfo", "org.coral.test.asm.AbAppInfo", "java.lang.Object");
-            rename("org.coral.test.asm.AppInfoExt", "org.coral.test.asm.AppInfo", "org.coral.test.asm.AbAppInfo");
-            System.out.println("success!");
-            String path = Class.forName("org.coral.test.asm.AppInfo").getProtectionDomain().getCodeSource().getLocation().getPath() + "/";
-            String dstFile = "org.coral.test.asm.AppInfo";
-            MyClassLouder myClassLouder = new MyClassLouder(path, dstFile, GeneratorClassFactory.class.getClassLoader());
+//            rename("org.coral.test.asm.AppInfo", "org.coral.test.asm.AbAppInfo", "java/lang/Object");
+//            rename("org.coral.test.asm.AppInfoExt", "org.coral.test.asm.AppInfo", "org.coral.test.asm.AbAppInfo");
+//            System.out.println("success!");
 
-            String pathe = Class.forName("org.coral.test.asm.AppInfo").getProtectionDomain().getCodeSource().getLocation().getPath() + "/";
+            String path = "/Users/wuhao/data/code/coral-learning/guide-doc/kbs-source/kbs-java/src/classes1/";
             String dstFilee = "org.coral.test.asm.AbAppInfo";
-            MyClassLouder myClassLoudere = new MyClassLouder(pathe, dstFilee, GeneratorClassFactory.class.getClassLoader());
-            myClassLoudere.findClass("org.coral.test.asm.AbAppInfo");
-            Class class1 = myClassLoudere.findClass("org.coral.test.asm.AbAppInfo");
-            Class class2 = myClassLouder.findClass("org.coral.test.asm.AppInfo");
+            MyClassLouder myClassLoudere = new MyClassLouder(path, dstFilee, GeneratorClassFactory.class.getClassLoader());
 
-            AppInfo.bark1();
+            String dstFile = "org.coral.test.asm.AppInfo";
+            MyClassLouder myClassLouder = new MyClassLouder(path, dstFile, myClassLoudere);
+
+
+            myClassLoudere.findClass("org.coral.test.asm.AbAppInfo");
+//            Class class1 = myClassLoudere.findClass("org.coral.test.asm.AbAppInfo");
+            Class tttv = myClassLouder.findClass("org.coral.test.asm.AppInfo");
+
+            tttv.newInstance();
+
+            //AppInfo.bark1();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -47,7 +51,7 @@ public class GeneratorClassFactory {
     public static void rename(String source, String to, String pclass){
         try {
             ClassReader cr = new ClassReader(source);
-            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+            ClassWriter cw = new ClassWriter(0);
             ClassVisitor classAdapter = new GeneratorClassAdapter(cw);
             //使给定的访问者访问Java类的ClassReader
             cr.accept(classAdapter, ClassReader.SKIP_DEBUG);
