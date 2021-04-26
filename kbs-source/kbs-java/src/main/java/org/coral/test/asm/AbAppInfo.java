@@ -17,6 +17,11 @@ public class AbAppInfo {
         System.out.println("AppInfo bark1 Dog.woof ");
     }
 
+    public String toString() {
+        return "AbAppInfo:toString";
+    }
+
     public static void main(String[] var0) {
+        bark1();
     }
 }

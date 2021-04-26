@@ -1,5 +1,6 @@
 package org.coral.test.asm;
 
+import org.coral.test.loader.ClassHotLoader;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -7,6 +8,7 @@ import org.objectweb.asm.Opcodes;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.lang.reflect.Method;
 
 
 public class GeneratorClassFactory {
@@ -24,23 +26,40 @@ public class GeneratorClassFactory {
 //            FileOutputStream fout = new FileOutputStream(file);
 //            fout.write(data);
 //            fout.close();
-//            rename("org.coral.test.asm.AppInfo", "org.coral.test.asm.AbAppInfo", "java/lang/Object");
-//            rename("org.coral.test.asm.AppInfoExt", "org.coral.test.asm.AppInfo", "org.coral.test.asm.AbAppInfo");
-//            System.out.println("success!");
+            rename("org.coral.test.asm.AppInfo", "org.coral.test.asm.AbAppInfo", "java/lang/Object");
+            rename("org.coral.test.asm.AppInfoExt", "org.coral.test.asm.AppInfo", "org.coral.test.asm.AbAppInfo");
+            System.out.println("success!");
+            Class.forName("org.coral.test.asm.AbAppInfo");
+            Class cl = Class.forName("org.coral.test.asm.AppInfo");
+            AppInfo appInfo = (AppInfo) cl.newInstance();
+            appInfo.bark1();
 
-            String path = "/Users/wuhao/data/code/coral-learning/guide-doc/kbs-source/kbs-java/src/classes1/";
-            String dstFilee = "org.coral.test.asm.AbAppInfo";
-            MyClassLouder myClassLoudere = new MyClassLouder(path, dstFilee, GeneratorClassFactory.class.getClassLoader());
+            Class<?> loadClass = ClassHotLoader.get("/Users/wuhao/data/code/coral-learning/guide-doc/kbs-source/kbs-java/out/production/classes")
+                    .loadClass("org.coral.test.asm.AppInfo");
+            Object person = loadClass.newInstance();
+//            Method sayHelloMethod = loadClass.getMethod("sayHello");
+//            sayHelloMethod.invoke(person);
 
-            String dstFile = "org.coral.test.asm.AppInfo";
-            MyClassLouder myClassLouder = new MyClassLouder(path, dstFile, myClassLoudere);
-
-
-            myClassLoudere.findClass("org.coral.test.asm.AbAppInfo");
-//            Class class1 = myClassLoudere.findClass("org.coral.test.asm.AbAppInfo");
-            Class tttv = myClassLouder.findClass("org.coral.test.asm.AppInfo");
-
-            tttv.newInstance();
+//            Method sayHelloMethod = loadClass.getMethod("sayHello");
+//            sayHelloMethod.invoke(person);
+            System.out.println(person.toString());
+            appInfo.bark1();
+            System.gc();
+            System.out.println(person.toString());
+            appInfo.bark1();
+//            String path = "/Users/wuhao/data/code/coral-learning/guide-doc/kbs-source/kbs-java/src/classes1/";
+//            String dstFilee = "org.coral.test.asm.AbAppInfo";
+//            MyClassLouder myClassLoudere = new MyClassLouder(path, dstFilee, GeneratorClassFactory.class.getClassLoader());
+//
+//            String dstFile = "org.coral.test.asm.AppInfo";
+//            MyClassLouder myClassLouder = new MyClassLouder(path, dstFile, myClassLoudere);
+//
+//
+//            myClassLoudere.findClass("org.coral.test.asm.AbAppInfo");
+////            Class class1 = myClassLoudere.findClass("org.coral.test.asm.AbAppInfo");
+//            Class tttv = myClassLouder.findClass("org.coral.test.asm.AppInfo");
+//
+//            tttv.newInstance();
 
             //AppInfo.bark1();
         } catch (Exception e) {
@@ -48,7 +67,7 @@ public class GeneratorClassFactory {
         }
     }
 
-    public static void rename(String source, String to, String pclass){
+    public static void rename(String source, String to, String pclass) {
         try {
             ClassReader cr = new ClassReader(source);
             ClassWriter cw = new ClassWriter(0);
