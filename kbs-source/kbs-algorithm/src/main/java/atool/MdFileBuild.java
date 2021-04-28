@@ -45,10 +45,11 @@ public class MdFileBuild {
                 fileWriter.write("\n");
 
                 fileWriter.write("* 问题\n");
-
-                fileWriter.write("```\n");
+                fileWriter.write("\n");
+                //fileWriter.write("```\n");
                 fileWriter.write(FileUtil.read(fileItem.getParentFile().getAbsolutePath()+ "/" + "readme.md"));
-                fileWriter.write("```\n");
+                //fileWriter.write("```\n");
+                fileWriter.write("\n");
 
                 fileWriter.write("* 解答\n");
                 fileWriter.write("```\n");
