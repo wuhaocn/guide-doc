@@ -15,56 +15,32 @@ public class GeneratorClassFactory {
 
     public static void main(String[] args) {
         try {
-//            ClassReader cr = new ClassReader("org.coral.test.asm.AppInfoExt");
-//            ClassWriter cw = new ClassWriter(0);
-//            ClassVisitor classAdapter = new GeneratorClassAdapter(cw);
-//            //使给定的访问者访问Java类的ClassReader
-//            cr.accept(classAdapter, ClassReader.SKIP_DEBUG);
-//            cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "org/coral/test/asm/AppInfo", null, "java/lang/Object", null);
-//            byte[] data = cw.toByteArray();
-//            File file = new File("/Users/wuhao/data/code/coral-learning/guide-doc/kbs-source/kbs-java/out/production/classes/org/coral/test/asm/AppInfo.class");
-//            FileOutputStream fout = new FileOutputStream(file);
-//            fout.write(data);
-//            fout.close();
             rename("org.coral.test.asm.AppInfo", "org.coral.test.asm.AbAppInfo", "java/lang/Object");
-            rename("org.coral.test.asm.AppInfoExt", "org.coral.test.asm.AppInfo", "org.coral.test.asm.AbAppInfo");
-            System.out.println("success!");
-            Class.forName("org.coral.test.asm.AbAppInfo");
-            Class cl = Class.forName("org.coral.test.asm.AppInfo");
-            AppInfo appInfo = (AppInfo) cl.newInstance();
-            appInfo.bark1();
-
-            Class<?> loadClass = ClassHotLoader.get("/Users/wuhao/data/code/coral-learning/guide-doc/kbs-source/kbs-java/out/production/classes")
-                    .loadClass("org.coral.test.asm.AppInfo");
-            Object person = loadClass.newInstance();
-//            Method sayHelloMethod = loadClass.getMethod("sayHello");
-//            sayHelloMethod.invoke(person);
-
-//            Method sayHelloMethod = loadClass.getMethod("sayHello");
-//            sayHelloMethod.invoke(person);
-            System.out.println(person.toString());
-            appInfo.bark1();
-            System.gc();
-            System.out.println(person.toString());
-            appInfo.bark1();
-//            String path = "/Users/wuhao/data/code/coral-learning/guide-doc/kbs-source/kbs-java/src/classes1/";
-//            String dstFilee = "org.coral.test.asm.AbAppInfo";
-//            MyClassLouder myClassLoudere = new MyClassLouder(path, dstFilee, GeneratorClassFactory.class.getClassLoader());
-//
-//            String dstFile = "org.coral.test.asm.AppInfo";
-//            MyClassLouder myClassLouder = new MyClassLouder(path, dstFile, myClassLoudere);
-//
-//
-//            myClassLoudere.findClass("org.coral.test.asm.AbAppInfo");
-////            Class class1 = myClassLoudere.findClass("org.coral.test.asm.AbAppInfo");
-//            Class tttv = myClassLouder.findClass("org.coral.test.asm.AppInfo");
-//
-//            tttv.newInstance();
-
-            //AppInfo.bark1();
+            rename("org.coral.test.asm.AppInfoExt", "org.coral.test.asm.AppInfo", "java/lang/Object");
+            System.out.println("rename success!");
+//            Class.forName("org.coral.test.asm.AbAppInfo");
+//            Class cl = Class.forName("org.coral.test.asm.AppInfo");
+//            AppInfo appInfo = (AppInfo) cl.newInstance();
+//            System.out.println("xxx:");appInfo.bark1();
+//            System.out.println("xxx:");System.out.println(appInfo.toString());
+            String path = "/Users/wuhao/data/code/coral-learning/guide-doc/kbs-source/kbs-java/src/classes1";
+            Class<?> loadClassAbAppInfo = ClassHotLoader.get(path).loadClass("org.coral.test.asm.AbAppInfo");
+            Class<?> loadClassAppInfo = ClassHotLoader.get(path).loadClass("org.coral.test.asm.AppInfo");
+            Object appInfo =  loadClassAppInfo.newInstance();
+            print(appInfo);
+//            System.gc();
+//            print(appInfo);
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+
+
+    public static void print(Object appInfo){
+        System.out.println(appInfo.toString());
+//        System.out.print("object:");appInfo.bark1();
+        System.out.print("static:");AppInfo.bark1();
     }
 
     public static void rename(String source, String to, String pclass) {
