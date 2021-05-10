@@ -1,4 +1,4 @@
-package 树的遍历.q94_二叉树的中序遍历;
+package 树的遍历.q94_二叉树的中序遍历.f2;
 
 public class TreeNode {
     int val;
