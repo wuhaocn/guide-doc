@@ -348,7 +348,7 @@ class Solution {
 
 - 问题
 
-- 25.K 个一组翻转链表
+* 25.K 个一组翻转链表
 
 给你一个链表，每 k 个节点一组进行翻转，请你返回翻转后的链表。
 k 是一个正整数，它的值小于或等于链表的长度。
@@ -476,7 +476,7 @@ class Solution {
 
 - 问题
 
-- 206.反转链表
+* 206.反转链表
 
 给你单链表的头节点 head ，请你反转链表，并返回反转后的链表。
 
@@ -518,7 +518,7 @@ class Solution {
 
 - 问题
 
-- 19.删除链表的倒数第 N 个结点
+* 19.删除链表的倒数第 N 个结点
   给你一个链表，删除链表的倒数第 n 个结点，
   并且返回链表的头结点。
 
@@ -602,7 +602,7 @@ public class Solution {
 
 - 问题
 
-- 61.旋转链表
+* 61.旋转链表
 
 给你一个链表的头节点 head ，旋转链表，将链表每个节点向右移动 k 个位置。
 
@@ -634,7 +634,16 @@ public class Solution {
 package 链表操作.q61_旋转链表;
 
 /**
- * 先连接成环再找断点 o(n)
+ * 解法1 暴力解法
+ * 通过遍历k次，每一次遍历都完成一次尾节点的右移，最终实现题目要求
+ * 解法2 反转链表，逆序变正序
+ * 通过旋转链表的方式，让原本逆向的操作变成正向的操作，然后就可以从头节点开始直接操作即可。
+ * 解法3 快慢指针
+ * 快慢指针的方式，这种方式也可以经常用来解决需要反向操作链表的问题。
+ * 主要思想是，让快指针先走k次，然后慢指针再和快指针一起走，当快指针走完时，慢指针会刚好来到k的位置。此时慢指针的下一个节点就是新的头节点，慢指针当前的节点就是尾节点，最后把快指针当前的节点链上原来的头节点即可。
+ * 解法4 求得链表长度解决
+ * 比较正常的思路，先遍历一次链表，得到链表的长度，和链表的最后一个节点，有了链表的长度就可以直接遍历到（长度-k）的位置了，之后直接拼接下即可。
+ * 解法5 先连接成环再找断点 o(n)
  */
 public class Solution {
 
@@ -668,7 +677,7 @@ public class Solution {
 
 - 问题
 
-- 2.两数相加
+* 2.两数相加
 
 给你两个 非空 的链表，表示两个非负的整数。
 它们每位数字都是按照 逆序 的方式存储的，并且每个节点只能存储一位数字。
@@ -764,9 +773,9 @@ public class Solution {
 
 - 问题
 
-\*\* 1. 简介
+- 1.简介
 
-\*\*\* 1.1 定义
+- 1.1 定义
 
 线性表*（linear list）*是数据结构的一种，一个线性表是 n 个具有相同特性的数据元素的有限序列。数据元素是一个抽象的符号，其具体含义在不同的情况下一般不同。
 
@@ -776,53 +785,54 @@ public class Solution {
 线性表的相邻元素之间存在着序偶关系。如用（a1，…，ai-1，ai，ai+1，…，an）表示一个顺序表，则表中 ai-1 领先于 ai，ai 领先于 ai+1，
 称 ai-1 是 ai 的直接前驱元素，ai+1 是 ai 的直接后继元素。当 i=1,2，…，n-1 时，ai 有且仅有一个直接后继，当 i=2，3，…，n 时，ai 有且仅有一个直接前驱
 
-\*\*\* 1.2 分类
+- 1.2 分类
 
 我们说“线性”和“非线性”，只在逻辑层次上讨论，而不考虑存储层次，所以双向链表和循环链表依旧是线性表。
 在数据结构逻辑层次上细分，线性表可分为一般线性表和受限线性表。一般线性表也就是我们通常所说的“线性表”，可以自由的删除或添加结点。受限线性表主要包括栈和队列，受限表示对结点的操作受限制。
 
-\*\*\* 1.3 优点
+- 1.3 优点
 
 线性表的逻辑结构简单，便于实现和操作。因此，线性表这种数据结构在实际应用中是广泛采用的一种数据结构。
 
-\*\* 2. 特征
+- 2.特征
 
-    1．集合中必存在唯一的一个“第一元素”。
-    2．集合中必存在唯一的一个 “最后元素” 。
-    3．除最后一个元素之外，均有唯一的后继(后件)。
-    4．除第一个元素之外，均有唯一的前驱(前件)。
+  1．集合中必存在唯一的一个“第一元素”。
+  2．集合中必存在唯一的一个 “最后元素” 。
+  3．除最后一个元素之外，均有唯一的后继(后件)。
+  4．除第一个元素之外，均有唯一的前驱(前件)。
 
-\*\* 3.基本操作
+- 3.基本操作
 
-    1）MakeEmpty(L) 这是一个将L变为空表的方法
-    2）Length（L） 返回表L的长度，即表中元素个数
+  1）MakeEmpty(L) 这是一个将 L 变为空表的方法
+  2）Length（L） 返回表 L 的长度，即表中元素个数
 
-    3）Get（L，i） 这是一个函数，函数值为L中位置i处的元素（1≤i≤n）
-    4）Prior（L，i） 取i的前驱元素
+  3）Get（L，i） 这是一个函数，函数值为 L 中位置 i 处的元素（1≤i≤n）
+  4）Prior（L，i） 取 i 的前驱元素
 
-    5）Next（L，i） 取i的后继元素
-    6）Locate（L，x） 这是一个函数，函数值为元素x在L中的位置
+  5）Next（L，i） 取 i 的后继元素
+  6）Locate（L，x） 这是一个函数，函数值为元素 x 在 L 中的位置
 
-    7）Insert（L，i，x）在表L的位置i处插入元素x，将原占据位置i的元素及后面的元素都向后推一个位置
-    8）Delete（L，p） 从表L中删除位置p处的元素
+  7）Insert（L，i，x）在表 L 的位置 i 处插入元素 x，将原占据位置 i 的元素及后面的元素都向后推一个位置
+  8）Delete（L，p） 从表 L 中删除位置 p 处的元素
 
-    9）IsEmpty(L) 如果表L为空表(长度为0)则返回true，否则返回false
-    10）Clear（L）清除所有元素
+  9）IsEmpty(L) 如果表 L 为空表(长度为 0)则返回 true，否则返回 false
+  10）Clear（L）清除所有元素
 
-    11）Init（L）同第一个，初始化线性表为空
-    12）Traverse（L）遍历输出所有元素
+  11）Init（L）同第一个，初始化线性表为空
+  12）Traverse（L）遍历输出所有元素
 
-    13）Find（L，x）查找并返回元素
-    14）Update（L，x）修改元素
+  13）Find（L，x）查找并返回元素
+  14）Update（L，x）修改元素
 
-    15）Sort（L）对所有元素重新按给定的条件排序
-    16) strstr(string1,string2)用于字符数组的求string1中出现string2的首地址
+  15）Sort（L）对所有元素重新按给定的条件排序
 
-\*\* 4.存储结构
+  16. strstr(string1,string2)用于字符数组的求 string1 中出现 string2 的首地址
+
+- 4.存储结构
 
 线性表主要由顺序表示或链式表示。在实际应用中，常以栈、队列、字符串等特殊形式使用。
 
-\*\*\* 4.1 顺序存储
+- 4.1 顺序存储
 
 顺序表示指的是用一组地址连续的存储单元依次存储线性表的数据元素，称为线性表的顺序存储结构或顺序映像*（sequential mapping）*。它以“物理位置相邻”来表示线性表中数据元素间的逻辑关系，可随机存取表中任一元素。
 线性表顺序存储结构的优缺点：
@@ -837,7 +847,7 @@ public class Solution {
   - b、当线性表长度变化较大时，难以确定存储空间的容量。
   - c、造成存储空间的“碎片”。
 
-\*\*\* 4.2 链式存储
+* 4.2 链式存储
 
 链式表示指的是用一组任意的存储单元存储线性表中的数据元素，称为线性表的链式存储结构。它的存储单元可以是连续的，也可以是不连续的。在表示数据元素之间的逻辑关系时，除了存储其本身的信息之外，还需存储一个指示其直接后继的信息*（即直接后继的存储位置）*，这两部分信息组成数据元素的存储映像，称为结点*（node）*。它包括两个域；存储数据元素信息的域称为数据域；存储直接后继存储位置的域称为指针域。指针域中存储的信息称为指针或链[1][]()。
 
@@ -848,19 +858,15 @@ public class Solution {
 - 缺点：
   - a、顺序查找，查找复杂度为 o(n)
 
-\*\* 5.结构特点
+* 5.结构特点
 
-1.均匀性：虽然不同数据表的数据元素可以是各种各样的，但对于同一线性表的各数据元素必定具有相同的数据类型和长度。
+  1.均匀性：虽然不同数据表的数据元素可以是各种各样的，但对于同一线性表的各数据元素必定具有相同的数据类型和长度。
 
-2.有序性：各数据元素在线性表中的位置只取决于它们的序号，数据元素之前的相对位置是线性的，即存在唯一的“第一个“和“最后一个”的数据元素，除了第一个和最后一个外，其它元素前面均只有一个数据元素(直接前驱)和后面均只有一个数据元素（直接后继）。
+  2.有序性：各数据元素在线性表中的位置只取决于它们的序号，数据元素之前的相对位置是线性的，即存在唯一的“第一个“和“最后一个”的数据元素，除了第一个和最后一个外，其它元素前面均只有一个数据元素(直接前驱)和后面均只有一个数据元素（直接后继）。
 
-\*\* 6.线性表的推广
+* 6.线性表的推广
 
 时间有序表、排序表、和频率有序表都可以看做是线性表的推广。如果按照结点到达结构的时间先后，作为确定结点之间关系的，这样一种线性结构称之为时间有序表。例如，在红灯前停下的一长串汽车，最先到达的为首结点，最后到达的为尾结点；在离开时最先到达的汽车将最先离开，最后到达的将最后离开。这些汽车构成理一个队列，实际上就是一个时间有序表。栈和队列都是时间有序表。频率有序表是按照结点的使用频率确定它们之间的相互关系的，而排序表是根据结点的关键字值来加以确定的。[2][]()
-
-参考：
-
-[百度百科](https://baike.baidu.com/item/%E7%BA%BF%E6%80%A7%E8%A1%A8/3228081?fr=aladdin)
 
 - 解答
 
@@ -1320,7 +1326,58 @@ class TrieNode {
 
 - 问题
 
-* 解答
+* 20.有效的括号
+
+给定一个只包括 '('，')'，'{'，'}'，'['，']' 的字符串 s ，
+判断字符串是否有效。
+有效字符串需满足：
+
+左括号必须用相同类型的右括号闭合。
+左括号必须以正确的顺序闭合。
+
+- 示例 1：
+
+```
+输入：s = "()"
+输出：true
+```
+
+- 示例 2：
+
+```
+输入：s = "()[]{}"
+输出：true
+```
+
+- 示例 3：
+
+```
+输入：s = "(]"
+输出：false
+```
+
+- 示例 4：
+
+```
+输入：s = "([)]"
+输出：false
+```
+
+- 示例 5：
+
+```
+输入：s = "{[]}"
+输出：true
+```
+
+- 提示：
+
+```
+1 <= s.length <= 104
+s 仅由括号 '()[]{}' 组成
+```
+
+- 解答
 
 ```
 package 栈相关.q20_有效的括号;
@@ -1435,116 +1492,88 @@ public class Solution {
 }
 ```
 
-##### 2.f1
-
 - 问题
 
-* 解答
+* 224.基本计算器
+
+给你一个字符串表达式 s ，
+请你实现一个基本计算器来计算并返回它的值。
+
+- 示例 1：
 
 ```
-package 栈相关.q224_基本计算器.f1;
+输入：s = "1 + 1"
+输出：2
+```
 
-import java.util.Stack;
+- 示例 2：
 
-/**
- * 双栈（操作数栈+操作符栈）o(n)
- */
-public class Solution {
+```
+输入：s = " 2-1 + 2 "
+输出：3
+```
 
-    public int calculate(String s) {
-        char[] array = s.toCharArray();
-        int n = array.length;
-        Stack<Integer> num = new Stack<>();
-        Stack<Character> op = new Stack<>();
-        int temp = -1;
-        for (int i = 0; i < n; i++) {
-            if (array[i] == ' ') {
-                continue;
-            }
-            // 数字进行累加
-            if (isNumber(array[i])) {
-                if (temp == -1) {
-                    temp = array[i] - '0';
-                } else {
-                    temp = temp * 10 + array[i] - '0';
-                }
-            } else {
-                //将数字入栈
-                if (temp != -1) {
-                    num.push(temp);
-                    temp = -1;
-                }
-                //遇到操作符
-                if (isOperation(array[i] + "")) {
-                    while (!op.isEmpty()) {
-                        if (op.peek() == '(') {
-                            break;
-                        }
-                        //不停的出栈，进行运算，并将结果再次压入栈中
-                        int num1 = num.pop();
-                        int num2 = num.pop();
-                        if (op.pop() == '+') {
-                            num.push(num1 + num2);
-                        } else {
-                            num.push(num2 - num1);
-                        }
+- 示例 3：
 
-                    }
-                    //当前运算符入栈
-                    op.push(array[i]);
-                } else {
-                    //遇到左括号，直接入栈
-                    if (array[i] == '(') {
-                        op.push(array[i]);
-                    }
-                    //遇到右括号，不停的进行运算，直到遇到左括号
-                    if (array[i] == ')') {
-                        while (op.peek() != '(') {
-                            int num1 = num.pop();
-                            int num2 = num.pop();
-                            if (op.pop() == '+') {
-                                num.push(num1 + num2);
-                            } else {
-                                num.push(num2 - num1);
-                            }
-                        }
-                        op.pop();
-                    }
+```
+输入：s = "(1+(4+5+2)-3)+(6+8)"
+输出：23
+```
 
-                }
-            }
-        }
-        if (temp != -1) {
-            num.push(temp);
-        }
-        //将栈中的其他元素继续运算
-        while (!op.isEmpty()) {
-            int num1 = num.pop();
-            int num2 = num.pop();
-            if (op.pop() == '+') {
-                num.push(num1 + num2);
-            } else {
-                num.push(num2 - num1);
-            }
-        }
-        return num.pop();
-    }
+- 提示：
 
-    private boolean isNumber(char c) {
-        return c >= '0' && c <= '9';
-    }
+```
+1 <= s.length <= 3 * 105
+s 由数字、'+'、'-'、'('、')'、和 ' ' 组成
+s 表示一个有效的表达式
+```
 
-    private boolean isOperation(String t) {
-        return t.equals("+") || t.equals("-") || t.equals("*") || t.equals("/");
-    }
-}
+- 解答
+
+```
+
 ```
 
 #### 3.q32\_最长有效括号
 
 - 问题
 
-* 解答
+* 32. 最长有效括号
+
+给你一个只包含 '(' 和 ')' 的字符串，
+找出最长有效（格式正确且连续）括号子串的长度。
+
+- 示例 1：
+
+```
+输入：s = "(()"
+输出：2
+解释：最长有效括号子串是 "()"
+```
+
+- 示例 2：
+
+```
+输入：s = ")()())"
+输出：4
+解释：最长有效括号子串是 "()()"
+```
+
+- 示例 3：
+
+```
+输入：s = ""
+输出：0
+```
+
+- 提示：
+
+```
+0 <= s.length <= 3 * 104
+s[i] 为 '(' 或 ')'
+```
+
+- 解答
 
 ```
 package 栈相关.q32_最长有效括号;
@@ -1582,6 +1611,7 @@ public class Solution {
     }
 
     public static void main(String[] args) {
+
         System.out.println(new Solution().longestValidParentheses(")()())"));
     }
 }
@@ -1609,11 +1639,57 @@ public class Solution {
 
 ```
 
-##### 3.f1
-
 - 问题
 
-* 解答
+* 232.用栈实现队列
+
+请你仅使用两个栈实现先入先出队列。
+队列应当支持一般队列支持的所有操作（push、pop、peek、empty）：
+
+实现 MyQueue 类：
+
+void push(int x) 将元素 x 推到队列的末尾
+int pop() 从队列的开头移除并返回元素
+int peek() 返回队列开头的元素
+boolean empty() 如果队列为空，返回 true ；否则，返回 false
+
+- 说明：
+
+你只能使用标准的栈操作 —— 也就是只有 push to top, peek/pop from top, size, 和 is empty 操作是合法的。
+你所使用的语言也许不支持栈。你可以使用 list 或者 deque（双端队列）来模拟一个栈，只要是标准的栈操作即可。
+
+- 进阶：
+
+你能否实现每个操作均摊时间复杂度为 O(1) 的队列？换句话说，执行 n 个操作的总时间复杂度为 O(n) ，即使其中一个操作可能花费较长时间。
+
+- 示例：
+
+```
+输入：
+["MyQueue", "push", "push", "peek", "pop", "empty"]
+[[], [1], [2], [], [], []]
+输出：
+[null, null, null, 1, 1, false]
+
+解释：
+MyQueue myQueue = new MyQueue();
+myQueue.push(1); // queue is: [1]
+myQueue.push(2); // queue is: [1, 2] (leftmost is front of the queue)
+myQueue.peek(); // return 1
+myQueue.pop(); // return 1, queue is [2]
+myQueue.empty(); // return false
+
+```
+
+- 提示：
+
+```
+1 <= x <= 9
+最多调用 100 次 push、pop、peek 和 empty
+假设所有操作都是有效的 （例如，一个空的队列不会调用 pop 或者 peek 操作）
+```
+
+- 解答
 
 ```
 
@@ -1623,7 +1699,42 @@ public class Solution {
 
 - 问题
 
-* 解答
+* 155.最小栈
+
+设计一个支持 push ，pop ，top 操作，
+并能在常数时间内检索到最小元素的栈。
+
+push(x) —— 将元素 x 推入栈中。
+pop() —— 删除栈顶的元素。
+top() —— 获取栈顶元素。
+getMin() —— 检索栈中的最小元素。
+
+- 示例:
+
+```
+输入：
+["MinStack","push","push","push","getMin","pop","top","getMin"]
+[[],[-2],[0],[-3],[],[],[],[]]
+
+输出：
+[null,null,null,null,-3,null,0,-2]
+
+解释：
+MinStack minStack = new MinStack();
+minStack.push(-2);
+minStack.push(0);
+minStack.push(-3);
+minStack.getMin();   --> 返回 -3.
+minStack.pop();
+minStack.top();      --> 返回 0.
+minStack.getMin();   --> 返回 -2.
+```
+
+- 提示：
+
+pop、top 和 getMin 操作总是在 非空栈 上调用。
+
+- 解答
 
 ```
 
@@ -1633,7 +1744,36 @@ public class Solution {
 
 - 问题
 
-* 解答
+* 316.去除重复字母
+
+给你一个字符串 s ，请你去除字符串中重复的字母，
+使得每个字母只出现一次。
+需保证 返回结果的字典序最小（要求不能打乱其他字符的相对位置）。
+
+注意：该题与 1081 https://leetcode-cn.com/problems/smallest-subsequence-of-distinct-characters 相同
+
+- 示例 1：
+
+```
+输入：s = "bcabc"
+输出："abc"
+```
+
+- 示例 2：
+
+```
+输入：s = "cbacdcbc"
+输出："acdb"
+```
+
+- 提示：
+
+```
+1 <= s.length <= 104
+s 由小写英文字母组成
+```
+
+- 解答
 
 ```
 package 栈相关.q316_去除重复字母;
@@ -2842,7 +2982,28 @@ public class Solution {
 
 - 问题
 
-* 解答
+* 104.二叉树的最大深度
+
+给定一个二叉树，找出其最大深度。
+
+二叉树的深度为根节点到最远叶子节点的最长路径上的节点数。
+
+说明: 叶子节点是指没有子节点的节点。
+
+- 示例：
+  给定二叉树 [3,9,20,null,null,15,7]，
+
+```
+    3
+   / \
+  9  20
+    /  \
+   15   7
+```
+
+返回它的最大深度 3 。
+
+- 解答
 
 ```
 package 递归.q104_二叉树的最大深度;
@@ -2868,7 +3029,66 @@ public class Solution {
 
 - 问题
 
-* 解答
+* 1325.删除给定值的叶子节点
+
+给你一棵以 root 为根的二叉树和一个整数 target ，请你删除所有值为 target 的 叶子节点 。
+
+注意，一旦删除值为 target 的叶子节点，它的父节点就可能变成叶子节点；
+如果新叶子节点的值恰好也是 target ，那么这个节点也应该被删除。
+
+也就是说，你需要重复此过程直到不能继续删除。
+
+- 示例 1：
+
+```
+输入：root = [1,2,3,2,null,2,4], target = 2
+输出：[1,null,3,null,4]
+解释：
+上面左边的图中，绿色节点为叶子节点，且它们的值与 target 相同（同为 2 ），
+它们会被删除，得到中间的图。
+有一个新的节点变成了叶子节点且它的值与 target 相同，所以将再次进行删除，从而得到最右边的图。
+```
+
+- 示例 2：
+
+```
+输入：root = [1,3,3,3,2], target = 3
+输出：[1,3,null,null,2]
+```
+
+- 示例 3：
+
+```
+输入：root = [1,2,null,2,null,2], target = 2
+输出：[1]
+解释：每一步都删除一个绿色的叶子节点（值为 2）。
+```
+
+- 示例 4：
+
+```
+输入：root = [1,1,1], target = 1
+输出：[]
+```
+
+- 示例 5：
+
+```
+输入：root = [1,2,3], target = 1
+输出：[1,2,3]
+```
+
+- 提示：
+
+```
+1 <= target <= 1000
+每一棵树最多有 3000 个节点。
+每一个节点值的范围是 [1, 1000] 。
+```
+
+https://leetcode-cn.com/problems/delete-leaves-with-a-given-value/
+
+- 解答
 
 ```
 package 递归.q1325_删除给定值的叶子节点;
@@ -2987,84 +3207,78 @@ public class Solution {
 }
 ```
 
-##### 3.f1
-
 - 问题
 
-* 解答
+* 101.对称二叉树
+
+给定一个二叉树，检查它是否是镜像对称的。
+
+例如，二叉树 [1,2,2,3,4,4,3] 是对称的。
 
 ```
-package 递归.q101_对称二叉树.f1;
+    1
+   / \
+  2   2
+ / \ / \
+3  4 4  3
+```
 
-import java.util.ArrayList;
-import java.util.List;
+但是下面这个 [1,2,2,null,3,null,3] 则不是镜像对称的:
 
-/**
- * 层序遍历放入list对比 o(n*log(n))
- */
-public class Solution {
-    public boolean isSymmetric(List<TreeNode> nodes) {
-        if (nodes.size() < 2) {
-            return true;
-        }
-        int i = 0;
-        int j = nodes.size() - 1;
-        while (i < j) {
-            if (nodes.get(i) == nodes.get(j)) {
-                i++;
-                j--;
-            } else if (nodes.get(i) == null || nodes.get(j) == null || nodes.get(i).val != nodes.get(j).val) {
-                return false;
-            } else {
-                i++;
-                j--;
-            }
-        }
-        return true;
-    }
+```
+    1
+   / \
+  2   2
+   \   \
+   3    3
+```
 
-    public boolean isSymmetric(TreeNode root) {
-        List<TreeNode> list = new ArrayList<>();
-        list.add(root);
-        while (list.size() != 0) {
-            List<TreeNode> temp = new ArrayList<>();
-            for (int i = 0; i < list.size(); i++) {
-                if (list.get(i) != null) {
-                    temp.add(list.get(i).left);
-                    temp.add(list.get(i).right);
-                }
-            }
-            if (!isSymmetric(temp)) {
-                return false;
-            }
-            list = temp;
-        }
-        return true;
-    }
+- 进阶：
 
-    public static void main(String[] args) {
-        TreeNode root = new TreeNode(1);
-        TreeNode t1 = new TreeNode(2);
-        TreeNode t2 = new TreeNode(2);
-        root.left = t1;
-        root.right = t2;
-        TreeNode t3 = new TreeNode(3);
-        TreeNode t4 = new TreeNode(4);
-        t1.left = t3;
-        t1.right = t4;
-        TreeNode t5 = new TreeNode(4);
-        TreeNode t6 = new TreeNode(3);
-        t2.left = t5;
-        t2.right = t6;
+你可以运用递归和迭代两种方法解决这个问题吗？
 
-        System.out.println(new Solution().isSymmetric(root));
-    }
-}
+- 解答
+
+```
+
 ```
 
 #### 4.q226\_翻转二叉树
 
 - 问题
+
+* 226.翻转二叉树
+
+翻转一棵二叉树。
+
+- 示例：
+
+输入：
+
+```
+     4
+   /   \
+  2     7
+ / \   / \
+1   3 6   9
+```
+
+输出：
+
+```
+     4
+   /   \
+  7     2
+ / \   / \
+9   6 3   1
+```
+
+- 备注:
+
+这个问题是受到 Max Howell 的 原问题 启发的 ：
+
+- 参考
+  https://leetcode-cn.com/problems/invert-binary-tree/
 
 * 解答
 
@@ -3098,7 +3312,48 @@ public class Solution {
 
 - 问题
 
-* 解答
+* 236.二叉树的最近公共祖先
+
+给定一个二叉树, 找到该树中两个指定节点的最近公共祖先。
+
+百度百科中最近公共祖先的定义为：“对于有根树 T 的两个节点 p、q，最近公共祖先表示为一个节点 x，
+满足 x 是 p、q 的祖先且 x 的深度尽可能大（一个节点也可以是它自己的祖先）。”
+
+- 示例 1：
+
+```
+输入：root = [3,5,1,6,2,0,8,null,null,7,4], p = 5, q = 1
+输出：3
+解释：节点 5 和节点 1 的最近公共祖先是节点 3 。
+```
+
+- 示例 2：
+
+```
+输入：root = [3,5,1,6,2,0,8,null,null,7,4], p = 5, q = 4
+输出：5
+解释：节点 5 和节点 4 的最近公共祖先是节点 5 。因为根据定义最近公共祖先节点可以为节点本身。
+```
+
+- 示例 3：
+
+```
+输入：root = [1,2], p = 1, q = 2
+输出：1
+```
+
+- 提示：
+
+```
+树中节点数目在范围 [2, 105] 内。
+-109 <= Node.val <= 109
+所有 Node.val 互不相同 。
+p != q
+p 和 q 均存在于给定的二叉树中。
+通过次数193,321提交次数288,363
+```
+
+- 解答
 
 ```
 package 递归.q236_二叉树的最近公共祖先;
@@ -3157,48 +3412,48 @@ public class Solution {
 }
 ```
 
-##### 2.f1
-
 - 问题
 
-* 解答
+* 21.合并两个有序链表
+
+将两个升序链表合并为一个新的 升序 链表并返回。
+新链表是通过拼接给定的两个链表的所有节点组成的。
+
+- 示例 1：
 
 ```
-package 递归.q21_合并两个有序链表.f1;
+输入：l1 = [1,2,4], l2 = [1,3,4]
+输出：[1,1,2,3,4,4]
+```
 
-/**
- * 插队法 - 遍历迭代 o(n)
- */
-public class Solution {
-    public ListNode mergeTwoLists(ListNode l1, ListNode l2) {
-        if (l1 == null) {
-            return l2;
-        }
-        if (l2 == null) {
-            return l1;
-        }
-        ListNode head = new ListNode(Integer.MIN_VALUE);
-        head.next = l1;
-        ListNode pre = head;
-        while (l2 != null) {
-            ListNode t1 = pre.next;
-            ListNode t2 = l2.next;
-            while (l2.val > t1.val) {
-                if (t1.next == null) {
-                    t1.next = l2;
-                    return head.next;
-                } else {
-                    pre = pre.next;
-                    t1 = t1.next;
-                }
-            }
-            pre.next = l2;
-            l2.next = t1;
-            l2 = t2;
-        }
-        return head.next;
-    }
-}
+- 示例 2：
+
+```
+输入：l1 = [], l2 = []
+输出：[]
+```
+
+- 示例 3：
+
+```
+输入：l1 = [], l2 = [0]
+输出：[0]
+```
+
+- 提示：
+
+```
+两个链表的节点数目范围是 [0, 50]
+-100 <= Node.val <= 100
+l1 和 l2 均按 非递减顺序 排列
+```
+
+https://leetcode-cn.com/problems/merge-two-sorted-lists/
+
+- 解答
+
+```
+
 ```
 
 ### 15.动态规划
@@ -3268,7 +3523,103 @@ public class Solution {
 }
 ```
 
-#### 2.q53\_最大子序和
+#### 2.q403\_青蛙过河
+
+##### 1.f2
+
+- 问题
+
+* 解答
+
+```
+package 动态规划.q403_青蛙过河.f2;
+
+/**
+ * 动态规划
+ * 我们也可以使用动态规划的方法，令 {dp}[i][k]表示青蛙能否达到「现在所处的石子编号」为 i 且「上一次跳跃距离」为 k 的状态。
+ *
+ */
+public class Solution {
+    public boolean canCross(int[] stones) {
+        int n = stones.length;
+        boolean[][] dp = new boolean[n][n];
+        dp[0][0] = true;
+        for (int i = 1; i < n; ++i) {
+            if (stones[i] - stones[i - 1] > i) {
+                return false;
+            }
+        }
+        for (int i = 1; i < n; ++i) {
+            for (int j = i - 1; j >= 0; --j) {
+                int k = stones[i] - stones[j];
+                if (k > j + 1) {
+                    break;
+                }
+                dp[i][k] = dp[j][k - 1] || dp[j][k] || dp[j][k + 1];
+                if (i == n - 1 && dp[i][k]) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+}
+```
+
+- 问题
+
+* 403.青蛙过河
+
+一只青蛙想要过河。 假定河流被等分为若干个单元格，
+并且在每一个单元格内都有可能放有一块石子（也有可能没有）。
+青蛙可以跳上石子，但是不可以跳入水中。
+给你石子的位置列表 stones（用单元格序号 升序 表示），
+请判定青蛙能否成功过河（即能否在最后一步跳至最后一块石子上）。
+开始时， 青蛙默认已站在第一块石子上，并可以假定它第一步只能跳跃一个单位（即只能从单元格 1 跳至单元格 2 ）。
+如果青蛙上一步跳跃了 k 个单位，那么它接下来的跳跃距离只能选择为 k - 1、k 或 k + 1 个单位。
+另请注意，青蛙只能向前方（终点的方向）跳跃。
+
+- 示例 1：
+
+```
+输入：stones = [0,1,3,5,6,8,12,17]
+输出：true
+解释：青蛙可以成功过河，按照如下方案跳跃：跳 1 个单位到第 2 块石子,
+然后跳 2 个单位到第 3 块石子, 接着 跳 2 个单位到第 4 块石子,
+然后跳 3 个单位到第 6 块石子, 跳 4 个单位到第 7 块石子,
+最后，跳 5 个单位到第 8 个石子（即最后一块石子）。
+```
+
+- 示例 2：
+
+```
+输入：stones = [0,1,2,3,4,8,9,11]
+输出：false
+解释：这是因为第 5 和第 6 个石子之间的间距太大，没有可选的方案供青蛙跳跃过去。
+```
+
+- 提示：
+
+```
+2 <= stones.length <= 2000
+0 <= stones[i] <= 231 - 1
+stones[0] == 0
+```
+
+- 参考
+
+作者：LeetCode-Solution
+链接：https://leetcode-cn.com/problems/frog-jump/solution/qing-wa-guo-he-by-leetcode-solution-mbuo/
+来源：力扣（LeetCode）
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+- 解答
+
+```
+
+```
+
+#### 3.q53\_最大子序和
 
 ##### 1.f2
 
@@ -3345,7 +3696,7 @@ public class Solution {
 
 ```
 
-#### 3.q62\_不同路径
+#### 4.q62\_不同路径
 
 - 问题
 
@@ -3415,7 +3766,7 @@ public class Solution {
 }
 ```
 
-#### 4.q300\_最长上升子序列
+#### 5.q300\_最长上升子序列
 
 - 问题
 
@@ -3460,7 +3811,7 @@ public class Solution {
 }
 ```
 
-#### 5.q118\_杨辉三角
+#### 6.q118\_杨辉三角
 
 - 问题
 
@@ -3504,7 +3855,7 @@ public class Solution {
 }
 ```
 
-#### 6.q746\_使用最小花费爬楼梯
+#### 7.q746\_使用最小花费爬楼梯
 
 - 问题
 
@@ -3534,7 +3885,7 @@ class Solution {
 }
 ```
 
-#### 7.q1277\_统计全为 1 的正方形子矩阵
+#### 8.q1277\_统计全为 1 的正方形子矩阵
 
 - 问题
 
@@ -3580,7 +3931,7 @@ public class Solution {
 }
 ```
 
-#### 8.q1143\_最长公共子序列
+#### 9.q1143\_最长公共子序列
 
 - 问题
 
@@ -3617,7 +3968,7 @@ public class Solution {
 }
 ```
 
-#### 9.q5\_最长回文子串
+#### 10.q5\_最长回文子串
 
 ##### 1.f2
 
@@ -3829,7 +4180,7 @@ s 仅由数字和英文字母（大写和/或小写）组成
 
 ```
 
-#### 10.q70\_爬楼梯
+#### 11.q70\_爬楼梯
 
 - 问题
 
@@ -4552,7 +4903,28 @@ public class Solution {
 
 - 问题
 
-* 解答
+* 145.二叉树的后序遍历
+
+给定一个二叉树，返回它的 后序 遍历。
+
+- 示例:
+
+```
+输入: [1,null,2,3]
+   1
+    \
+     2
+    /
+   3
+
+输出: [3,2,1]
+```
+
+- 进阶
+
+递归算法很简单，你可以通过迭代算法完成吗？
+
+- 解答
 
 ```
 package 树的遍历.q145_二叉树的后序遍历;
@@ -4592,7 +4964,38 @@ public class Solution {
 
 - 问题
 
-* 解答
+* 102.二叉树的层序遍历
+
+给你一个二叉树，请你返回其按 层序遍历 得到的节点值。
+（即逐层地，从左到右访问所有节点）。
+
+- 示例：
+
+```
+二叉树：[3,9,20,null,null,15,7],
+
+    3
+   / \
+  9  20
+    /  \
+   15   7
+返回其层序遍历结果：
+
+[
+  [3],
+  [9,20],
+  [15,7]
+]
+```
+
+- 参考
+
+作者：LeetCode-Solution
+链接：https://leetcode-cn.com/problems/binary-tree-level-order-traversal/solution/er-cha-shu-de-ceng-xu-bian-li-by-leetcode-solution/
+来源：力扣（LeetCode）
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+- 解答
 
 ```
 package 树的遍历.q102_二叉树的层次遍历;
@@ -4604,6 +5007,7 @@ import java.util.Queue;
 
 /**
  * 利用队列迭代 o(n)
+ *
  */
 public class Solution {
     public List<List<Integer>> levelOrder(TreeNode root) {
@@ -4677,61 +5081,109 @@ public class Solution {
 }
 ```
 
-##### 2.f1
-
 - 问题
 
-* 解答
+* 110.平衡二叉树
+
+给定一个二叉树，判断它是否是高度平衡的二叉树。
+本题中，一棵高度平衡二叉树定义为：
+一个二叉树每个节点 的左右两个子树的高度差的绝对值不超过 1 。
+
+- 示例 1：
 
 ```
-package 树的遍历.q110_平衡二叉树.f1;
+输入：root = [3,9,20,null,null,15,7]
+输出：true
+```
 
-/**
- * 从顶至底遍历 o(n^2)
- */
-public class Solution {
+- 示例 2：
 
-    public int getHeight(TreeNode root) {
-        if (root == null) {
-            return 0;
-        } else {
-            int lh = getHeight(root.left);
-            int rh = getHeight(root.right);
-            return Math.max(lh, rh) + 1;
-        }
-    }
+```
+输入：root = [1,2,2,3,3,null,null,4,4]
+输出：false
+```
 
-    public boolean isBalanced(TreeNode root) {
-        if (root == null) {
-            return true;
-        }
-        if (Math.abs(getHeight(root.left) - getHeight(root.right)) > 1) {
-            return false;
-        } else {
-            return isBalanced(root.left) && isBalanced(root.right);
-        }
-    }
+- 示例 3：
 
-    public static void main(String[] args) {
-        TreeNode root = new TreeNode(3);
-        TreeNode n1 = new TreeNode(9);
-        TreeNode n2 = new TreeNode(20);
-        TreeNode n3 = new TreeNode(15);
-        TreeNode n4 = new TreeNode(7);
-//        root.left = n1;
-        root.right = n2;
-        n2.left = n3;
-        n2.right = n4;
-        System.out.println(new Solution().isBalanced(root));
-    }
-}
+```
+输入：root = []
+输出：true
+```
+
+- 提示：
+
+```
+树中的节点数在范围 [0, 5000] 内
+-104 <= Node.val <= 104
+```
+
+- 参考
+
+作者：LeetCode-Solution
+链接：https://leetcode-cn.com/problems/balanced-binary-tree/solution/ping-heng-er-cha-shu-by-leetcode-solution/
+来源：力扣（LeetCode）
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+- 解答
+
+```
+
 ```
 
 #### 4.q144\_二叉树的前序遍历
 
 - 问题
 
-* 解答
+* 144.二叉树的前序遍历
+
+给你二叉树的根节点 root ，返回它节点值的 前序 遍历。
+
+- 示例 1：
+
+```
+输入：root = [1,null,2,3]
+输出：[1,2,3]
+```
+
+- 示例 2：
+
+```
+输入：root = []
+输出：[]
+```
+
+- 示例 3：
+
+```
+输入：root = [1]
+输出：[1]
+```
+
+- 示例 4：
+
+```
+输入：root = [1,2]
+输出：[1,2]
+```
+
+- 示例 5：
+
+```
+输入：root = [1,null,2]
+输出：[1,2]
+```
+
+- 提示：
+
+```
+树中节点数目在范围 [0, 100] 内
+-100 <= Node.val <= 100
+
+
+进阶：递归算法很简单，你可以通过迭代算法完成吗？
+```
+
+- 解答
 
 ```
 package 树的遍历.q144_二叉树的前序遍历;
@@ -4772,36 +5224,98 @@ public class Solution {
 
 #### 5.q94\_二叉树的中序遍历
 
+##### 1.f2
+
 - 问题
 
 * 解答
 
 ```
-package 树的遍历.q94_二叉树的中序遍历;
+package 树的遍历.q94_二叉树的中序遍历.f2;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Stack;
 
-/**
- * 非递归 o(n)
- */
-public class Solution {
+class Solution {
     public List<Integer> inorderTraversal(TreeNode root) {
-        List<Integer> rs = new ArrayList<>();
-        Stack<TreeNode> stack = new Stack<>();
-        while (!stack.empty() || root != null) {
-            while (root != null) {
-                stack.push(root);
-                root = root.left;
-            }
-            root = stack.pop();
-            rs.add(root.val);
-            root = root.right;
+        List<Integer> res = new ArrayList<Integer>();
+        inorder(root, res);
+        return res;
+    }
+
+    public void inorder(TreeNode root, List<Integer> res) {
+        if (root == null) {
+            return;
         }
-        return rs;
+        inorder(root.left, res);
+        res.add(root.val);
+        inorder(root.right, res);
     }
 }
+```
+
+- 问题
+
+* 94. 二叉树的中序遍历
+
+给定一个二叉树的根节点 root ，返回它的 中序 遍历。
+
+- 示例 1：
+
+```
+输入：root = [1,null,2,3]
+输出：[1,3,2]
+```
+
+- 示例 2：
+
+```
+输入：root = []
+输出：[]
+```
+
+- 示例 3：
+
+```
+输入：root = [1]
+输出：[1]
+```
+
+- 示例 4：
+
+```
+输入：root = [1,2]
+输出：[2,1]
+```
+
+- 示例 5：
+
+```
+输入：root = [1,null,2]
+输出：[1,2]
+```
+
+- 提示：
+
+```
+树中节点数目在范围 [0, 100] 内
+-100 <= Node.val <= 100
+
+
+进阶: 递归算法很简单，你可以通过迭代算法完成吗？
+```
+
+- 参考
+
+作者：LeetCode-Solution
+链接：https://leetcode-cn.com/problems/binary-tree-inorder-traversal/solution/er-cha-shu-de-zhong-xu-bian-li-by-leetcode-solutio/
+来源：力扣（LeetCode）
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+
+- 解答
+
+```
+
 ```
 
 ### 19.hash 相关
@@ -4810,11 +5324,11 @@ public class Solution {
 
 - 问题
 
-### 387. 字符串中的第一个唯一字符
+* 387. 字符串中的第一个唯一字符
 
 给定一个字符串，找到它的第一个不重复的字符，并返回它的索引。如果不存在，则返回 -1。
 
-### 示例：
+- 示例：
 
 ```
 s = "leetcode"
@@ -4824,7 +5338,7 @@ s = "loveleetcode"
 返回 2
 ```
 
-### 提示：
+- 提示：
 
 你可以假定该字符串只包含小写字母。
 
@@ -4898,14 +5412,14 @@ public class Solution {
 
 - 问题
 
-### 1. 两数之和
+* 1. 两数之和
 
 给定一个整数数组 nums 和一个整数目标值 target，
 请你在该数组中找出 和为目标值 的那 两个 整数，并返回它们的数组下标。
 你可以假设每种输入只会对应一个答案。但是，数组中同一个元素不能使用两遍。
 你可以按任意顺序返回答案。
 
-### 示例 1：
+- 示例 1：
 
 ```
 输入：nums = [2,7,11,15], target = 9
@@ -4922,7 +5436,7 @@ public class Solution {
 输出：[0,1]
 ```
 
-### 提示：
+- 提示：
 
 ```
 2 <= nums.length <= 103
