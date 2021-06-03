@@ -9,7 +9,7 @@ import java.util.List;
 
 public class TnyTraToMd {
     public static void main(String[] args) throws IOException {
-        findAnrWrite(new File("/Users/wuhao/data/code/github/coral-learning/guide-doc/5.middleware/6.服务注册中心/zookeeper/源码分析"));
+        findAnrWrite(new File("/Users/wuhao/data/code/coral-learning/guide-doc/docs"));
     }
     private static boolean findAnrWrite(File file) throws IOException {
 
