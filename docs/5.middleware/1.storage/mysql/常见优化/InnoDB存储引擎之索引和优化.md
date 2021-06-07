@@ -62,19 +62,3 @@ MySQL5.6 开始支持该项优化，使用的时候需要 SET optimizer_switch=�
 # 参考
 
 - [MySQL 技术内幕 – InnoDB 存储引擎](https://book.douban.com/subject/24708143/)
-
-[点赞]()
-[innodb](http://ju.outofmemory.cn/tag/innodb/) [mysql](http://ju.outofmemory.cn/tag/mysql/)
-
-作者：[ImportNew](http://ju.outofmemory.cn/feed/123/ 'ImportNew')
-
-[![ImportNew](http://ju.outofmemory.cn/flogos/3/123.png)](http://ju.outofmemory.cn/feed/123/)
-原文地址：[InnoDB 存储引擎之索引和优化](http://www.importnew.com/30259.html), 感谢原作者分享。
-→[使用 Thread Pool 不当引发的死锁]() ←[ssh 服务突然连接不了案例总结]()
-
-[]()
-[]()
-
-### 发表评论
-
-发表评论
