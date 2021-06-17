@@ -1,0 +1,1 @@
+docker run -it --name sctp-java 10.10.208.193:5000/urcs/java:8  bash

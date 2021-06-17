@@ -1,0 +1,27 @@
+## 使用 kingshard 遇到的坑
+
+- 禁止用 mysqldump 连接 kingshard, 会导致表锁死
+- 读取 NULL 值变为文本
+  - 通过 kingshard 连接 select 出来的 null 值变为文本"NULL"
+- kingshard 无法 join 分片表
+  - 假设 a 与 b 都是分片表， 即使 a 与 b 分片一致也无法 join
+  - kingshard 只能在分片表与不分片表之间 join
+  - 不使用 join，改写为嵌套语句 kingshard 也不支持
+- kingshard 分片前先预估数据量和 iops
+  - iops 满了 必须分物理机才能解决
+- kingshard 不支持 insert on duplicated key update 这样的高级语句 会报语句过于复杂错误 只能支持 insert/replace
+  - 使用 replace 语句会比 insert on duplicated key update 的 iops 高很多
+- kingshard 不支持过程，使得一些分表操作的过程原子性无法保证，如果需要达到过程原子性，请仔细设计和衡量
+- 套表不要使用文本键作为 kingshard 分片键 会导致大量消耗数据库存储空间
+  - 如果文本键仅用于一个分片表可以
+  - 如果文本键用于一组表的分片 会导致一组表都需要存储 并 索引这个分片键 从而大量消耗磁盘空间
+    - 如果一定要用 kingshard 在一组表中用文本键分表, 那么必须选择一张表作为核心表 在核心表上存储文本键及其索引
+    - 在附属表用使用主表的 id 做为索引分片 但这样会导致核心表和附属表不在一个分片上 无法使用 join 等复杂语句 不推荐
+    - 这种情况 推荐使用程序代码按文本键直接计算分片表 这样可以分表键 仅用于程序逻辑 不需要存储在数据库磁盘上
+- kingshard 无法在插入时同时声明 分片键与主键 会报过于复杂
+  - insert into (id, shard_key, value) values('assigned_id', 'shard_key_value', 'custom_value') 这样的语句就是同时声明主键与分片键
+  - 只要声明主键就会报语句过于复杂, 哪怕主键指定为 null
+- 总体：
+  - 好处，语言中立，不用对分片硬编码，采用并发模式 分片越多 跨分片查询越有利
+  - 坏处，多了很多 SQL 语言限制，还有奇怪的转义
+  - 对于 SQL 语句 推荐给所有 from join 的表 在语句中起一个别名， 这样如果表分片调整时 只需要修改指定名称即可
