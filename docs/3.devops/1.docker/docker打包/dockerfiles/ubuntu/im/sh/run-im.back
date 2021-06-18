@@ -1,0 +1,13 @@
+##!/bin/bash
+#
+#chmod -R 777 /usr/local/bin
+#chmod -R 777 /root
+#
+#source /etc/profile
+#
+#echo 'start zkServer application'
+#cd /usr/local/bin/apache-zookeeper-3.7.0/bin/
+#./zkServer.sh  restart
+#
+#echo 'start ssdb application'
+#/usr/local/bin/ssdb/ssdb-server /usr/local/bin/ssdb/ssdb.conf -s restart &
