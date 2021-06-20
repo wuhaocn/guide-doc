@@ -51,7 +51,7 @@ sudo apt-get install cmake g++ libpython-dev python-numpy swig git libsqlite3-de
 ```
 cd ~
 
-git clone https://github.com/pothosware/SoapySDR.git
+git clone git@github.com:pothosware/SoapySDR.git
 
 cd SoapySDR
 
@@ -73,7 +73,7 @@ sudo ldconfig
 ```
 cd ~
 
-git clone https://github.com/myriadrf/LimeSuite.git
+git clone git@github.com:myriadrf/LimeSuite.git
 
 cd LimeSuite
 
@@ -104,11 +104,15 @@ sudo ./install.sh
 ### 6.编译安装 srsGUI
 
 ```
+apt-get install libboost-system-dev libboost-test-dev libboost-thread-dev libqwt-qt5-dev qtbase5-dev
+```
+
+```
 cd ~
 
 # srsGUI提供了一个软件示波器的功能，我们可以比较直观的观察到波形信息
 
-git clone https://github.com/srsLTE/srsGUI.git
+git clone git@github.com:srsran/srsGUI.git
 
 cd srsGUI
 
@@ -138,7 +142,7 @@ sudo apt-get install git cmake libfftw3-dev libmbedtls-dev libboost-program-opti
 
 ```
 cd ~
-git clone https://github.com/srsLTE/srsLTE.git
+git clone git@github.com:srsran/srsRAN.git
 
 cd srsLTE
 

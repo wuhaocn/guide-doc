@@ -24,7 +24,7 @@ git config --global user.email "邮箱地址"
 ### 4、生成 ssh 密钥
 
 ```
-ssh-keygen -C 'you email address@gmail.com' -t rsa
+ssh-keygen -C 'wuhaocn@126.com' -t rsa
 会在用户目录~/.ssh/下建立相应的密钥文件。
 ```
 
