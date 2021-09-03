@@ -23,7 +23,7 @@ docker update jenkins --restart=always
 
 - 查询密码
 
+```
 访问 jenkins 地址
 /var/jenkins_home/secrets/initialAdminPassword
-
-\*
+```

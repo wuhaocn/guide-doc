@@ -1,12 +1,19 @@
-## prometheus + grafana
+## prometheus+grafana
 
 ### 安装
 
 - 默认配置
 
 ```
+docker stop prometheus
+docker rm prometheus
 docker run -d --name=prometheus  -p 9090:9090  prom/prometheus
+docker update prometheus --restart=always
+
+docker stop grafana
+docker rm grafana
 docker run -d --name=grafana  -p 3000:3000 grafana/grafana
+docker update prometheus --restart=always
 ```
 
 - 修改配置
@@ -15,6 +22,7 @@ docker run -d --name=grafana  -p 3000:3000 grafana/grafana
 docker stop prometheus
 docker rm prometheus
 docker run -d --name=prometheus  -p 9090:9090  -v /home/rcloud/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml prom/prometheus
+docker update prometheus --restart=always
 ```
 
 ```
